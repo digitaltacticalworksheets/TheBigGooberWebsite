@@ -28,9 +28,14 @@
 
 <nav>
   <a href="#goobers">Goober Gallery</a>
-  <a href="/goober-run/">Goober Run</a>
-  <a href="/goobers-around-the-world/">Around the World</a>
-  <a href="/snowball-goobers/">Snowball Goobers</a>
+  <div class="nav-dropdown">
+    <button class="nav-dropdown-toggle" type="button" aria-expanded="false">Games ▾</button>
+    <div class="nav-dropdown-menu">
+      <a href="/goober-run/">Goober Run</a>
+      <a href="/snowball-goobers/">Snowball Goobers</a>
+      <a href="/goobers-around-the-world/">Goobers Around the World</a>
+    </div>
+  </div>
   <a href="#about">What is a Goober?</a>
   <a href="#upload">Add Goober</a>
 </nav>
@@ -83,6 +88,12 @@
     <button class="filter-btn" data-filter="classic">Classic</button>
     <button class="filter-btn" data-filter="costume">Costume</button>
     <button class="filter-btn" data-filter="chaos">Chaos</button>
+  </div>
+
+  <div class="admin-delete-panel">
+    <label for="adminDeleteCode">Admin delete code</label>
+    <input id="adminDeleteCode" type="password" placeholder="Enter code to delete inappropriate uploads" autocomplete="off" />
+    <span>Enter the admin code once, then use the Admin delete button on uploaded goobers.</span>
   </div>
 
   <div class="goober-grid" id="gooberGrid">
@@ -166,13 +177,18 @@
     <h2>Add a Goober</h2>
     <p>
       Use this lower-page upload tool to add new Goobers after you review the gallery.
-      Pick an image, give it a name, choose a category, and it will appear above after upload.
+      You now need the upload code before a Goober can be added to the site.
     </p>
 
    
   </div>
 
   <form class="upload-form" id="gooberUploadForm">
+    <div class="form-row">
+      <label for="gooberUploadCode">Upload code</label>
+      <input id="gooberUploadCode" type="password" placeholder="Enter upload code" autocomplete="off" required />
+    </div>
+
     <div class="form-row">
       <label for="gooberName">Goober name</label>
       <input id="gooberName" type="text" placeholder="Example: Wizard Goober" required />
