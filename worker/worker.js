@@ -33,6 +33,14 @@ export default {
 
 const ALLOWED_CATEGORIES = new Set(["classic", "costume", "chaos"]);
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const NO_STORE_HEADERS = {
+  "cache-control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+  "pragma": "no-cache",
+  "expires": "0",
+  "surrogate-control": "no-store",
+  "cdn-cache-control": "no-store",
+  "cloudflare-cdn-cache-control": "no-store"
+};
 
 async function listGoobers(env) {
   const result = await env.DB.prepare(`
@@ -51,7 +59,7 @@ async function listGoobers(env) {
     createdAt: row.created_at
   }));
 
-  return jsonResponse(goobers);
+  return jsonResponse(goobers, 200, NO_STORE_HEADERS);
 }
 
 async function uploadGoober(request, env) {
@@ -64,15 +72,15 @@ async function uploadGoober(request, env) {
   const image = formData.get("image");
 
   if (!hasValidUploadCode(uploadCode, env)) {
-    return jsonResponse({ error: "Invalid upload code." }, 403);
+    return jsonResponse({ error: "Invalid upload code." }, 403, NO_STORE_HEADERS);
   }
 
-  if (!name) return jsonResponse({ error: "Goober name is required." }, 400);
-  if (!description) return jsonResponse({ error: "Goober description is required." }, 400);
-  if (!ALLOWED_CATEGORIES.has(category)) return jsonResponse({ error: "Invalid category." }, 400);
-  if (!(image instanceof File)) return jsonResponse({ error: "Image file is required." }, 400);
-  if (!image.type.startsWith("image/")) return jsonResponse({ error: "File must be an image." }, 400);
-  if (image.size > MAX_IMAGE_BYTES) return jsonResponse({ error: "Image is too large. Max size is 5 MB." }, 400);
+  if (!name) return jsonResponse({ error: "Goober name is required." }, 400, NO_STORE_HEADERS);
+  if (!description) return jsonResponse({ error: "Goober description is required." }, 400, NO_STORE_HEADERS);
+  if (!ALLOWED_CATEGORIES.has(category)) return jsonResponse({ error: "Invalid category." }, 400, NO_STORE_HEADERS);
+  if (!(image instanceof File)) return jsonResponse({ error: "Image file is required." }, 400, NO_STORE_HEADERS);
+  if (!image.type.startsWith("image/")) return jsonResponse({ error: "File must be an image." }, 400, NO_STORE_HEADERS);
+  if (image.size > MAX_IMAGE_BYTES) return jsonResponse({ error: "Image is too large. Max size is 5 MB." }, 400, NO_STORE_HEADERS);
 
   const id = crypto.randomUUID();
   const extension = getExtension(image.name, image.type);
@@ -101,7 +109,7 @@ async function uploadGoober(request, env) {
     category,
     description,
     imageUrl: `/api/goober-image/${imageKey}`
-  }, 201);
+  }, 201, NO_STORE_HEADERS);
 }
 
 async function deleteGoober(request, env) {
@@ -109,13 +117,13 @@ async function deleteGoober(request, env) {
   const id = decodeURIComponent(url.pathname.replace("/api/goobers/", "")).trim();
 
   if (!id || id.includes("/") || id.includes("..")) {
-    return jsonResponse({ error: "Invalid goober id." }, 400);
+    return jsonResponse({ error: "Invalid goober id." }, 400, NO_STORE_HEADERS);
   }
 
   const adminCode = await readAdminCode(request);
 
   if (!hasValidAdminCode(adminCode, env)) {
-    return jsonResponse({ error: "Invalid admin delete code." }, 403);
+    return jsonResponse({ error: "Invalid admin delete code." }, 403, NO_STORE_HEADERS);
   }
 
   const row = await env.DB.prepare(`
@@ -125,16 +133,24 @@ async function deleteGoober(request, env) {
   `).bind(id).first();
 
   if (!row) {
-    return jsonResponse({ error: "Goober not found." }, 404);
+    return jsonResponse({ error: "Goober not found." }, 404, NO_STORE_HEADERS);
   }
 
-  await env.DB.prepare(`DELETE FROM goobers WHERE id = ?`).bind(id).run();
+  await env.DB.prepare(`
+    UPDATE goobers
+    SET approved = 0
+    WHERE id = ?
+  `).bind(id).run();
 
-  if (row.image_key) {
-    await env.GOOBER_IMAGES.delete(row.image_key);
+  try {
+    if (row.image_key) {
+      await env.GOOBER_IMAGES.delete(row.image_key);
+    }
+  } catch (error) {
+    console.error("R2 image delete failed after DB soft delete", error);
   }
 
-  return jsonResponse({ ok: true, id });
+  return jsonResponse({ ok: true, id, deleted: true }, 200, NO_STORE_HEADERS);
 }
 
 async function readAdminCode(request) {
@@ -182,13 +198,13 @@ async function getGooberImage(request, env) {
   const imageKey = decodeURIComponent(url.pathname.replace("/api/goober-image/", ""));
 
   if (!imageKey || imageKey.includes("..") || !imageKey.startsWith("goobers/")) {
-    return jsonResponse({ error: "Invalid image key." }, 400);
+    return jsonResponse({ error: "Invalid image key." }, 400, NO_STORE_HEADERS);
   }
 
   const object = await env.GOOBER_IMAGES.get(imageKey);
 
   if (!object) {
-    return jsonResponse({ error: "Image not found." }, 404);
+    return jsonResponse({ error: "Image not found" }, 404, NO_STORE_HEADERS);
   }
 
   const headers = new Headers();
@@ -219,9 +235,10 @@ function getExtension(filename = "", contentType = "") {
   return "jpg";
 }
 
-function jsonResponse(data, status = 200) {
+function jsonResponse(data, status = 200, headers = {}) {
   return corsResponse(JSON.stringify(data), status, {
-    "content-type": "application/json; charset=utf-8"
+    "content-type": "application/json; charset=utf-8",
+    ...headers
   });
 }
 
@@ -231,7 +248,7 @@ function corsResponse(body, status = 200, headers = {}) {
     headers: {
       "access-control-allow-origin": "*",
       "access-control-allow-methods": "GET, POST, DELETE, OPTIONS",
-      "access-control-allow-headers": "content-type, x-goober-admin-code",
+      "access-control-allow-headers": "content-type, x-goober-admin-code, cache-control, pragma",
       ...headers
     }
   });
