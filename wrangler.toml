@@ -2,6 +2,10 @@ name = "thebiggooberwebsite"
 main = "worker/worker.js"
 compatibility_date = "2026-05-28"
 
+routes = [
+  { pattern = "thebiggooberwebsite.com/api/*", zone_name = "thebiggooberwebsite.com" }
+]
+
 [[d1_databases]]
 binding = "DB"
 database_name = "thebiggooberwebsite-db"
@@ -11,6 +15,3 @@ database_id = "58f2457b-a74c-4370-9ad7-bc43067048af"
 binding = "GOOBER_IMAGES"
 bucket_name = "big-goober-images"
 
-routes = [
-  { pattern = "thebiggooberwebsite.com/api/*", zone_name = "thebiggooberwebsite.com" }
-]
