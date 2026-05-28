@@ -115,9 +115,15 @@
       margin-top: 2px;
       font-size: clamp(1.15rem, 3vw, 1.9rem);
       line-height: 1.05;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      white-space: normal;
+      overflow: visible;
+      text-overflow: clip;
+      overflow-wrap: anywhere;
+    }
+
+    #activeName {
+      font-size: clamp(0.95rem, 2vw, 1.35rem);
+      line-height: 1.05;
     }
 
     .canvas-wrap { position: relative; padding: 16px; background: #fffaf0; }
@@ -141,31 +147,32 @@
       position: absolute;
       inset: 16px;
       display: flex;
-      align-items: center;
-      justify-content: center;
+      align-items: flex-end;
+      justify-content: flex-end;
       padding: 18px;
       pointer-events: none;
     }
 
     .message {
-      width: min(540px, 92%);
+      width: min(330px, 46%);
       background: white;
       border: 4px solid var(--ink);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow), 7px 7px 0 var(--ink);
-      padding: 24px;
+      border-radius: 22px;
+      box-shadow: var(--shadow), 5px 5px 0 var(--ink);
+      padding: 16px;
       text-align: center;
     }
 
     .message h2 {
-      margin: 0 0 8px;
-      font-size: clamp(2rem, 4vw, 3.3rem);
+      margin: 0 0 6px;
+      font-size: clamp(1.55rem, 3vw, 2.3rem);
       letter-spacing: -0.06em;
       line-height: 0.95;
     }
 
-    .message p { margin: 0 0 16px; color: var(--muted); line-height: 1.4; font-weight: 800; }
-    .message .actions { pointer-events: auto; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .message p { margin: 0 0 12px; color: var(--muted); line-height: 1.25; font-weight: 800; font-size: 0.9rem; }
+    .message .actions { pointer-events: auto; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+    .message .actions button { padding: 8px 11px; font-size: 0.85rem; }
 
     button,
     .game-button {
@@ -200,7 +207,7 @@
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 10px;
-      max-height: 250px;
+      max-height: 300px;
       overflow: auto;
       padding: 2px 6px 2px 0;
     }
@@ -211,7 +218,7 @@
       border-radius: 18px;
       padding: 8px;
       cursor: pointer;
-      min-height: 96px;
+      min-height: 112px;
       display: flex;
       flex-direction: column;
       gap: 5px;
@@ -230,13 +237,15 @@
     .goober-option img { width: 58px; height: 58px; object-fit: contain; display: block; }
 
     .goober-option span {
-      font-size: 0.73rem;
+      font-size: 0.72rem;
       color: var(--muted);
       width: 100%;
       text-align: center;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      white-space: normal;
+      overflow: visible;
+      text-overflow: clip;
+      overflow-wrap: anywhere;
+      line-height: 1.05;
       font-weight: 900;
     }
 
@@ -294,10 +303,10 @@
       .game-shell { padding-left: 14px; padding-right: 14px; }
       .hud { gap: 8px; padding: 22px 10px 10px; }
       .canvas-wrap { padding: 10px; }
-      .overlay { inset: 10px; }
+      .overlay { inset: 10px; align-items: flex-end; justify-content: center; }
       canvas { min-height: 270px; border-radius: 18px; }
       .runner-grid { grid-template-columns: repeat(3, 1fr); }
-      .message { padding: 18px; }
+      .message { width: min(330px, 92%); padding: 14px; }
     }
   </style>
 </head>
