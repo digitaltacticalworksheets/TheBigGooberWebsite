@@ -7,6 +7,8 @@ const gooberNameInput = document.getElementById("gooberName");
 const gooberCategoryInput = document.getElementById("gooberCategory");
 const gooberDescriptionInput = document.getElementById("gooberDescription");
 const gooberImageInput = document.getElementById("gooberImage");
+const gooberUploadCodeInput = document.getElementById("gooberUploadCode");
+const adminDeleteCodeInput = document.getElementById("adminDeleteCode");
 const filePreview = document.getElementById("filePreview");
 const uploadStatus = document.getElementById("uploadStatus");
 const reloadCloudGoobersButton = document.getElementById("reloadCloudGoobers");
@@ -62,6 +64,15 @@ function createGooberCard(goober, isCloud = false) {
   info.appendChild(title);
   info.appendChild(description);
   info.appendChild(tags);
+
+  if (isCloud) {
+    const deleteButton = document.createElement("button");
+    deleteButton.className = "delete-goober";
+    deleteButton.type = "button";
+    deleteButton.textContent = "Admin delete";
+    deleteButton.addEventListener("click", () => deleteGoober(goober));
+    info.appendChild(deleteButton);
+  }
 
   card.appendChild(imageWrap);
   card.appendChild(info);
@@ -170,6 +181,46 @@ async function loadCloudGoobers() {
   }
 }
 
+async function deleteGoober(goober) {
+  const inlineCode = adminDeleteCodeInput?.value.trim() || "";
+  const adminCode = inlineCode || window.prompt("Enter the admin delete code to remove this Goober:");
+
+  if (!adminCode) {
+    uploadStatus.textContent = "Admin delete canceled.";
+    return;
+  }
+
+  const confirmed = window.confirm(`Delete ${goober.name || "this Goober"}? This removes it from the gallery and games.`);
+
+  if (!confirmed) {
+    uploadStatus.textContent = "Admin delete canceled.";
+    return;
+  }
+
+  uploadStatus.textContent = `Deleting ${goober.name || "Goober"}...`;
+
+  try {
+    const response = await fetch(`${API_BASE}/api/goobers/${encodeURIComponent(goober.id)}`, {
+      method: "DELETE",
+      headers: {
+        "x-goober-admin-code": adminCode
+      }
+    });
+
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(result.error || "Delete failed.");
+    }
+
+    uploadStatus.textContent = `${goober.name || "Goober"} deleted.`;
+    await loadCloudGoobers();
+  } catch (error) {
+    console.error(error);
+    uploadStatus.textContent = error.message || "Delete failed.";
+  }
+}
+
 if (gooberImageInput) {
   gooberImageInput.addEventListener("change", async () => {
     const file = gooberImageInput.files[0];
@@ -202,6 +253,12 @@ if (uploadForm) {
     event.preventDefault();
 
     const file = gooberImageInput.files[0];
+    const uploadCode = gooberUploadCodeInput?.value.trim() || "";
+
+    if (!uploadCode) {
+      uploadStatus.textContent = "Enter the upload code first.";
+      return;
+    }
 
     if (!file) {
       uploadStatus.textContent = "Choose a Goober image first.";
@@ -223,6 +280,7 @@ if (uploadForm) {
     }
 
     const formData = new FormData();
+    formData.append("uploadCode", uploadCode);
     formData.append("name", name);
     formData.append("category", category);
     formData.append("description", description);
@@ -242,7 +300,9 @@ if (uploadForm) {
         throw new Error(result.error || "Upload failed.");
       }
 
+      const savedCode = uploadCode;
       uploadForm.reset();
+      if (gooberUploadCodeInput) gooberUploadCodeInput.value = savedCode;
       filePreview.textContent = "Image preview will appear here.";
       uploadStatus.textContent = `${result.name || name} uploaded successfully.`;
 
