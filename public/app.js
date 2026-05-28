@@ -35,6 +35,20 @@ function updateAdminDeleteVisibility() {
   });
 }
 
+function closeGamesDropdowns() {
+  document.querySelectorAll(".nav-dropdown.open").forEach((dropdown) => {
+    dropdown.classList.remove("open");
+    dropdown.querySelector(".nav-dropdown-toggle")?.setAttribute("aria-expanded", "false");
+  });
+}
+
+document.querySelectorAll(".nav-dropdown-menu a").forEach((link) => {
+  link.addEventListener("click", () => {
+    closeGamesDropdowns();
+    link.blur();
+  });
+});
+
 function createGooberCard(goober, isCloud = false) {
   const card = document.createElement("article");
   card.className = "goober-card";
@@ -161,7 +175,7 @@ function readImageFile(file) {
   });
 }
 
-async function loadCloudGoobers() {
+async function loadCloudGoobers(options = {}) {
   if (!gooberGrid) return;
 
   try {
@@ -169,7 +183,10 @@ async function loadCloudGoobers() {
       .querySelectorAll("[data-cloud-goober-id]")
       .forEach((card) => card.remove());
 
-    const response = await fetch(`${API_BASE}/api/goobers`);
+    const cacheBust = options.bustCache ? `?t=${Date.now()}` : "";
+    const response = await fetch(`${API_BASE}/api/goobers${cacheBust}`, {
+      cache: options.bustCache ? "no-store" : "default"
+    });
 
     if (!response.ok) {
       throw new Error("Could not load uploaded Goobers.");
@@ -185,7 +202,7 @@ async function loadCloudGoobers() {
     updateAdminDeleteVisibility();
     applyCurrentFilter();
 
-    if (uploadStatus && goobers.length > 0) {
+    if (uploadStatus) {
       uploadStatus.textContent = `${goobers.length} uploaded Goober${
         goobers.length === 1 ? "" : "s"
       } loaded.`;
@@ -199,6 +216,16 @@ async function loadCloudGoobers() {
         "Uploaded Goobers could not be loaded. Check the Worker API setup.";
     }
   }
+}
+
+function removeGooberCardFromGallery(gooberId) {
+  document.querySelectorAll("[data-cloud-goober-id]").forEach((card) => {
+    if (card.dataset.cloudGooberId === gooberId) {
+      card.remove();
+    }
+  });
+
+  applyCurrentFilter();
 }
 
 async function deleteGoober(goober) {
@@ -225,7 +252,8 @@ async function deleteGoober(goober) {
       method: "DELETE",
       headers: {
         "x-goober-admin-code": adminCode
-      }
+      },
+      cache: "no-store"
     });
 
     const result = await response.json().catch(() => ({}));
@@ -234,8 +262,9 @@ async function deleteGoober(goober) {
       throw new Error(result.error || "Delete failed.");
     }
 
+    removeGooberCardFromGallery(goober.id);
     uploadStatus.textContent = `${goober.name || "Goober"} deleted.`;
-    await loadCloudGoobers();
+    await loadCloudGoobers({ bustCache: true });
   } catch (error) {
     console.error(error);
     uploadStatus.textContent = error.message || "Delete failed.";
@@ -320,7 +349,8 @@ if (uploadForm) {
     try {
       const response = await fetch(`${API_BASE}/api/goobers`, {
         method: "POST",
-        body: formData
+        body: formData,
+        cache: "no-store"
       });
 
       const result = await response.json().catch(() => ({}));
@@ -335,7 +365,7 @@ if (uploadForm) {
       filePreview.textContent = "Image preview will appear here.";
       uploadStatus.textContent = `${result.name || name} uploaded successfully.`;
 
-      await loadCloudGoobers();
+      await loadCloudGoobers({ bustCache: true });
 
       document.getElementById("goobers").scrollIntoView({
         behavior: "smooth"
@@ -350,8 +380,8 @@ if (uploadForm) {
 }
 
 if (reloadCloudGoobersButton) {
-  reloadCloudGoobersButton.addEventListener("click", loadCloudGoobers);
+  reloadCloudGoobersButton.addEventListener("click", () => loadCloudGoobers({ bustCache: true }));
 }
 
 updateAdminDeleteVisibility();
-loadCloudGoobers();
+loadCloudGoobers({ bustCache: true });
