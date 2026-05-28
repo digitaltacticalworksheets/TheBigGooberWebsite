@@ -15,6 +15,10 @@ export default {
         return await uploadGoober(request, env);
       }
 
+      if (url.pathname.startsWith("/api/goobers/") && request.method === "DELETE") {
+        return await deleteGoober(request, env);
+      }
+
       if (url.pathname.startsWith("/api/goober-image/") && request.method === "GET") {
         return await getGooberImage(request, env);
       }
@@ -53,10 +57,15 @@ async function listGoobers(env) {
 async function uploadGoober(request, env) {
   const formData = await request.formData();
 
+  const uploadCode = cleanText(formData.get("uploadCode"), 120);
   const name = cleanText(formData.get("name"), 80);
   const category = cleanText(formData.get("category"), 30);
   const description = cleanText(formData.get("description"), 280);
   const image = formData.get("image");
+
+  if (!hasValidUploadCode(uploadCode, env)) {
+    return jsonResponse({ error: "Invalid upload code." }, 403);
+  }
 
   if (!name) return jsonResponse({ error: "Goober name is required." }, 400);
   if (!description) return jsonResponse({ error: "Goober description is required." }, 400);
@@ -93,6 +102,79 @@ async function uploadGoober(request, env) {
     description,
     imageUrl: `/api/goober-image/${imageKey}`
   }, 201);
+}
+
+async function deleteGoober(request, env) {
+  const url = new URL(request.url);
+  const id = decodeURIComponent(url.pathname.replace("/api/goobers/", "")).trim();
+
+  if (!id || id.includes("/") || id.includes("..")) {
+    return jsonResponse({ error: "Invalid goober id." }, 400);
+  }
+
+  const adminCode = await readAdminCode(request);
+
+  if (!hasValidAdminCode(adminCode, env)) {
+    return jsonResponse({ error: "Invalid admin delete code." }, 403);
+  }
+
+  const row = await env.DB.prepare(`
+    SELECT id, image_key
+    FROM goobers
+    WHERE id = ?
+  `).bind(id).first();
+
+  if (!row) {
+    return jsonResponse({ error: "Goober not found." }, 404);
+  }
+
+  await env.DB.prepare(`DELETE FROM goobers WHERE id = ?`).bind(id).run();
+
+  if (row.image_key) {
+    await env.GOOBER_IMAGES.delete(row.image_key);
+  }
+
+  return jsonResponse({ ok: true, id });
+}
+
+async function readAdminCode(request) {
+  const headerCode = cleanText(request.headers.get("x-goober-admin-code"), 120);
+  if (headerCode) return headerCode;
+
+  const contentType = request.headers.get("content-type") || "";
+
+  if (contentType.includes("application/json")) {
+    const body = await request.json().catch(() => ({}));
+    return cleanText(body.adminCode, 120);
+  }
+
+  if (contentType.includes("multipart/form-data") || contentType.includes("application/x-www-form-urlencoded")) {
+    const formData = await request.formData().catch(() => null);
+    return cleanText(formData?.get("adminCode"), 120);
+  }
+
+  return "";
+}
+
+function hasValidUploadCode(code, env) {
+  const expected = cleanText(env.GOOBER_UPLOAD_CODE, 120);
+  return Boolean(expected && code && safeEqual(code, expected));
+}
+
+function hasValidAdminCode(code, env) {
+  const expected = cleanText(env.GOOBER_ADMIN_CODE || env.GOOBER_UPLOAD_CODE, 120);
+  return Boolean(expected && code && safeEqual(code, expected));
+}
+
+function safeEqual(a, b) {
+  if (a.length !== b.length) return false;
+
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+
+  return result === 0;
 }
 
 async function getGooberImage(request, env) {
@@ -148,8 +230,8 @@ function corsResponse(body, status = 200, headers = {}) {
     status,
     headers: {
       "access-control-allow-origin": "*",
-      "access-control-allow-methods": "GET, POST, OPTIONS",
-      "access-control-allow-headers": "content-type",
+      "access-control-allow-methods": "GET, POST, DELETE, OPTIONS",
+      "access-control-allow-headers": "content-type, x-goober-admin-code",
       ...headers
     }
   });
