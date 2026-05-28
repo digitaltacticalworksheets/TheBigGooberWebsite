@@ -498,6 +498,12 @@ color: white;
 padding: 26px 22px;
 text-align: center;
 font-weight: 800;
+font-size: 0;
+}
+
+footer::after {
+content: "The Big Goober Website - Built for maximum goober appreciation Created by Leo and Evan";
+font-size: 1rem;
 }
 
 @media (max-width: 940px) {
