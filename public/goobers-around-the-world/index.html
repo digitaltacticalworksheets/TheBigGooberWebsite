@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Goobers Around the World | The Big Goober Website</title>
+  <meta name="description" content="Pose uploaded goobers in famous places around the world." />
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    body { overflow-x: hidden; }
+    .world-hero { max-width: 1180px; margin: 0 auto; padding: 34px 22px 18px; }
+    .world-hero h1 { font-size: clamp(2.8rem, 7vw, 6.8rem); line-height: 0.88; margin: 0 0 18px; letter-spacing: -0.08em; }
+    .world-hero p { color: var(--muted); font-size: clamp(1.05rem, 2vw, 1.25rem); line-height: 1.45; max-width: 820px; margin: 0; }
+    .world-shell { max-width: 1180px; margin: 0 auto; padding: 16px 22px 70px; display: grid; grid-template-columns: minmax(0, 1fr) 350px; gap: 24px; align-items: start; }
+    .postcard, .control-panel { background: var(--card); border: 4px solid var(--ink); border-radius: var(--radius); box-shadow: var(--shadow), 7px 7px 0 var(--ink); overflow: hidden; }
+    .postcard { position: relative; background: #fffaf0; }
+    .postcard::before { content: "goober postcard studio"; position: absolute; z-index: 3; top: -4px; left: 28px; background: var(--pink); border: 3px solid var(--ink); border-radius: 999px; padding: 7px 14px; font-size: 0.9rem; font-weight: 900; rotate: -4deg; }
+    .scene-title { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 24px 16px 14px; background: var(--yellow); border-bottom: 4px solid var(--ink); }
+    .scene-title h2 { margin: 0; font-size: clamp(1.35rem, 3vw, 2.4rem); letter-spacing: -0.04em; line-height: 0.95; }
+    .scene-title span { font-weight: 900; color: var(--muted); text-align: right; }
+    .stage-wrap { padding: 16px; position: relative; }
+    canvas { display: block; width: 100%; aspect-ratio: 16 / 9; min-height: 360px; max-height: calc(100vh - 240px); background: var(--blue); border: 4px solid var(--ink); border-radius: 24px; box-shadow: 5px 5px 0 var(--ink); touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; }
+    canvas:active { cursor: grabbing; }
+    .hint { position: absolute; left: 30px; bottom: 30px; max-width: 360px; background: white; border: 3px solid var(--ink); border-radius: 18px; box-shadow: 4px 4px 0 var(--ink); padding: 10px 12px; font-weight: 900; color: var(--muted); pointer-events: none; }
+    .control-panel { padding: 18px; background: var(--blue); position: sticky; top: 14px; }
+    .control-panel h2, .control-panel h3 { margin: 0 0 10px; letter-spacing: -0.04em; }
+    .control-panel p { margin: 0 0 14px; color: #26333a; line-height: 1.4; font-weight: 800; }
+    button, select, .world-button { color: var(--ink); text-decoration: none; font-weight: 900; border: 3px solid var(--ink); border-radius: 999px; background: white; padding: 10px 14px; box-shadow: 3px 3px 0 var(--ink); transition: transform 0.14s ease, box-shadow 0.14s ease, background 0.14s ease; cursor: pointer; font-family: inherit; font-size: 0.94rem; }
+    button:hover, .world-button:hover { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); background: var(--yellow); }
+    button.primary { background: var(--orange); }
+    select { width: 100%; border-radius: 18px; background: #fffaf0; }
+    .controls { display: grid; gap: 10px; margin-bottom: 16px; }
+    .button-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .goober-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-height: 260px; overflow: auto; padding: 2px 6px 2px 0; margin-bottom: 16px; }
+    .goober-option { border: 3px solid var(--ink); background: white; border-radius: 18px; padding: 8px; cursor: pointer; min-height: 112px; display: flex; flex-direction: column; gap: 5px; align-items: center; justify-content: center; box-shadow: 3px 3px 0 var(--ink); }
+    .goober-option:hover, .goober-option.selected { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); background: var(--yellow); }
+    .goober-option img { width: 58px; height: 58px; object-fit: contain; display: block; }
+    .goober-option span { font-size: 0.72rem; color: var(--muted); width: 100%; text-align: center; white-space: normal; overflow-wrap: anywhere; line-height: 1.05; font-weight: 900; }
+    .adjust-panel { display: grid; gap: 10px; margin: 14px 0 8px; padding: 14px; border: 4px solid var(--ink); border-radius: 22px; background: white; box-shadow: 4px 4px 0 var(--ink); }
+    .slider-row { display: grid; grid-template-columns: 78px 1fr 48px; gap: 8px; align-items: center; color: var(--ink); font-size: 0.84rem; font-weight: 900; }
+    .slider-row output { color: var(--muted); text-align: right; font-size: 0.78rem; }
+    input[type="range"] { width: 100%; accent-color: var(--orange); }
+    .location-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0 16px; }
+    .location-grid button { border-radius: 18px; min-height: 58px; padding: 8px; line-height: 1.05; }
+    .location-grid button.active { background: var(--yellow); }
+    .error { border: 3px solid var(--ink); background: #ffd1d1; color: var(--ink); border-radius: 16px; padding: 10px 12px; margin-bottom: 12px; display: none; font-weight: 900; }
+    .help { display: grid; gap: 8px; margin-top: 16px; color: #26333a; font-size: 0.92rem; line-height: 1.35; font-weight: 800; }
+    .pill { display: inline-flex; align-items: center; justify-content: center; min-width: 34px; padding: 3px 8px; border-radius: 999px; border: 2px solid var(--ink); background: white; color: var(--ink); font-weight: 900; }
+    @media (max-width: 940px) { .world-shell { grid-template-columns: 1fr; } .control-panel { position: static; } canvas { min-height: 300px; max-height: none; } .goober-grid { grid-template-columns: repeat(4, 1fr); } }
+    @media (max-width: 560px) { .world-hero { padding-top: 20px; } .world-shell { padding-left: 14px; padding-right: 14px; } .scene-title { align-items: flex-start; flex-direction: column; padding-top: 24px; } .scene-title span { text-align: left; } .stage-wrap { padding: 10px; } canvas { min-height: 270px; border-radius: 18px; } .hint { left: 18px; right: 18px; bottom: 20px; max-width: none; font-size: 0.82rem; } .goober-grid { grid-template-columns: repeat(3, 1fr); } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo" aria-label="The Big Goober Website logo">
+      <div class="logo-mark"><img src="/assets/original-goober.jpg" alt="Miniature Original Goober logo" /></div>
+      <span>The Big Goober Website</span>
+    </div>
+    <nav><a href="/">Home</a><a href="/#goobers">Goober Gallery</a><a href="/goober-run/">Goober Run</a><a href="/#upload">Add Goober</a></nav>
+  </header>
+
+  <section class="world-hero">
+    <h1>Goobers Around the World.</h1>
+    <p>Pick an uploaded goober and pose it in famous places around the world. Drag it around, zoom it, rotate it, flip it, then save the postcard.</p>
+  </section>
+
+  <main class="world-shell">
+    <section class="postcard">
+      <div class="scene-title">
+        <h2 id="placeTitle">Paris, France</h2>
+        <span id="placeSubtitle">Eiffel Tower postcard mode</span>
+      </div>
+      <div class="stage-wrap">
+        <canvas id="worldCanvas" width="1280" height="720" aria-label="Goober postcard canvas"></canvas>
+        <div class="hint">Drag the goober on the postcard. Use the sliders to zoom, rotate, and pose it.</div>
+      </div>
+    </section>
+
+    <aside class="control-panel">
+      <h2>Build a Goober Postcard</h2>
+      <p>Uploaded goobers load from <strong>/api/goobers</strong>. This does not change the uploaded image.</p>
+      <div class="error" id="errorBox"></div>
+
+      <h3>Choose a Goober</h3>
+      <div class="goober-grid" id="gooberGrid" aria-label="Uploaded goober choices"></div>
+      <div class="controls">
+        <button class="primary" id="randomGooberBtn">Random Goober</button>
+      </div>
+
+      <h3>Choose a Place</h3>
+      <div class="location-grid" id="locationGrid"></div>
+
+      <h3>Pose Controls</h3>
+      <div class="adjust-panel">
+        <label class="slider-row" for="sizeRange"><span>Size</span><input id="sizeRange" type="range" min="60" max="360" step="4" value="190" /><output id="sizeValue">190</output></label>
+        <label class="slider-row" for="rotateRange"><span>Rotate</span><input id="rotateRange" type="range" min="-45" max="45" step="1" value="0" /><output id="rotateValue">0°</output></label>
+        <label class="slider-row" for="xRange"><span>Left/Right</span><input id="xRange" type="range" min="0" max="1280" step="1" value="640" /><output id="xValue">640</output></label>
+        <label class="slider-row" for="yRange"><span>Up/Down</span><input id="yRange" type="range" min="0" max="720" step="1" value="500" /><output id="yValue">500</output></label>
+        <div class="button-row"><button id="flipBtn" type="button">Flip</button><button id="resetPoseBtn" type="button">Reset Pose</button></div>
+      </div>
+
+      <div class="button-row">
+        <button id="randomSceneBtn" type="button">Random Scene</button>
+        <button id="downloadBtn" type="button">Save Postcard</button>
+      </div>
+
+      <div class="help">
+        <div><span class="pill">Drag</span> move the goober</div>
+        <div><span class="pill">Sliders</span> fine tune the pose</div>
+        <div><span class="pill">Save</span> downloads a PNG postcard</div>
+      </div>
+    </aside>
+  </main>
+
+  <footer>The Big Goober Website - Built for maximum goober appreciation Created by Leo and Evan</footer>
+
+  <script>
+    const canvas = document.getElementById("worldCanvas");
+    const ctx = canvas.getContext("2d");
+    const gooberGrid = document.getElementById("gooberGrid");
+    const locationGrid = document.getElementById("locationGrid");
+    const errorBox = document.getElementById("errorBox");
+    const placeTitle = document.getElementById("placeTitle");
+    const placeSubtitle = document.getElementById("placeSubtitle");
+    const randomGooberBtn = document.getElementById("randomGooberBtn");
+    const randomSceneBtn = document.getElementById("randomSceneBtn");
+    const downloadBtn = document.getElementById("downloadBtn");
+    const flipBtn = document.getElementById("flipBtn");
+    const resetPoseBtn = document.getElementById("resetPoseBtn");
+    const sizeRange = document.getElementById("sizeRange");
+    const rotateRange = document.getElementById("rotateRange");
+    const xRange = document.getElementById("xRange");
+    const yRange = document.getElementById("yRange");
+    const sizeValue = document.getElementById("sizeValue");
+    const rotateValue = document.getElementById("rotateValue");
+    const xValue = document.getElementById("xValue");
+    const yValue = document.getElementById("yValue");
+
+    const places = [
+      { id: "paris", title: "Paris, France", subtitle: "Eiffel Tower postcard mode", button: "Paris", draw: drawParis, pose: { x: 300, y: 520, size: 190, rotate: -4, flip: 1 } },
+      { id: "egypt", title: "Giza, Egypt", subtitle: "Pyramids and desert chaos", button: "Pyramids", draw: drawEgypt, pose: { x: 930, y: 520, size: 180, rotate: 2, flip: -1 } },
+      { id: "nyc", title: "New York City, USA", subtitle: "Statue of Liberty sightseeing", button: "NYC", draw: drawNYC, pose: { x: 370, y: 525, size: 185, rotate: 0, flip: 1 } },
+      { id: "rome", title: "Rome, Italy", subtitle: "Colosseum vacation energy", button: "Rome", draw: drawRome, pose: { x: 1000, y: 535, size: 170, rotate: 5, flip: -1 } },
+      { id: "london", title: "London, England", subtitle: "Big Ben and rainy goober weather", button: "London", draw: drawLondon, pose: { x: 870, y: 520, size: 180, rotate: -3, flip: -1 } },
+      { id: "tokyo", title: "Tokyo, Japan", subtitle: "Mount Fuji and neon city vibes", button: "Tokyo", draw: drawTokyo, pose: { x: 260, y: 525, size: 175, rotate: 3, flip: 1 } },
+      { id: "sydney", title: "Sydney, Australia", subtitle: "Opera House harbor goober", button: "Sydney", draw: drawSydney, pose: { x: 935, y: 540, size: 175, rotate: -2, flip: -1 } },
+      { id: "rio", title: "Rio de Janeiro, Brazil", subtitle: "Mountains, beach, and giant statue vibes", button: "Rio", draw: drawRio, pose: { x: 230, y: 540, size: 185, rotate: 4, flip: 1 } }
+    ];
+
+    const state = { goobers: [], selectedIndex: 0, image: null, imageReady: false, placeIndex: 0, pose: { x: 300, y: 520, size: 190, rotate: -4, flip: 1 }, dragging: false, dragOffsetX: 0, dragOffsetY: 0 };
+
+    function showError(message) { errorBox.textContent = message; errorBox.style.display = message ? "block" : "none"; }
+    function roundedRect(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+    function setStroke(width = 5) { ctx.lineWidth = width; ctx.strokeStyle = "#1f1f1f"; ctx.lineJoin = "round"; ctx.lineCap = "round"; }
+
+    async function loadGoobers() {
+      try {
+        const response = await fetch("/api/goobers", { headers: { accept: "application/json" } });
+        if (!response.ok) throw new Error("Could not load goobers.");
+        const goobers = await response.json();
+        state.goobers = Array.isArray(goobers) && goobers.length ? goobers : [{ id: "fallback", name: "Mystery Goober", imageUrl: "" }];
+        if (!goobers.length) showError("No uploaded goobers were returned yet, so Mystery Goober is available.");
+      } catch (error) {
+        state.goobers = [{ id: "fallback", name: "Mystery Goober", imageUrl: "" }];
+        showError("The goober API did not respond, so Mystery Goober is available.");
+      }
+      renderGooberGrid();
+      selectGoober(Math.floor(Math.random() * state.goobers.length));
+    }
+
+    function renderGooberGrid() {
+      gooberGrid.innerHTML = "";
+      state.goobers.forEach((goober, index) => {
+        const button = document.createElement("button");
+        button.className = "goober-option" + (index === state.selectedIndex ? " selected" : "");
+        button.type = "button";
+        button.title = goober.name || "Goober";
+        if (goober.imageUrl) {
+          const img = document.createElement("img");
+          img.src = goober.imageUrl;
+          img.alt = goober.name || "Goober";
+          button.appendChild(img);
+        } else {
+          const fallback = document.createElement("div");
+          fallback.style.fontSize = "2.4rem";
+          fallback.textContent = "🌎";
+          button.appendChild(fallback);
+        }
+        const label = document.createElement("span");
+        label.textContent = goober.name || "Goober";
+        button.appendChild(label);
+        button.addEventListener("click", () => selectGoober(index));
+        gooberGrid.appendChild(button);
+      });
+    }
+
+    function renderLocations() {
+      locationGrid.innerHTML = "";
+      places.forEach((place, index) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = place.button;
+        button.className = index === state.placeIndex ? "active" : "";
+        button.addEventListener("click", () => selectPlace(index));
+        locationGrid.appendChild(button);
+      });
+    }
+
+    function selectGoober(index) {
+      state.selectedIndex = Math.max(0, Math.min(index, state.goobers.length - 1));
+      const goober = state.goobers[state.selectedIndex];
+      state.imageReady = false;
+      state.image = null;
+      if (goober.imageUrl) {
+        const img = new Image();
+        img.onload = () => { state.image = img; state.imageReady = true; draw(); };
+        img.onerror = () => { state.image = null; state.imageReady = false; draw(); };
+        img.src = goober.imageUrl;
+      }
+      [...gooberGrid.children].forEach((child, i) => child.classList.toggle("selected", i === state.selectedIndex));
+      draw();
+    }
+
+    function selectPlace(index, resetPose = true) {
+      state.placeIndex = Math.max(0, Math.min(index, places.length - 1));
+      const place = places[state.placeIndex];
+      placeTitle.textContent = place.title;
+      placeSubtitle.textContent = place.subtitle;
+      if (resetPose) state.pose = { ...place.pose };
+      renderLocations();
+      syncControls();
+      draw();
+    }
+
+    function syncControls() {
+      sizeRange.value = state.pose.size;
+      rotateRange.value = state.pose.rotate;
+      xRange.value = state.pose.x;
+      yRange.value = state.pose.y;
+      sizeValue.textContent = Math.round(state.pose.size);
+      rotateValue.textContent = `${Math.round(state.pose.rotate)}°`;
+      xValue.textContent = Math.round(state.pose.x);
+      yValue.textContent = Math.round(state.pose.y);
+      flipBtn.textContent = state.pose.flip === -1 ? "Unflip" : "Flip";
+    }
+
+    function draw() {
+      const place = places[state.placeIndex];
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      place.draw();
+      drawPostcardStamp(place);
+      drawGoober();
+    }
+
+    function drawBackground(skyTop = "#8ed3ff", skyBottom = "#fffaf0", ground = "#98e7a7") {
+      const gradient = ctx.createLinearGradient(0, 0, 0, 720);
+      gradient.addColorStop(0, skyTop);
+      gradient.addColorStop(0.65, skyBottom);
+      gradient.addColorStop(1, ground);
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 1280, 720);
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      drawCloud(180, 95, 62); drawCloud(980, 115, 76); drawCloud(640, 80, 42);
+    }
+
+    function drawCloud(x, y, s) {
+      ctx.beginPath();
+      ctx.arc(x, y, s * 0.42, 0, Math.PI * 2);
+      ctx.arc(x + s * 0.42, y - s * 0.18, s * 0.48, 0, Math.PI * 2);
+      ctx.arc(x + s * 0.92, y, s * 0.38, 0, Math.PI * 2);
+      ctx.arc(x + s * 0.45, y + s * 0.16, s * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function drawPostcardStamp(place) {
+      setStroke(4);
+      ctx.save();
+      ctx.translate(1010, 38);
+      ctx.rotate(0.04);
+      ctx.fillStyle = "rgba(255,255,255,0.86)";
+      roundedRect(0, 0, 230, 82, 16); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#1f1f1f";
+      ctx.font = "900 22px Comic Sans MS, Trebuchet MS, system-ui";
+      ctx.fillText("GOOBER", 24, 34);
+      ctx.font = "900 15px Comic Sans MS, Trebuchet MS, system-ui";
+      ctx.fillText("POSTCARD", 24, 58);
+      ctx.strokeRect(158, 18, 42, 42);
+      ctx.restore();
+    }
+
+    function drawGoober() {
+      const p = state.pose;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate((p.rotate * Math.PI) / 180);
+      ctx.scale(p.flip, 1);
+      ctx.fillStyle = "rgba(31,31,31,0.22)";
+      ctx.beginPath();
+      ctx.ellipse(0, p.size * 0.42, p.size * 0.34, p.size * 0.08, 0, 0, Math.PI * 2);
+      ctx.fill();
+      if (state.image && state.imageReady) {
+        const ratio = state.image.width / Math.max(1, state.image.height);
+        let w = p.size;
+        let h = p.size;
+        if (ratio > 1) h = p.size / ratio;
+        else w = p.size * ratio;
+        ctx.drawImage(state.image, -w / 2, -h / 2, w, h);
+      } else {
+        setStroke(5);
+        ctx.fillStyle = "#ffd34d";
+        ctx.beginPath(); ctx.arc(0, -20, p.size * 0.28, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = "#1f1f1f";
+        ctx.beginPath(); ctx.arc(-18, -28, 6, 0, Math.PI * 2); ctx.arc(18, -28, 6, 0, Math.PI * 2); ctx.fill();
+        ctx.font = `900 ${Math.round(p.size * 0.16)}px Comic Sans MS, Trebuchet MS, system-ui`;
+        ctx.textAlign = "center"; ctx.fillText("GOOB", 0, 25);
+      }
+      ctx.restore();
+    }
+
+    function drawParis() {
+      drawBackground("#8ed3ff", "#fff4cb", "#98e7a7");
+      setStroke(7);
+      ctx.fillStyle = "#6b6257";
+      ctx.beginPath(); ctx.moveTo(610, 135); ctx.lineTo(470, 615); ctx.lineTo(540, 615); ctx.lineTo(640, 245); ctx.lineTo(740, 615); ctx.lineTo(810, 615); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(550, 330); ctx.lineTo(730, 330); ctx.moveTo(520, 430); ctx.lineTo(760, 430); ctx.moveTo(500, 530); ctx.lineTo(780, 530); ctx.stroke();
+      ctx.fillStyle = "#ff8bd1"; ctx.beginPath(); ctx.arc(210, 620, 42, 0, Math.PI * 2); ctx.arc(255, 620, 42, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#fffaf0"; roundedRect(0, 615, 1280, 105, 0); ctx.fill();
+    }
+
+    function drawEgypt() {
+      drawBackground("#ffd34d", "#fff4cb", "#ffcf75");
+      ctx.fillStyle = "#ffcf75"; ctx.fillRect(0, 490, 1280, 230);
+      setStroke(6);
+      ctx.fillStyle = "#d7a24a"; ctx.beginPath(); ctx.moveTo(120, 520); ctx.lineTo(360, 260); ctx.lineTo(610, 520); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#f0bf63"; ctx.beginPath(); ctx.moveTo(505, 520); ctx.lineTo(735, 310); ctx.lineTo(990, 520); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#b98346"; ctx.beginPath(); ctx.moveTo(360, 260); ctx.lineTo(610, 520); ctx.lineTo(450, 520); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#1f1f1f"; ctx.font = "900 28px Comic Sans MS, Trebuchet MS, system-ui"; ctx.fillText("GIZA GOOBER TOUR", 70, 650);
+    }
+
+    function drawNYC() {
+      drawBackground("#8ed3ff", "#d8f2ff", "#8ed3ff");
+      ctx.fillStyle = "#8ed3ff"; ctx.fillRect(0, 510, 1280, 210);
+      setStroke(5);
+      ctx.fillStyle = "#6b6257"; ctx.fillRect(520, 260, 70, 250); ctx.strokeRect(520, 260, 70, 250);
+      ctx.fillStyle = "#98e7a7"; ctx.fillRect(545, 170, 24, 90); ctx.strokeRect(545, 170, 24, 90);
+      ctx.beginPath(); ctx.moveTo(557, 100); ctx.lineTo(530, 180); ctx.lineTo(584, 180); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#fffaf0"; for (let x = 690; x < 1120; x += 70) { const h = 160 + (x % 3) * 55; ctx.fillRect(x, 510 - h, 45, h); ctx.strokeRect(x, 510 - h, 45, h); }
+      ctx.fillStyle = "#fffaf0"; ctx.fillRect(0, 585, 1280, 135);
+    }
+
+    function drawRome() {
+      drawBackground("#ffcf75", "#fffaf0", "#98e7a7");
+      setStroke(6);
+      ctx.fillStyle = "#d7a24a"; roundedRect(180, 285, 790, 265, 24); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#fff4cb"; for (let y = 325; y <= 465; y += 70) for (let x = 230; x <= 875; x += 85) { ctx.beginPath(); ctx.arc(x, y + 34, 25, Math.PI, 0); ctx.lineTo(x + 25, y + 55); ctx.lineTo(x - 25, y + 55); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+      ctx.fillStyle = "#98e7a7"; ctx.fillRect(0, 550, 1280, 170);
+      ctx.fillStyle = "#1f1f1f"; ctx.font = "900 28px Comic Sans MS, Trebuchet MS, system-ui"; ctx.fillText("ROMA", 1005, 610);
+    }
+
+    function drawLondon() {
+      drawBackground("#b9d8e6", "#fffaf0", "#98e7a7");
+      setStroke(6);
+      ctx.fillStyle = "#d7a24a"; ctx.fillRect(610, 160, 88, 390); ctx.strokeRect(610, 160, 88, 390);
+      ctx.fillStyle = "#fffaf0"; ctx.beginPath(); ctx.arc(654, 245, 31, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#1f1f1f"; ctx.fillRect(650, 218, 6, 30); ctx.fillRect(654, 242, 18, 5);
+      ctx.fillStyle = "#6b6257"; ctx.beginPath(); ctx.moveTo(654, 95); ctx.lineTo(610, 160); ctx.lineTo(698, 160); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#98e7a7"; ctx.fillRect(0, 550, 1280, 170);
+      for (let i = 0; i < 35; i++) { ctx.fillStyle = "#8ed3ff"; ctx.fillRect((i * 47) % 1280, 70 + (i * 29) % 380, 8, 18); }
+    }
+
+    function drawTokyo() {
+      drawBackground("#8ed3ff", "#ffe0eb", "#98e7a7");
+      setStroke(6);
+      ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.moveTo(760, 460); ctx.lineTo(900, 245); ctx.lineTo(1040, 460); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#8ed3ff"; ctx.beginPath(); ctx.moveTo(850, 320); ctx.lineTo(900, 245); ctx.lineTo(950, 320); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#ff8bd1"; for (let x = 90; x < 560; x += 80) { ctx.fillRect(x, 380 - (x % 160), 52, 190 + (x % 160)); ctx.strokeRect(x, 380 - (x % 160), 52, 190 + (x % 160)); }
+      ctx.fillStyle = "#98e7a7"; ctx.fillRect(0, 555, 1280, 165);
+    }
+
+    function drawSydney() {
+      drawBackground("#8ed3ff", "#fffaf0", "#8ed3ff");
+      ctx.fillStyle = "#8ed3ff"; ctx.fillRect(0, 500, 1280, 220);
+      setStroke(6);
+      ctx.fillStyle = "#fffaf0"; for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.moveTo(350 + i * 100, 500); ctx.quadraticCurveTo(410 + i * 90, 280 - i * 16, 530 + i * 82, 500); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+      ctx.fillStyle = "#ffd34d"; ctx.fillRect(0, 590, 1280, 130);
+      ctx.fillStyle = "#1f1f1f"; ctx.font = "900 26px Comic Sans MS, Trebuchet MS, system-ui"; ctx.fillText("SYDNEY", 70, 650);
+    }
+
+    function drawRio() {
+      drawBackground("#8ed3ff", "#fffaf0", "#98e7a7");
+      setStroke(6);
+      ctx.fillStyle = "#65bf78"; ctx.beginPath(); ctx.moveTo(0, 560); ctx.quadraticCurveTo(270, 270, 520, 560); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#65bf78"; ctx.beginPath(); ctx.moveTo(690, 560); ctx.quadraticCurveTo(950, 230, 1280, 560); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#fffaf0"; ctx.fillRect(0, 580, 1280, 140);
+      ctx.fillStyle = "#ffffff"; ctx.fillRect(635, 250, 22, 120); ctx.strokeRect(635, 250, 22, 120); ctx.fillRect(590, 275, 112, 18); ctx.strokeRect(590, 275, 112, 18);
+    }
+
+    function updatePoseFromControls() {
+      state.pose.size = Number(sizeRange.value);
+      state.pose.rotate = Number(rotateRange.value);
+      state.pose.x = Number(xRange.value);
+      state.pose.y = Number(yRange.value);
+      syncControls(); draw();
+    }
+
+    function downloadPostcard() {
+      draw();
+      const link = document.createElement("a");
+      const place = places[state.placeIndex];
+      const goober = state.goobers[state.selectedIndex];
+      link.download = `${(goober?.name || "goober").toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${place.id}-postcard.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    }
+
+    function getCanvasPoint(event) {
+      const rect = canvas.getBoundingClientRect();
+      return { x: ((event.clientX - rect.left) / rect.width) * canvas.width, y: ((event.clientY - rect.top) / rect.height) * canvas.height };
+    }
+
+    canvas.addEventListener("pointerdown", (event) => {
+      const point = getCanvasPoint(event);
+      const dx = point.x - state.pose.x;
+      const dy = point.y - state.pose.y;
+      const distance = Math.hypot(dx, dy);
+      if (distance < state.pose.size * 0.65) {
+        state.dragging = true;
+        state.dragOffsetX = dx;
+        state.dragOffsetY = dy;
+        canvas.setPointerCapture(event.pointerId);
+      }
+    });
+    canvas.addEventListener("pointermove", (event) => {
+      if (!state.dragging) return;
+      const point = getCanvasPoint(event);
+      state.pose.x = Math.max(0, Math.min(canvas.width, point.x - state.dragOffsetX));
+      state.pose.y = Math.max(0, Math.min(canvas.height, point.y - state.dragOffsetY));
+      syncControls(); draw();
+    });
+    canvas.addEventListener("pointerup", () => { state.dragging = false; });
+    canvas.addEventListener("pointercancel", () => { state.dragging = false; });
+
+    sizeRange.addEventListener("input", updatePoseFromControls);
+    rotateRange.addEventListener("input", updatePoseFromControls);
+    xRange.addEventListener("input", updatePoseFromControls);
+    yRange.addEventListener("input", updatePoseFromControls);
+    flipBtn.addEventListener("click", () => { state.pose.flip = state.pose.flip === -1 ? 1 : -1; syncControls(); draw(); });
+    resetPoseBtn.addEventListener("click", () => selectPlace(state.placeIndex, true));
+    randomGooberBtn.addEventListener("click", () => selectGoober(Math.floor(Math.random() * state.goobers.length)));
+    randomSceneBtn.addEventListener("click", () => { selectPlace(Math.floor(Math.random() * places.length), true); selectGoober(Math.floor(Math.random() * state.goobers.length)); });
+    downloadBtn.addEventListener("click", downloadPostcard);
+
+    renderLocations();
+    selectPlace(0, true);
+    loadGoobers();
+  </script>
+</body>
+</html>
