@@ -9,7 +9,7 @@ database_id = "58f2457b-a74c-4370-9ad7-bc43067048af"
 
 [[r2_buckets]]
 binding = "GOOBER_IMAGES"
-bucket_name = "thebiggooberwebsite-images"
+bucket_name = "big-goober-images"
 
 routes = [
   { pattern = "thebiggooberwebsite.com/api/*", zone_name = "thebiggooberwebsite.com" }
