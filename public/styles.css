@@ -81,6 +81,7 @@ justify-content: flex-end;
 }
 
 nav a,
+.nav-dropdown-toggle,
 .button,
 .filter-btn,
 .upload-button {
@@ -99,6 +100,8 @@ font-size: 0.98rem;
 }
 
 nav a:hover,
+.nav-dropdown:hover .nav-dropdown-toggle,
+.nav-dropdown.open .nav-dropdown-toggle,
 .button:hover,
 .filter-btn:hover,
 .filter-btn.active,
@@ -106,6 +109,42 @@ nav a:hover,
 transform: translate(2px, 2px);
 box-shadow: 1px 1px 0 var(--ink);
 background: var(--yellow);
+}
+
+.nav-dropdown {
+position: relative;
+display: inline-flex;
+}
+
+.nav-dropdown-toggle {
+line-height: 1;
+}
+
+.nav-dropdown-menu {
+position: absolute;
+top: calc(100% + 9px);
+right: 0;
+z-index: 20;
+min-width: 245px;
+display: none;
+gap: 8px;
+background: white;
+border: 4px solid var(--ink);
+border-radius: 22px;
+box-shadow: 6px 6px 0 var(--ink);
+padding: 10px;
+}
+
+.nav-dropdown:hover .nav-dropdown-menu,
+.nav-dropdown:focus-within .nav-dropdown-menu,
+.nav-dropdown.open .nav-dropdown-menu {
+display: grid;
+}
+
+.nav-dropdown-menu a {
+width: 100%;
+text-align: left;
+box-shadow: 2px 2px 0 var(--ink);
 }
 
 .hero {
@@ -259,7 +298,7 @@ overflow: hidden;
 }
 
 .upload-panel::after {
-content: "test upload tool";
+content: "code protected upload";
 position: absolute;
 top: 14px;
 right: -28px;
@@ -370,6 +409,34 @@ display: flex;
 gap: 10px;
 flex-wrap: wrap;
 margin: 22px 0;
+}
+
+.admin-delete-panel {
+display: grid;
+grid-template-columns: auto minmax(220px, 320px) 1fr;
+gap: 10px;
+align-items: center;
+margin: 0 0 18px;
+background: var(--blue);
+border: 3px solid var(--ink);
+border-radius: 20px;
+box-shadow: 4px 4px 0 var(--ink);
+padding: 12px;
+font-weight: 900;
+}
+
+.admin-delete-panel input {
+border: 3px solid var(--ink);
+border-radius: 999px;
+padding: 9px 12px;
+font: inherit;
+background: white;
+}
+
+.admin-delete-panel span {
+color: #26333a;
+font-size: 0.9rem;
+line-height: 1.25;
 }
 
 .goober-grid {
@@ -520,6 +587,10 @@ rotate: 0deg;
 .goober-grid {
 grid-template-columns: repeat(2, minmax(0, 1fr));
 }
+
+.admin-delete-panel {
+grid-template-columns: 1fr;
+}
 }
 
 @media (max-width: 560px) {
@@ -530,6 +601,17 @@ flex-direction: column;
 
 nav {
 justify-content: flex-start;
+}
+
+.nav-dropdown,
+.nav-dropdown-toggle,
+.nav-dropdown-menu {
+width: 100%;
+}
+
+.nav-dropdown-menu {
+position: static;
+margin-top: 8px;
 }
 
 .goober-grid {
