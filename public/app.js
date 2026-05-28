@@ -19,6 +19,18 @@ const featuredGooberDescription = featuredGooberCard?.querySelector("p");
 
 let activeFilter = "all";
 
+function isAdminDeleteUnlocked() {
+  return Boolean(adminDeleteCodeInput?.value.trim());
+}
+
+function updateAdminDeleteVisibility() {
+  const isUnlocked = isAdminDeleteUnlocked();
+
+  document.querySelectorAll(".delete-goober").forEach((button) => {
+    button.hidden = !isUnlocked;
+  });
+}
+
 function createGooberCard(goober, isCloud = false) {
   const card = document.createElement("article");
   card.className = "goober-card";
@@ -70,6 +82,7 @@ function createGooberCard(goober, isCloud = false) {
     deleteButton.className = "delete-goober";
     deleteButton.type = "button";
     deleteButton.textContent = "Admin delete";
+    deleteButton.hidden = !isAdminDeleteUnlocked();
     deleteButton.addEventListener("click", () => deleteGoober(goober));
     info.appendChild(deleteButton);
   }
@@ -163,6 +176,7 @@ async function loadCloudGoobers() {
     });
 
     randomizeFeaturedGoober(goobers);
+    updateAdminDeleteVisibility();
     applyCurrentFilter();
 
     if (uploadStatus && goobers.length > 0) {
@@ -182,11 +196,11 @@ async function loadCloudGoobers() {
 }
 
 async function deleteGoober(goober) {
-  const inlineCode = adminDeleteCodeInput?.value.trim() || "";
-  const adminCode = inlineCode || window.prompt("Enter the admin delete code to remove this Goober:");
+  const adminCode = adminDeleteCodeInput?.value.trim() || "";
 
   if (!adminCode) {
-    uploadStatus.textContent = "Admin delete canceled.";
+    uploadStatus.textContent = "Enter the admin delete code first.";
+    updateAdminDeleteVisibility();
     return;
   }
 
@@ -219,6 +233,10 @@ async function deleteGoober(goober) {
     console.error(error);
     uploadStatus.textContent = error.message || "Delete failed.";
   }
+}
+
+if (adminDeleteCodeInput) {
+  adminDeleteCodeInput.addEventListener("input", updateAdminDeleteVisibility);
 }
 
 if (gooberImageInput) {
