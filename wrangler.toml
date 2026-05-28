@@ -5,7 +5,7 @@ compatibility_date = "2026-05-28"
 [[d1_databases]]
 binding = "DB"
 database_name = "big-goober-db"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_id = "58f2457b-a74c-4370-9ad7-bc43067048af"
 
 [[r2_buckets]]
 binding = "GOOBER_IMAGES"
