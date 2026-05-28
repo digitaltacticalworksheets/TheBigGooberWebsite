@@ -8,306 +8,50 @@
   <link rel="stylesheet" href="/styles.css" />
   <style>
     body { overflow-x: hidden; }
-
-    .game-hero {
-      max-width: 1180px;
-      margin: 0 auto;
-      padding: 34px 22px 18px;
-    }
-
-    .game-hero h1 {
-      font-size: clamp(3rem, 8vw, 7.4rem);
-      line-height: 0.88;
-      margin: 0 0 18px;
-      letter-spacing: -0.08em;
-    }
-
-    .game-hero p {
-      color: var(--muted);
-      font-size: clamp(1.05rem, 2vw, 1.25rem);
-      line-height: 1.45;
-      max-width: 760px;
-      margin: 0;
-    }
-
-    .game-shell {
-      max-width: 1180px;
-      margin: 0 auto;
-      padding: 16px 22px 70px;
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 340px;
-      gap: 24px;
-      align-items: start;
-    }
-
-    .game-card,
-    .runner-panel {
-      background: var(--card);
-      border: 4px solid var(--ink);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow), 7px 7px 0 var(--ink);
-      overflow: hidden;
-    }
-
+    .game-hero { max-width: 1180px; margin: 0 auto; padding: 34px 22px 18px; }
+    .game-hero h1 { font-size: clamp(3rem, 8vw, 7.4rem); line-height: 0.88; margin: 0 0 18px; letter-spacing: -0.08em; }
+    .game-hero p { color: var(--muted); font-size: clamp(1.05rem, 2vw, 1.25rem); line-height: 1.45; max-width: 820px; margin: 0; }
+    .game-shell { max-width: 1180px; margin: 0 auto; padding: 16px 22px 70px; display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; align-items: start; }
+    .game-card, .runner-panel { background: var(--card); border: 4px solid var(--ink); border-radius: var(--radius); box-shadow: var(--shadow), 7px 7px 0 var(--ink); overflow: hidden; }
     .game-card { position: relative; }
-
-    .game-card::before {
-      content: "goober run";
-      position: absolute;
-      z-index: 3;
-      top: -4px;
-      left: 28px;
-      background: var(--pink);
-      border: 3px solid var(--ink);
-      border-radius: 999px;
-      padding: 7px 14px;
-      font-size: 0.9rem;
-      font-weight: 900;
-      rotate: -4deg;
-    }
-
-    .runner-panel {
-      padding: 18px;
-      background: var(--blue);
-      position: sticky;
-      top: 14px;
-    }
-
-    .runner-panel h2,
-    .runner-panel h3 { margin: 0 0 10px; letter-spacing: -0.04em; }
-
-    .runner-panel p {
-      margin: 0 0 14px;
-      color: #26333a;
-      line-height: 1.4;
-      font-weight: 800;
-    }
-
-    .hud {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 12px;
-      padding: 24px 16px 14px;
-      background: var(--yellow);
-      border-bottom: 4px solid var(--ink);
-    }
-
-    .stat {
-      background: white;
-      border: 3px solid var(--ink);
-      border-radius: 18px;
-      box-shadow: 3px 3px 0 var(--ink);
-      padding: 10px 12px;
-      min-width: 0;
-    }
-
-    .stat span {
-      display: block;
-      color: var(--muted);
-      font-size: 0.78rem;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      font-weight: 900;
-    }
-
-    .stat strong {
-      display: block;
-      margin-top: 2px;
-      font-size: clamp(1.15rem, 3vw, 1.9rem);
-      line-height: 1.05;
-      white-space: normal;
-      overflow: visible;
-      text-overflow: clip;
-      overflow-wrap: anywhere;
-    }
-
-    #activeName {
-      font-size: clamp(0.95rem, 2vw, 1.35rem);
-      line-height: 1.05;
-    }
-
+    .game-card::before { content: "goober run"; position: absolute; z-index: 3; top: -4px; left: 28px; background: var(--pink); border: 3px solid var(--ink); border-radius: 999px; padding: 7px 14px; font-size: 0.9rem; font-weight: 900; rotate: -4deg; }
+    .runner-panel { padding: 18px; background: var(--blue); position: sticky; top: 14px; }
+    .runner-panel h2, .runner-panel h3 { margin: 0 0 10px; letter-spacing: -0.04em; }
+    .runner-panel p { margin: 0 0 14px; color: #26333a; line-height: 1.4; font-weight: 800; }
+    .hud { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; padding: 24px 16px 14px; background: var(--yellow); border-bottom: 4px solid var(--ink); }
+    .stat { background: white; border: 3px solid var(--ink); border-radius: 18px; box-shadow: 3px 3px 0 var(--ink); padding: 10px 12px; min-width: 0; }
+    .stat span { display: block; color: var(--muted); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 900; }
+    .stat strong { display: block; margin-top: 2px; font-size: clamp(1.15rem, 3vw, 1.9rem); line-height: 1.05; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+    #activeName { font-size: clamp(0.95rem, 2vw, 1.35rem); line-height: 1.05; }
     .canvas-wrap { position: relative; padding: 16px; background: #fffaf0; }
-
-    canvas {
-      display: block;
-      width: 100%;
-      aspect-ratio: 16 / 9;
-      max-height: calc(100vh - 230px);
-      min-height: 360px;
-      border: 4px solid var(--ink);
-      border-radius: 24px;
-      background: var(--blue);
-      box-shadow: 5px 5px 0 var(--ink);
-      touch-action: manipulation;
-      user-select: none;
-      -webkit-user-select: none;
-    }
-
-    .overlay {
-      position: absolute;
-      inset: 16px;
-      display: flex;
-      align-items: flex-end;
-      justify-content: flex-end;
-      padding: 18px;
-      pointer-events: none;
-    }
-
-    .message {
-      width: min(330px, 46%);
-      background: white;
-      border: 4px solid var(--ink);
-      border-radius: 22px;
-      box-shadow: var(--shadow), 5px 5px 0 var(--ink);
-      padding: 16px;
-      text-align: center;
-    }
-
-    .message h2 {
-      margin: 0 0 6px;
-      font-size: clamp(1.55rem, 3vw, 2.3rem);
-      letter-spacing: -0.06em;
-      line-height: 0.95;
-    }
-
+    canvas { display: block; width: 100%; aspect-ratio: 16 / 9; max-height: calc(100vh - 230px); min-height: 360px; border: 4px solid var(--ink); border-radius: 24px; background: var(--blue); box-shadow: 5px 5px 0 var(--ink); touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+    .overlay { position: absolute; inset: 16px; display: flex; align-items: flex-end; justify-content: flex-end; padding: 18px; pointer-events: none; }
+    .message { width: min(330px, 46%); background: white; border: 4px solid var(--ink); border-radius: 22px; box-shadow: var(--shadow), 5px 5px 0 var(--ink); padding: 16px; text-align: center; }
+    .message h2 { margin: 0 0 6px; font-size: clamp(1.55rem, 3vw, 2.3rem); letter-spacing: -0.06em; line-height: 0.95; }
     .message p { margin: 0 0 12px; color: var(--muted); line-height: 1.25; font-weight: 800; font-size: 0.9rem; }
     .message .actions { pointer-events: auto; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
     .message .actions button { padding: 8px 11px; font-size: 0.85rem; }
-
-    button,
-    .game-button {
-      color: var(--ink);
-      text-decoration: none;
-      font-weight: 900;
-      border: 3px solid var(--ink);
-      border-radius: 999px;
-      background: white;
-      padding: 10px 16px;
-      box-shadow: 3px 3px 0 var(--ink);
-      transition: transform 0.14s ease, box-shadow 0.14s ease, background 0.14s ease;
-      cursor: pointer;
-      font-family: inherit;
-      font-size: 0.98rem;
-    }
-
-    button:hover,
-    .game-button:hover {
-      transform: translate(2px, 2px);
-      box-shadow: 1px 1px 0 var(--ink);
-      background: var(--yellow);
-    }
-
-    button.primary,
-    .game-button.primary { background: var(--orange); }
-
+    button, .game-button { color: var(--ink); text-decoration: none; font-weight: 900; border: 3px solid var(--ink); border-radius: 999px; background: white; padding: 10px 16px; box-shadow: 3px 3px 0 var(--ink); transition: transform 0.14s ease, box-shadow 0.14s ease, background 0.14s ease; cursor: pointer; font-family: inherit; font-size: 0.98rem; }
+    button:hover, .game-button:hover { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); background: var(--yellow); }
+    button.primary, .game-button.primary { background: var(--orange); }
     .controls { display: grid; gap: 10px; margin-bottom: 16px; }
     .controls button { width: 100%; }
-
-    .runner-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
-      max-height: 300px;
-      overflow: auto;
-      padding: 2px 6px 2px 0;
-    }
-
-    .goober-option {
-      border: 3px solid var(--ink);
-      background: white;
-      border-radius: 18px;
-      padding: 8px;
-      cursor: pointer;
-      min-height: 112px;
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 3px 3px 0 var(--ink);
-    }
-
-    .goober-option:hover,
-    .goober-option.selected {
-      transform: translate(2px, 2px);
-      box-shadow: 1px 1px 0 var(--ink);
-      background: var(--yellow);
-    }
-
+    .runner-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-height: 300px; overflow: auto; padding: 2px 6px 2px 0; }
+    .goober-option { border: 3px solid var(--ink); background: white; border-radius: 18px; padding: 8px; cursor: pointer; min-height: 112px; display: flex; flex-direction: column; gap: 5px; align-items: center; justify-content: center; box-shadow: 3px 3px 0 var(--ink); }
+    .goober-option:hover, .goober-option.selected { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); background: var(--yellow); }
     .goober-option img { width: 58px; height: 58px; object-fit: contain; display: block; }
-
-    .goober-option span {
-      font-size: 0.72rem;
-      color: var(--muted);
-      width: 100%;
-      text-align: center;
-      white-space: normal;
-      overflow: visible;
-      text-overflow: clip;
-      overflow-wrap: anywhere;
-      line-height: 1.05;
-      font-weight: 900;
-    }
-
-    .adjust-panel {
-      display: grid;
-      gap: 10px;
-      margin: 14px 0 8px;
-      padding: 14px;
-      border: 4px solid var(--ink);
-      border-radius: 22px;
-      background: white;
-      box-shadow: 4px 4px 0 var(--ink);
-    }
-
-    .slider-row {
-      display: grid;
-      grid-template-columns: 76px 1fr 48px;
-      gap: 8px;
-      align-items: center;
-      color: var(--ink);
-      font-size: 0.84rem;
-      font-weight: 900;
-    }
-
+    .goober-option span { font-size: 0.72rem; color: var(--muted); width: 100%; text-align: center; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; line-height: 1.05; font-weight: 900; }
+    .adjust-panel { display: grid; gap: 10px; margin: 14px 0 8px; padding: 14px; border: 4px solid var(--ink); border-radius: 22px; background: white; box-shadow: 4px 4px 0 var(--ink); }
+    .slider-row { display: grid; grid-template-columns: 76px 1fr 48px; gap: 8px; align-items: center; color: var(--ink); font-size: 0.84rem; font-weight: 900; }
     .slider-row output { color: var(--muted); text-align: right; font-size: 0.78rem; }
     input[type="range"] { width: 100%; accent-color: var(--orange); }
-
     .mini-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .mini-actions button { padding: 9px 10px; font-size: 0.82rem; }
-
     .help { display: grid; gap: 8px; margin-top: 16px; color: #26333a; font-size: 0.94rem; line-height: 1.35; font-weight: 800; }
     .pill { display: inline-flex; align-items: center; justify-content: center; min-width: 34px; padding: 3px 8px; border-radius: 999px; border: 2px solid var(--ink); background: white; color: var(--ink); font-weight: 900; }
-
-    .error {
-      border: 3px solid var(--ink);
-      background: #ffd1d1;
-      color: var(--ink);
-      border-radius: 16px;
-      padding: 10px 12px;
-      margin-bottom: 12px;
-      display: none;
-      font-weight: 900;
-    }
-
-    @media (max-width: 940px) {
-      .game-shell { grid-template-columns: 1fr; }
-      .runner-panel { position: static; }
-      .hud { grid-template-columns: repeat(2, 1fr); }
-      canvas { min-height: 300px; max-height: none; }
-      .runner-grid { grid-template-columns: repeat(4, 1fr); }
-    }
-
-    @media (max-width: 560px) {
-      .game-hero { padding-top: 20px; }
-      .game-shell { padding-left: 14px; padding-right: 14px; }
-      .hud { gap: 8px; padding: 22px 10px 10px; }
-      .canvas-wrap { padding: 10px; }
-      .overlay { inset: 10px; align-items: flex-end; justify-content: center; }
-      canvas { min-height: 270px; border-radius: 18px; }
-      .runner-grid { grid-template-columns: repeat(3, 1fr); }
-      .message { width: min(330px, 92%); padding: 14px; }
-    }
+    .error { border: 3px solid var(--ink); background: #ffd1d1; color: var(--ink); border-radius: 16px; padding: 10px 12px; margin-bottom: 12px; display: none; font-weight: 900; }
+    @media (max-width: 940px) { .game-shell { grid-template-columns: 1fr; } .runner-panel { position: static; } .hud { grid-template-columns: repeat(2, 1fr); } canvas { min-height: 300px; max-height: none; } .runner-grid { grid-template-columns: repeat(4, 1fr); } }
+    @media (max-width: 560px) { .game-hero { padding-top: 20px; } .game-shell { padding-left: 14px; padding-right: 14px; } .hud { gap: 8px; padding: 22px 10px 10px; } .canvas-wrap { padding: 10px; } .overlay { inset: 10px; align-items: flex-end; justify-content: center; } canvas { min-height: 270px; border-radius: 18px; } .runner-grid { grid-template-columns: repeat(3, 1fr); } .message { width: min(330px, 92%); padding: 14px; } }
   </style>
 </head>
 <body>
@@ -316,16 +60,12 @@
       <div class="logo-mark"><img src="/assets/original-goober.jpg" alt="Miniature Original Goober logo" /></div>
       <span>The Big Goober Website</span>
     </div>
-    <nav>
-      <a href="/">Home</a>
-      <a href="/#goobers">Goober Gallery</a>
-      <a href="/#upload">Add Goober</a>
-    </nav>
+    <nav><a href="/">Home</a><a href="/#goobers">Goober Gallery</a><a href="/#upload">Add Goober</a></nav>
   </header>
 
   <section class="game-hero">
     <h1>Goober Run.</h1>
-    <p>Pick an uploaded goober, tune the fit, then jump over flaming pits, police cars, and other ridiculous obstacles. Spacebar, mouse click, and screen tap all work.</p>
+    <p>Pick an uploaded goober, tune the fit, then jump over flaming pits, police cars, UFO beams, giant boots, banana peels, evil toasters, slime puddles, shark fins, and other ridiculous obstacles.</p>
   </section>
 
   <main class="game-shell">
@@ -342,10 +82,7 @@
           <div class="message">
             <h2 id="overlayTitle">Goober Run</h2>
             <p id="overlayText">Pick a goober, adjust the fit if needed, then press Space, click, or tap to jump.</p>
-            <div class="actions">
-              <button class="primary" id="startBtn">Start Game</button>
-              <button id="randomBtn">Random Goober</button>
-            </div>
+            <div class="actions"><button class="primary" id="startBtn">Start Game</button><button id="randomBtn">Random Goober</button></div>
           </div>
         </div>
       </div>
@@ -355,12 +92,8 @@
       <h2>Choose Your Goober</h2>
       <p>These load from <strong>/api/goobers</strong>. New uploads become playable runners.</p>
       <div class="error" id="errorBox"></div>
-      <div class="controls">
-        <button class="primary" id="playBtn">Play / Restart</button>
-        <button id="shuffleBtn">Pick Random Goober</button>
-      </div>
+      <div class="controls"><button class="primary" id="playBtn">Play / Restart</button><button id="shuffleBtn">Pick Random Goober</button></div>
       <div class="runner-grid" id="gooberGrid" aria-label="Uploaded goober character choices"></div>
-
       <h3>Adjust Goober Fit</h3>
       <p>Zoom, rotate, move, or flip the selected goober. Settings save on this device.</p>
       <div class="adjust-panel">
@@ -368,17 +101,9 @@
         <label class="slider-row" for="rotateRange"><span>Rotate</span><input id="rotateRange" type="range" min="-45" max="45" step="1" value="0" /><output id="rotateValue">0°</output></label>
         <label class="slider-row" for="offsetXRange"><span>Left/Right</span><input id="offsetXRange" type="range" min="-70" max="70" step="1" value="0" /><output id="offsetXValue">0</output></label>
         <label class="slider-row" for="offsetYRange"><span>Up/Down</span><input id="offsetYRange" type="range" min="-70" max="70" step="1" value="0" /><output id="offsetYValue">0</output></label>
-        <div class="mini-actions">
-          <button id="flipBtn" type="button">Flip</button>
-          <button id="resetFitBtn" type="button">Reset Fit</button>
-        </div>
+        <div class="mini-actions"><button id="flipBtn" type="button">Flip</button><button id="resetFitBtn" type="button">Reset Fit</button></div>
       </div>
-
-      <div class="help">
-        <div><span class="pill">Space</span> jump on keyboard</div>
-        <div><span class="pill">Click</span> jump with mouse</div>
-        <div><span class="pill">Tap</span> jump on phone or iPad</div>
-      </div>
+      <div class="help"><div><span class="pill">Space</span> jump on keyboard</div><div><span class="pill">Click</span> jump with mouse</div><div><span class="pill">Tap</span> jump on phone or iPad</div></div>
     </aside>
   </main>
 
@@ -413,6 +138,30 @@
 
     const WORLD = { width: 1280, height: 720, groundY: 585, gravity: 2450, jumpVelocity: -920, baseSpeed: 430 };
     const DEFAULT_FIT = { zoom: 1, rotate: 0, offsetX: 0, offsetY: 0, flip: 1 };
+    const OBSTACLE_TYPES = [
+      { label: "Cone", color: "#ff9f45", width: 46, height: 76, points: 10 },
+      { label: "Trash", color: "#6b6257", width: 62, height: 92, points: 10 },
+      { label: "Sign", color: "#ff8bd1", width: 54, height: 116, points: 10 },
+      { label: "Box", color: "#ffd34d", width: 76, height: 70, points: 10 },
+      { label: "Flaming Pit", color: "#1f1f1f", width: 132, height: 52, points: 18 },
+      { label: "Police Car", color: "#ffffff", width: 150, height: 82, points: 18 },
+      { label: "Banana Peel", color: "#ffd34d", width: 86, height: 44, points: 12 },
+      { label: "Giant Boot", color: "#5a3825", width: 96, height: 118, points: 16 },
+      { label: "UFO Beam", color: "#8ed3ff", width: 92, height: 150, points: 20 },
+      { label: "Toilet Plunger", color: "#ff9f45", width: 56, height: 122, points: 15 },
+      { label: "Anvil", color: "#6b6257", width: 102, height: 72, points: 14 },
+      { label: "Slime Puddle", color: "#98e7a7", width: 130, height: 42, points: 14 },
+      { label: "Shark Fin", color: "#8ed3ff", width: 96, height: 76, points: 15 },
+      { label: "Cactus", color: "#98e7a7", width: 70, height: 124, points: 16 },
+      { label: "Rolling Donut", color: "#ff8bd1", width: 82, height: 82, points: 14 },
+      { label: "Lawn Gnome", color: "#ff9f45", width: 70, height: 112, points: 16 },
+      { label: "Mailbox", color: "#ffffff", width: 86, height: 88, points: 13 },
+      { label: "Evil Toaster", color: "#ffffff", width: 94, height: 82, points: 15 },
+      { label: "Meteor", color: "#ff9f45", width: 86, height: 86, points: 18 },
+      { label: "Spooky Hand", color: "#d8c5ff", width: 84, height: 112, points: 17 },
+      { label: "Traffic Barricade", color: "#ff9f45", width: 118, height: 86, points: 14 },
+      { label: "Mystery Portal", color: "#ff8bd1", width: 88, height: 120, points: 20 }
+    ];
 
     const state = {
       goobers: [], selectedIndex: 0, selectedImage: null, selectedImageReady: false, imageFit: { ...DEFAULT_FIT },
@@ -425,166 +174,59 @@
 
     function showError(message) { errorBox.textContent = message; errorBox.style.display = message ? "block" : "none"; }
     function fitStorageKey(goober) { return `gooberRunFit:${goober?.id || goober?.imageUrl || "fallback"}`; }
-    function loadFitForGoober(goober) {
-      try { state.imageFit = { ...DEFAULT_FIT, ...(JSON.parse(localStorage.getItem(fitStorageKey(goober)) || "null") || {}) }; }
-      catch { state.imageFit = { ...DEFAULT_FIT }; }
-      updateFitControls();
-    }
+    function loadFitForGoober(goober) { try { state.imageFit = { ...DEFAULT_FIT, ...(JSON.parse(localStorage.getItem(fitStorageKey(goober)) || "null") || {}) }; } catch { state.imageFit = { ...DEFAULT_FIT }; } updateFitControls(); }
     function saveFitForCurrentGoober() { const goober = state.goobers[state.selectedIndex]; if (goober) localStorage.setItem(fitStorageKey(goober), JSON.stringify(state.imageFit)); }
-    function updateFitControls() {
-      zoomRange.value = state.imageFit.zoom; rotateRange.value = state.imageFit.rotate; offsetXRange.value = state.imageFit.offsetX; offsetYRange.value = state.imageFit.offsetY;
-      zoomValue.textContent = `${Number(state.imageFit.zoom).toFixed(2)}x`; rotateValue.textContent = `${Math.round(state.imageFit.rotate)}°`;
-      offsetXValue.textContent = Math.round(state.imageFit.offsetX); offsetYValue.textContent = Math.round(state.imageFit.offsetY);
-      flipBtn.textContent = state.imageFit.flip === -1 ? "Unflip" : "Flip"; if (!state.running) draw();
-    }
+    function updateFitControls() { zoomRange.value = state.imageFit.zoom; rotateRange.value = state.imageFit.rotate; offsetXRange.value = state.imageFit.offsetX; offsetYRange.value = state.imageFit.offsetY; zoomValue.textContent = `${Number(state.imageFit.zoom).toFixed(2)}x`; rotateValue.textContent = `${Math.round(state.imageFit.rotate)}°`; offsetXValue.textContent = Math.round(state.imageFit.offsetX); offsetYValue.textContent = Math.round(state.imageFit.offsetY); flipBtn.textContent = state.imageFit.flip === -1 ? "Unflip" : "Flip"; if (!state.running) draw(); }
     function setFitValue(key, value) { state.imageFit[key] = value; updateFitControls(); saveFitForCurrentGoober(); }
 
-    async function loadGoobers() {
-      try {
-        const response = await fetch("/api/goobers", { headers: { "accept": "application/json" } });
-        if (!response.ok) throw new Error("Could not load goobers.");
-        const goobers = await response.json();
-        state.goobers = Array.isArray(goobers) ? goobers : [];
-        if (!state.goobers.length) { showError("No approved goobers were returned yet. The game will use a temporary mystery goober."); state.goobers = [{ id: "fallback", name: "Mystery Goober", imageUrl: "" }]; }
-        renderGooberGrid(); selectGoober(Math.floor(Math.random() * state.goobers.length));
-      } catch (error) {
-        showError("The goober API did not respond, so the game is using a temporary mystery goober.");
-        state.goobers = [{ id: "fallback", name: "Mystery Goober", imageUrl: "" }]; renderGooberGrid(); selectGoober(0);
-      }
-    }
-
-    function renderGooberGrid() {
-      gooberGrid.innerHTML = "";
-      state.goobers.forEach((goober, index) => {
-        const button = document.createElement("button");
-        button.className = "goober-option" + (index === state.selectedIndex ? " selected" : "");
-        button.type = "button"; button.title = goober.name || "Goober";
-        if (goober.imageUrl) { const img = document.createElement("img"); img.src = goober.imageUrl; img.alt = goober.name || "Goober"; img.loading = "lazy"; button.appendChild(img); }
-        else { const fallback = document.createElement("div"); fallback.style.fontSize = "2.4rem"; fallback.textContent = "🤪"; button.appendChild(fallback); }
-        const label = document.createElement("span"); label.textContent = goober.name || "Goober"; button.appendChild(label);
-        button.addEventListener("click", () => selectGoober(index)); gooberGrid.appendChild(button);
-      });
-    }
-
-    function selectGoober(index) {
-      state.selectedIndex = Math.max(0, Math.min(index, state.goobers.length - 1));
-      const goober = state.goobers[state.selectedIndex]; activeNameEl.textContent = goober.name || "Goober";
-      state.selectedImageReady = false; state.selectedImage = null; loadFitForGoober(goober);
-      if (goober.imageUrl) {
-        const img = new Image();
-        img.onload = () => { state.selectedImage = img; state.selectedImageReady = true; if (!state.running) draw(); };
-        img.onerror = () => { state.selectedImage = null; state.selectedImageReady = false; if (!state.running) draw(); };
-        img.src = goober.imageUrl;
-      }
-      [...gooberGrid.children].forEach((child, childIndex) => child.classList.toggle("selected", childIndex === state.selectedIndex));
-      if (!state.running) draw();
-    }
-
+    async function loadGoobers() { try { const response = await fetch("/api/goobers", { headers: { "accept": "application/json" } }); if (!response.ok) throw new Error("Could not load goobers."); const goobers = await response.json(); state.goobers = Array.isArray(goobers) ? goobers : []; if (!state.goobers.length) { showError("No approved goobers were returned yet. The game will use a temporary mystery goober."); state.goobers = [{ id: "fallback", name: "Mystery Goober", imageUrl: "" }]; } renderGooberGrid(); selectGoober(Math.floor(Math.random() * state.goobers.length)); } catch (error) { showError("The goober API did not respond, so the game is using a temporary mystery goober."); state.goobers = [{ id: "fallback", name: "Mystery Goober", imageUrl: "" }]; renderGooberGrid(); selectGoober(0); } }
+    function renderGooberGrid() { gooberGrid.innerHTML = ""; state.goobers.forEach((goober, index) => { const button = document.createElement("button"); button.className = "goober-option" + (index === state.selectedIndex ? " selected" : ""); button.type = "button"; button.title = goober.name || "Goober"; if (goober.imageUrl) { const img = document.createElement("img"); img.src = goober.imageUrl; img.alt = goober.name || "Goober"; img.loading = "lazy"; button.appendChild(img); } else { const fallback = document.createElement("div"); fallback.style.fontSize = "2.4rem"; fallback.textContent = "🤪"; button.appendChild(fallback); } const label = document.createElement("span"); label.textContent = goober.name || "Goober"; button.appendChild(label); button.addEventListener("click", () => selectGoober(index)); gooberGrid.appendChild(button); }); }
+    function selectGoober(index) { state.selectedIndex = Math.max(0, Math.min(index, state.goobers.length - 1)); const goober = state.goobers[state.selectedIndex]; activeNameEl.textContent = goober.name || "Goober"; state.selectedImageReady = false; state.selectedImage = null; loadFitForGoober(goober); if (goober.imageUrl) { const img = new Image(); img.onload = () => { state.selectedImage = img; state.selectedImageReady = true; if (!state.running) draw(); }; img.onerror = () => { state.selectedImage = null; state.selectedImageReady = false; if (!state.running) draw(); }; img.src = goober.imageUrl; } [...gooberGrid.children].forEach((child, childIndex) => child.classList.toggle("selected", childIndex === state.selectedIndex)); if (!state.running) draw(); }
     function pickRandomGoober() { if (state.goobers.length) selectGoober(Math.floor(Math.random() * state.goobers.length)); }
-    function resetGame() {
-      state.running = true; state.gameOver = false; state.startedOnce = true; state.score = 0; state.speedMultiplier = 1; state.distance = 0;
-      state.lastTime = performance.now(); state.obstacleTimer = 0.8; state.obstacles = []; state.particles = [];
-      state.player.y = WORLD.groundY - state.player.height; state.player.vy = 0; state.player.onGround = true;
-      overlay.style.display = "none"; scoreEl.textContent = "0"; speedEl.textContent = "1.0x"; ensureClouds(); requestAnimationFrame(loop);
-    }
-    function endGame() {
-      state.running = false; state.gameOver = true; state.best = Math.max(state.best, Math.floor(state.score)); localStorage.setItem("gooberRunBest", String(state.best)); bestEl.textContent = state.best;
-      overlayTitle.textContent = "Game Over"; overlayText.textContent = `Score: ${Math.floor(state.score)}. Press Space, click, or tap to run it back.`; startBtn.textContent = "Play Again"; overlay.style.display = "flex";
-    }
-    function jump() {
-      if (!state.startedOnce || state.gameOver) { resetGame(); return; }
-      if (!state.running) return;
-      if (state.player.onGround) { state.player.vy = WORLD.jumpVelocity; state.player.onGround = false; state.player.squash = 0.86; puff(state.player.x + 30, WORLD.groundY - 12, 10); }
-    }
+    function resetGame() { state.running = true; state.gameOver = false; state.startedOnce = true; state.score = 0; state.speedMultiplier = 1; state.distance = 0; state.lastTime = performance.now(); state.obstacleTimer = 0.7; state.obstacles = []; state.particles = []; state.player.y = WORLD.groundY - state.player.height; state.player.vy = 0; state.player.onGround = true; overlay.style.display = "none"; scoreEl.textContent = "0"; speedEl.textContent = "1.0x"; ensureClouds(); requestAnimationFrame(loop); }
+    function endGame() { state.running = false; state.gameOver = true; state.best = Math.max(state.best, Math.floor(state.score)); localStorage.setItem("gooberRunBest", String(state.best)); bestEl.textContent = state.best; overlayTitle.textContent = "Game Over"; overlayText.textContent = `Score: ${Math.floor(state.score)}. Press Space, click, or tap to run it back.`; startBtn.textContent = "Play Again"; overlay.style.display = "flex"; }
+    function jump() { if (!state.startedOnce || state.gameOver) { resetGame(); return; } if (!state.running) return; if (state.player.onGround) { state.player.vy = WORLD.jumpVelocity; state.player.onGround = false; state.player.squash = 0.86; puff(state.player.x + 30, WORLD.groundY - 12, 10); } }
 
-    function spawnObstacle() {
-      const types = [
-        { label: "Cone", color: "#ff9f45", width: 46, height: 76 },
-        { label: "Trash", color: "#6b6257", width: 62, height: 92 },
-        { label: "Sign", color: "#ff8bd1", width: 54, height: 116 },
-        { label: "Box", color: "#ffd34d", width: 76, height: 70 },
-        { label: "Flaming Pit", color: "#1f1f1f", width: 132, height: 52 },
-        { label: "Police Car", color: "#ffffff", width: 150, height: 82 }
-      ];
-      const type = types[Math.floor(Math.random() * types.length)];
-      state.obstacles.push({ ...type, x: WORLD.width + 40, y: WORLD.groundY - type.height, passed: false, wobble: Math.random() * Math.PI * 2, flame: Math.random() * Math.PI * 2 });
-    }
+    function spawnObstacle() { const type = OBSTACLE_TYPES[Math.floor(Math.random() * OBSTACLE_TYPES.length)]; state.obstacles.push({ ...type, x: WORLD.width + 40, y: WORLD.groundY - type.height, passed: false, wobble: Math.random() * Math.PI * 2, flame: Math.random() * Math.PI * 2, spin: Math.random() * Math.PI * 2 }); }
     function ensureClouds() { if (state.clouds.length) return; for (let i = 0; i < 8; i++) state.clouds.push({ x: Math.random() * WORLD.width, y: 55 + Math.random() * 210, size: 38 + Math.random() * 70, speed: 18 + Math.random() * 34 }); }
     function puff(x, y, count) { for (let i = 0; i < count; i++) state.particles.push({ x, y, vx: -80 - Math.random() * 150, vy: -80 + Math.random() * 120, life: 0.4 + Math.random() * 0.3, maxLife: 0.7, radius: 6 + Math.random() * 8 }); }
     function loop(now) { if (!state.running) return; const dt = Math.min(0.033, (now - state.lastTime) / 1000 || 0.016); state.lastTime = now; update(dt); draw(); requestAnimationFrame(loop); }
-    function update(dt) {
-      state.distance += WORLD.baseSpeed * state.speedMultiplier * dt; state.speedMultiplier = Math.min(2.65, 1 + state.distance / 5200); state.score += dt * 10 * state.speedMultiplier;
-      scoreEl.textContent = Math.floor(state.score); speedEl.textContent = `${state.speedMultiplier.toFixed(1)}x`;
-      const player = state.player; player.vy += WORLD.gravity * dt; player.y += player.vy * dt; player.squash += (1 - player.squash) * Math.min(1, dt * 10);
-      if (player.y >= WORLD.groundY - player.height) { if (!player.onGround && player.vy > 0) puff(player.x + 28, WORLD.groundY - 10, 7); player.y = WORLD.groundY - player.height; player.vy = 0; player.onGround = true; }
-      state.obstacleTimer -= dt; if (state.obstacleTimer <= 0) { spawnObstacle(); const baseDelay = 1.15 - Math.min(0.46, state.speedMultiplier * 0.13); state.obstacleTimer = baseDelay + Math.random() * 0.78; }
-      const speed = WORLD.baseSpeed * state.speedMultiplier;
-      state.obstacles.forEach((obstacle) => { obstacle.x -= speed * dt; obstacle.wobble += dt * 5; obstacle.flame += dt * 11; if (!obstacle.passed && obstacle.x + obstacle.width < player.x) { obstacle.passed = true; state.score += obstacle.label === "Flaming Pit" || obstacle.label === "Police Car" ? 18 : 10; } });
-      state.obstacles = state.obstacles.filter((obstacle) => obstacle.x + obstacle.width > -60);
-      state.clouds.forEach((cloud) => { cloud.x -= cloud.speed * dt * state.speedMultiplier; if (cloud.x + cloud.size * 2 < 0) { cloud.x = WORLD.width + Math.random() * 260; cloud.y = 55 + Math.random() * 210; } });
-      state.particles.forEach((particle) => { particle.life -= dt; particle.x += particle.vx * dt; particle.y += particle.vy * dt; particle.vy += 250 * dt; }); state.particles = state.particles.filter((particle) => particle.life > 0);
-      for (const obstacle of state.obstacles) if (collides(player, obstacle)) { puff(player.x + player.width / 2, player.y + player.height / 2, 20); draw(); endGame(); break; }
-    }
-    function collides(player, obstacle) {
-      const shrinkX = 20, shrinkY = 14;
-      const hitbox = obstacle.hitbox || { x: 0, y: 0, width: obstacle.width, height: obstacle.height };
-      return player.x + shrinkX < obstacle.x + hitbox.x + hitbox.width && player.x + player.width - shrinkX > obstacle.x + hitbox.x && player.y + shrinkY < obstacle.y + hitbox.y + hitbox.height && player.y + player.height - 8 > obstacle.y + hitbox.y;
-    }
+    function update(dt) { state.distance += WORLD.baseSpeed * state.speedMultiplier * dt; state.speedMultiplier = Math.min(2.8, 1 + state.distance / 5200); state.score += dt * 10 * state.speedMultiplier; scoreEl.textContent = Math.floor(state.score); speedEl.textContent = `${state.speedMultiplier.toFixed(1)}x`; const player = state.player; player.vy += WORLD.gravity * dt; player.y += player.vy * dt; player.squash += (1 - player.squash) * Math.min(1, dt * 10); if (player.y >= WORLD.groundY - player.height) { if (!player.onGround && player.vy > 0) puff(player.x + 28, WORLD.groundY - 10, 7); player.y = WORLD.groundY - player.height; player.vy = 0; player.onGround = true; } state.obstacleTimer -= dt; if (state.obstacleTimer <= 0) { spawnObstacle(); const baseDelay = 1.12 - Math.min(0.48, state.speedMultiplier * 0.13); state.obstacleTimer = baseDelay + Math.random() * 0.78; } const speed = WORLD.baseSpeed * state.speedMultiplier; state.obstacles.forEach((obstacle) => { obstacle.x -= speed * dt; obstacle.wobble += dt * 5; obstacle.flame += dt * 11; obstacle.spin += dt * 7; if (!obstacle.passed && obstacle.x + obstacle.width < player.x) { obstacle.passed = true; state.score += obstacle.points || 10; } }); state.obstacles = state.obstacles.filter((obstacle) => obstacle.x + obstacle.width > -80); state.clouds.forEach((cloud) => { cloud.x -= cloud.speed * dt * state.speedMultiplier; if (cloud.x + cloud.size * 2 < 0) { cloud.x = WORLD.width + Math.random() * 260; cloud.y = 55 + Math.random() * 210; } }); state.particles.forEach((particle) => { particle.life -= dt; particle.x += particle.vx * dt; particle.y += particle.vy * dt; particle.vy += 250 * dt; }); state.particles = state.particles.filter((particle) => particle.life > 0); for (const obstacle of state.obstacles) if (collides(player, obstacle)) { puff(player.x + player.width / 2, player.y + player.height / 2, 20); draw(); endGame(); break; } }
+    function collides(player, obstacle) { const shrinkX = 20, shrinkY = 14; const hitbox = obstacle.hitbox || { x: 0, y: 0, width: obstacle.width, height: obstacle.height }; return player.x + shrinkX < obstacle.x + hitbox.x + hitbox.width && player.x + player.width - shrinkX > obstacle.x + hitbox.x && player.y + shrinkY < obstacle.y + hitbox.y + hitbox.height && player.y + player.height - 8 > obstacle.y + hitbox.y; }
 
     function draw() { ctx.clearRect(0, 0, WORLD.width, WORLD.height); drawSky(); drawGround(); drawObstacles(); drawPlayer(); drawParticles(); }
-    function drawSky() {
-      const gradient = ctx.createLinearGradient(0, 0, 0, WORLD.height); gradient.addColorStop(0, "#8ed3ff"); gradient.addColorStop(0.62, "#fffaf0"); gradient.addColorStop(1, "#ffd34d"); ctx.fillStyle = gradient; ctx.fillRect(0, 0, WORLD.width, WORLD.height);
-      ctx.fillStyle = "rgba(255,255,255,0.9)"; state.clouds.forEach((cloud) => drawCloud(cloud.x, cloud.y, cloud.size));
-      ctx.fillStyle = "rgba(31,31,31,0.08)"; for (let i = 0; i < 9; i++) ctx.fillRect((i * 210) - (state.distance * 0.08 % 210), 390, 120, 12);
-    }
+    function drawSky() { const gradient = ctx.createLinearGradient(0, 0, 0, WORLD.height); gradient.addColorStop(0, "#8ed3ff"); gradient.addColorStop(0.62, "#fffaf0"); gradient.addColorStop(1, "#ffd34d"); ctx.fillStyle = gradient; ctx.fillRect(0, 0, WORLD.width, WORLD.height); ctx.fillStyle = "rgba(255,255,255,0.9)"; state.clouds.forEach((cloud) => drawCloud(cloud.x, cloud.y, cloud.size)); ctx.fillStyle = "rgba(31,31,31,0.08)"; for (let i = 0; i < 9; i++) ctx.fillRect((i * 210) - (state.distance * 0.08 % 210), 390, 120, 12); }
     function drawCloud(x, y, size) { ctx.beginPath(); ctx.arc(x, y, size * 0.42, 0, Math.PI * 2); ctx.arc(x + size * 0.42, y - size * 0.18, size * 0.48, 0, Math.PI * 2); ctx.arc(x + size * 0.92, y, size * 0.38, 0, Math.PI * 2); ctx.arc(x + size * 0.45, y + size * 0.16, size * 0.5, 0, Math.PI * 2); ctx.fill(); }
-    function drawGround() {
-      ctx.fillStyle = "#98e7a7"; ctx.fillRect(0, WORLD.groundY, WORLD.width, WORLD.height - WORLD.groundY); ctx.fillStyle = "#65bf78"; ctx.fillRect(0, WORLD.groundY + 22, WORLD.width, WORLD.height - WORLD.groundY - 22);
-      ctx.strokeStyle = "#1f1f1f"; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(0, WORLD.groundY + 2); ctx.lineTo(WORLD.width, WORLD.groundY + 2); ctx.stroke();
-      const offset = state.distance % 90; for (let x = -offset; x < WORLD.width + 90; x += 90) { ctx.fillStyle = "rgba(31,31,31,0.12)"; ctx.fillRect(x, WORLD.groundY + 45, 42, 8); }
-    }
-    function drawObstacles() {
-      state.obstacles.forEach((obstacle) => {
-        ctx.save(); ctx.translate(obstacle.x + obstacle.width / 2, obstacle.y + obstacle.height / 2); ctx.rotate(Math.sin(obstacle.wobble) * 0.025); ctx.translate(-obstacle.width / 2, -obstacle.height / 2); ctx.lineWidth = 4; ctx.strokeStyle = "#1f1f1f";
-        if (obstacle.label === "Cone") { ctx.fillStyle = obstacle.color; ctx.beginPath(); ctx.moveTo(obstacle.width / 2, 0); ctx.lineTo(obstacle.width, obstacle.height); ctx.lineTo(0, obstacle.height); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.fillStyle = "white"; ctx.fillRect(12, obstacle.height * 0.58, obstacle.width - 24, 10); ctx.strokeRect(12, obstacle.height * 0.58, obstacle.width - 24, 10); }
-        else if (obstacle.label === "Sign") { ctx.fillStyle = "#6b6257"; ctx.fillRect(obstacle.width / 2 - 5, 35, 10, obstacle.height - 20); ctx.strokeRect(obstacle.width / 2 - 5, 35, 10, obstacle.height - 20); ctx.fillStyle = obstacle.color; roundedRect(0, 0, obstacle.width, 46, 10); ctx.fill(); ctx.stroke(); ctx.fillStyle = "#1f1f1f"; ctx.font = "900 14px Comic Sans MS, Trebuchet MS, system-ui"; ctx.textAlign = "center"; ctx.fillText("NO", obstacle.width / 2, 19); ctx.fillText("GOOB", obstacle.width / 2, 35); }
-        else if (obstacle.label === "Flaming Pit") { drawFlamingPit(obstacle); }
-        else if (obstacle.label === "Police Car") { drawPoliceCar(obstacle); }
-        else { ctx.fillStyle = obstacle.color; roundedRect(0, 0, obstacle.width, obstacle.height, 12); ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, 20); ctx.lineTo(obstacle.width, 20); ctx.moveTo(obstacle.width / 2, 0); ctx.lineTo(obstacle.width / 2, obstacle.height); ctx.stroke(); }
-        ctx.restore();
-      });
-    }
-    function drawFlamingPit(obstacle) {
-      ctx.fillStyle = "#2b1a14"; roundedRect(0, 16, obstacle.width, 36, 18); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = "#1f1f1f"; ctx.beginPath(); ctx.ellipse(obstacle.width / 2, 44, obstacle.width * 0.46, 13, 0, 0, Math.PI * 2); ctx.fill();
-      for (let i = 0; i < 6; i++) {
-        const x = 16 + i * 20;
-        const h = 28 + Math.sin(obstacle.flame + i) * 8;
-        drawFlame(x, 24, h, "#ff9f45", 14);
-        drawFlame(x + 4, 29, h * 0.62, "#ffd34d", 8);
-      }
-      ctx.fillStyle = "#1f1f1f"; ctx.font = "900 14px Comic Sans MS, Trebuchet MS, system-ui"; ctx.textAlign = "center"; ctx.fillText("HOT", obstacle.width / 2, 49);
-    }
-    function drawFlame(x, baseY, height, color, width) {
-      ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(x, baseY); ctx.quadraticCurveTo(x - width, baseY - height * 0.45, x, baseY - height); ctx.quadraticCurveTo(x + width, baseY - height * 0.45, x, baseY); ctx.closePath(); ctx.fill(); ctx.stroke();
-    }
-    function drawPoliceCar(obstacle) {
-      ctx.fillStyle = "#ffffff"; roundedRect(6, 30, obstacle.width - 12, 38, 14); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = "#ffffff"; roundedRect(42, 12, 66, 34, 12); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = "#8ed3ff"; ctx.fillRect(50, 20, 22, 20); ctx.strokeRect(50, 20, 22, 20); ctx.fillRect(78, 20, 22, 20); ctx.strokeRect(78, 20, 22, 20);
-      ctx.fillStyle = "#1f1f1f"; ctx.fillRect(62, 43, 28, 8);
-      ctx.fillStyle = "#ff8bd1"; ctx.fillRect(68, 5, 14, 9); ctx.strokeRect(68, 5, 14, 9); ctx.fillStyle = "#8ed3ff"; ctx.fillRect(84, 5, 14, 9); ctx.strokeRect(84, 5, 14, 9);
-      ctx.fillStyle = "#1f1f1f"; ctx.font = "900 15px Comic Sans MS, Trebuchet MS, system-ui"; ctx.textAlign = "center"; ctx.fillText("POLICE", obstacle.width / 2, 57);
-      ctx.fillStyle = "#1f1f1f"; ctx.beginPath(); ctx.arc(36, 68, 13, 0, Math.PI * 2); ctx.arc(114, 68, 13, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = "white"; ctx.beginPath(); ctx.arc(36, 68, 5, 0, Math.PI * 2); ctx.arc(114, 68, 5, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = "#ffd34d"; ctx.fillRect(9, 43, 10, 10); ctx.strokeRect(9, 43, 10, 10); ctx.fillStyle = "#ff9f45"; ctx.fillRect(obstacle.width - 20, 43, 10, 10); ctx.strokeRect(obstacle.width - 20, 43, 10, 10);
-    }
-    function drawPlayer() {
-      const player = state.player; ctx.save(); ctx.translate(player.x + player.width / 2, player.y + player.height / 2); ctx.scale(1 + (1 - player.squash) * 0.32, player.squash);
-      ctx.fillStyle = "rgba(31,31,31,0.2)"; ctx.beginPath(); ctx.ellipse(0, player.height / 2 + 8, player.width * 0.52, 13, 0, 0, Math.PI * 2); ctx.fill();
-      if (state.selectedImage && state.selectedImageReady) { const fit = state.imageFit; ctx.save(); ctx.translate(fit.offsetX, fit.offsetY); ctx.rotate((fit.rotate * Math.PI) / 180); ctx.scale(fit.zoom * fit.flip, fit.zoom); ctx.drawImage(state.selectedImage, -player.width / 2, -player.height / 2, player.width, player.height); ctx.restore(); }
-      else { ctx.fillStyle = "#ffd34d"; ctx.beginPath(); ctx.arc(0, -8, 48, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = "#1f1f1f"; ctx.lineWidth = 4; ctx.stroke(); ctx.fillStyle = "#1f1f1f"; ctx.beginPath(); ctx.arc(-15, -18, 6, 0, Math.PI * 2); ctx.arc(15, -18, 6, 0, Math.PI * 2); ctx.fill(); ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(0, -4, 25, 0.2, Math.PI - 0.2); ctx.stroke(); }
-      ctx.restore();
-    }
+    function drawGround() { ctx.fillStyle = "#98e7a7"; ctx.fillRect(0, WORLD.groundY, WORLD.width, WORLD.height - WORLD.groundY); ctx.fillStyle = "#65bf78"; ctx.fillRect(0, WORLD.groundY + 22, WORLD.width, WORLD.height - WORLD.groundY - 22); ctx.strokeStyle = "#1f1f1f"; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(0, WORLD.groundY + 2); ctx.lineTo(WORLD.width, WORLD.groundY + 2); ctx.stroke(); const offset = state.distance % 90; for (let x = -offset; x < WORLD.width + 90; x += 90) { ctx.fillStyle = "rgba(31,31,31,0.12)"; ctx.fillRect(x, WORLD.groundY + 45, 42, 8); } }
+    function drawObstacles() { state.obstacles.forEach((obstacle) => { ctx.save(); ctx.translate(obstacle.x + obstacle.width / 2, obstacle.y + obstacle.height / 2); const rolling = obstacle.label === "Rolling Donut" || obstacle.label === "Meteor"; ctx.rotate(rolling ? obstacle.spin : Math.sin(obstacle.wobble) * 0.025); ctx.translate(-obstacle.width / 2, -obstacle.height / 2); ctx.lineWidth = 4; ctx.strokeStyle = "#1f1f1f"; drawObstacleByType(obstacle); ctx.restore(); }); }
+    function drawObstacleByType(o) { if (o.label === "Cone") drawCone(o); else if (o.label === "Sign") drawSign(o); else if (o.label === "Flaming Pit") drawFlamingPit(o); else if (o.label === "Police Car") drawPoliceCar(o); else if (o.label === "Banana Peel") drawBanana(o); else if (o.label === "Giant Boot") drawBoot(o); else if (o.label === "UFO Beam") drawUfo(o); else if (o.label === "Toilet Plunger") drawPlunger(o); else if (o.label === "Anvil") drawAnvil(o); else if (o.label === "Slime Puddle") drawSlime(o); else if (o.label === "Shark Fin") drawShark(o); else if (o.label === "Cactus") drawCactus(o); else if (o.label === "Rolling Donut") drawDonut(o); else if (o.label === "Lawn Gnome") drawGnome(o); else if (o.label === "Mailbox") drawMailbox(o); else if (o.label === "Evil Toaster") drawToaster(o); else if (o.label === "Meteor") drawMeteor(o); else if (o.label === "Spooky Hand") drawHand(o); else if (o.label === "Traffic Barricade") drawBarricade(o); else if (o.label === "Mystery Portal") drawPortal(o); else drawBox(o); }
+
+    function drawCone(o) { ctx.fillStyle = o.color; ctx.beginPath(); ctx.moveTo(o.width / 2, 0); ctx.lineTo(o.width, o.height); ctx.lineTo(0, o.height); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.fillStyle = "white"; ctx.fillRect(12, o.height * 0.58, o.width - 24, 10); ctx.strokeRect(12, o.height * 0.58, o.width - 24, 10); }
+    function drawSign(o) { ctx.fillStyle = "#6b6257"; ctx.fillRect(o.width / 2 - 5, 35, 10, o.height - 20); ctx.strokeRect(o.width / 2 - 5, 35, 10, o.height - 20); ctx.fillStyle = o.color; roundedRect(0, 0, o.width, 46, 10); ctx.fill(); ctx.stroke(); ctx.fillStyle = "#1f1f1f"; ctx.font = "900 14px Comic Sans MS, Trebuchet MS, system-ui"; ctx.textAlign = "center"; ctx.fillText("NO", o.width / 2, 19); ctx.fillText("GOOB", o.width / 2, 35); }
+    function drawBox(o) { ctx.fillStyle = o.color; roundedRect(0, 0, o.width, o.height, 12); ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, 20); ctx.lineTo(o.width, 20); ctx.moveTo(o.width / 2, 0); ctx.lineTo(o.width / 2, o.height); ctx.stroke(); }
+    function drawFlamingPit(o) { ctx.fillStyle = "#2b1a14"; roundedRect(0, 16, o.width, 36, 18); ctx.fill(); ctx.stroke(); ctx.fillStyle = "#1f1f1f"; ctx.beginPath(); ctx.ellipse(o.width / 2, 44, o.width * 0.46, 13, 0, 0, Math.PI * 2); ctx.fill(); for (let i = 0; i < 6; i++) { const x = 16 + i * 20; const h = 28 + Math.sin(o.flame + i) * 8; drawFlame(x, 24, h, "#ff9f45", 14); drawFlame(x + 4, 29, h * 0.62, "#ffd34d", 8); } ctx.fillStyle = "#1f1f1f"; ctx.font = "900 14px Comic Sans MS, Trebuchet MS, system-ui"; ctx.textAlign = "center"; ctx.fillText("HOT", o.width / 2, 49); }
+    function drawFlame(x, baseY, height, color, width) { ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(x, baseY); ctx.quadraticCurveTo(x - width, baseY - height * 0.45, x, baseY - height); ctx.quadraticCurveTo(x + width, baseY - height * 0.45, x, baseY); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+    function drawPoliceCar(o) { ctx.fillStyle = "#ffffff"; roundedRect(6, 30, o.width - 12, 38, 14); ctx.fill(); ctx.stroke(); ctx.fillStyle = "#ffffff"; roundedRect(42, 12, 66, 34, 12); ctx.fill(); ctx.stroke(); ctx.fillStyle = "#8ed3ff"; ctx.fillRect(50, 20, 22, 20); ctx.strokeRect(50, 20, 22, 20); ctx.fillRect(78, 20, 22, 20); ctx.strokeRect(78, 20, 22, 20); ctx.fillStyle = "#1f1f1f"; ctx.fillRect(62, 43, 28, 8); ctx.fillStyle = "#ff8bd1"; ctx.fillRect(68, 5, 14, 9); ctx.strokeRect(68, 5, 14, 9); ctx.fillStyle = "#8ed3ff"; ctx.fillRect(84, 5, 14, 9); ctx.strokeRect(84, 5, 14, 9); ctx.fillStyle = "#1f1f1f"; ctx.font = "900 15px Comic Sans MS, Trebuchet MS, system-ui"; ctx.textAlign = "center"; ctx.fillText("POLICE", o.width / 2, 57); drawWheel(36, 68); drawWheel(114, 68); ctx.fillStyle = "#ffd34d"; ctx.fillRect(9, 43, 10, 10); ctx.strokeRect(9, 43, 10, 10); ctx.fillStyle = "#ff9f45"; ctx.fillRect(o.width - 20, 43, 10, 10); ctx.strokeRect(o.width - 20, 43, 10, 10); }
+    function drawBanana(o) { ctx.fillStyle = "#ffd34d"; ctx.beginPath(); ctx.moveTo(8, 29); ctx.quadraticCurveTo(38, -5, 78, 28); ctx.quadraticCurveTo(45, 15, 12, 40); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.fillStyle = "#6b6257"; ctx.fillRect(7, 28, 10, 8); ctx.strokeRect(7, 28, 10, 8); }
+    function drawBoot(o) { ctx.fillStyle = "#5a3825"; roundedRect(36, 0, 34, 82, 10); ctx.fill(); ctx.stroke(); roundedRect(8, 66, 82, 34, 14); ctx.fill(); ctx.stroke(); ctx.fillStyle = "#1f1f1f"; ctx.fillRect(5, 94, 88, 16); ctx.strokeRect(5, 94, 88, 16); ctx.fillStyle = "#ffd34d"; ctx.fillRect(44, 12, 18, 8); ctx.strokeRect(44, 12, 18, 8); }
+    function drawUfo(o) { ctx.fillStyle = "rgba(255, 211, 77, 0.55)"; ctx.beginPath(); ctx.moveTo(15, o.height); ctx.lineTo(o.width / 2, 38); ctx.lineTo(o.width - 15, o.height); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.fillStyle = "#d8c5ff"; ctx.beginPath(); ctx.ellipse(o.width / 2, 34, 37, 14, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.fillStyle = "#8ed3ff"; ctx.beginPath(); ctx.arc(o.width / 2, 22, 19, Math.PI, 0); ctx.fill(); ctx.stroke(); ctx.fillStyle = "#ff8bd1"; for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(30 + i * 16, 35, 4, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); } }
+    function drawPlunger(o) { ctx.fillStyle = "#6b6257"; ctx.fillRect(o.width / 2 - 5, 0, 10, 76); ctx.strokeRect(o.width / 2 - 5, 0, 10, 76); ctx.fillStyle = "#ff9f45"; ctx.beginPath(); ctx.arc(o.width / 2, 92, 24, Math.PI, 0); ctx.lineTo(o.width / 2 + 26, 116); ctx.lineTo(o.width / 2 - 26, 116); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+    function drawAnvil(o) { ctx.fillStyle = "#6b6257"; roundedRect(18, 18, 62, 34, 8); ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, 26); ctx.lineTo(24, 14); ctx.lineTo(24, 52); ctx.lineTo(0, 44); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.fillRect(32, 52, 32, 12); ctx.strokeRect(32, 52, 32, 12); ctx.fillRect(18, 64, 64, 8); ctx.strokeRect(18, 64, 64, 8); }
+    function drawSlime(o) { ctx.fillStyle = "#98e7a7"; ctx.beginPath(); ctx.ellipse(o.width / 2, 26, o.width * 0.45, 16, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.fillStyle = "#65bf78"; ctx.beginPath(); ctx.arc(34, 22, 8, 0, Math.PI * 2); ctx.arc(76, 30, 6, 0, Math.PI * 2); ctx.arc(104, 22, 5, 0, Math.PI * 2); ctx.fill(); }
+    function drawShark(o) { ctx.fillStyle = "#8ed3ff"; ctx.beginPath(); ctx.moveTo(8, o.height); ctx.quadraticCurveTo(45, -4, 88, o.height); ctx.lineTo(8, o.height); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.fillStyle = "white"; ctx.beginPath(); ctx.arc(56, 32, 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.fillStyle = "#1f1f1f"; ctx.beginPath(); ctx.arc(58, 32, 2, 0, Math.PI * 2); ctx.fill(); }
+    function drawCactus(o) { ctx.fillStyle = "#98e7a7"; roundedRect(28, 18, 26, 104, 14); ctx.fill(); ctx.stroke(); roundedRect(5, 50, 25, 18, 9); ctx.fill(); ctx.stroke(); roundedRect(50, 72, 18, 25, 9); ctx.fill(); ctx.stroke(); ctx.fillStyle = "#1f1f1f"; for (let y = 34; y < 104; y += 18) ctx.fillRect(38, y, 4, 4); }
+    function drawDonut(o) { ctx.fillStyle = "#b98346"; ctx.beginPath(); ctx.arc(41, 41, 38, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.fillStyle = "#ff8bd1"; ctx.beginPath(); ctx.arc(41, 41, 29, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.fillStyle = "#fffaf0"; ctx.beginPath(); ctx.arc(41, 41, 13, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); sprinkle(24, 26); sprinkle(55, 29); sprinkle(36, 58); sprinkle(61, 50); }
+    function drawGnome(o) { ctx.fillStyle = "#ff9f45"; ctx.beginPath(); ctx.moveTo(o.width / 2, 0); ctx.lineTo(10, 54); ctx.lineTo(60, 54); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.fillStyle = "#fffaf0"; ctx.beginPath(); ctx.arc(o.width / 2, 62, 18, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.fillStyle = "#6b6257"; roundedRect(16, 76, 38, 34, 12); ctx.fill(); ctx.stroke(); ctx.fillStyle = "#ff8bd1"; ctx.beginPath(); ctx.arc(o.width / 2, 62, 5, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+    function drawMailbox(o) { ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.moveTo(8, 36); ctx.quadraticCurveTo(o.width / 2, 4, o.width - 8, 36); ctx.lineTo(o.width - 8, 68); ctx.lineTo(8, 68); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.fillStyle = "#ff8bd1"; ctx.fillRect(o.width - 26, 20, 18, 10); ctx.strokeRect(o.width - 26, 20, 18, 10); ctx.fillStyle = "#6b6257"; ctx.fillRect(38, 68, 10, 20); ctx.strokeRect(38, 68, 10, 20); }
+    function drawToaster(o) { ctx.fillStyle = "#ffffff"; roundedRect(8, 20, 78, 50, 14); ctx.fill(); ctx.stroke(); ctx.fillStyle = "#1f1f1f"; ctx.fillRect(22, 14, 48, 8); ctx.strokeRect(22, 14, 48, 8); ctx.fillStyle = "#ff8bd1"; ctx.beginPath(); ctx.arc(32, 45, 6, 0, Math.PI * 2); ctx.arc(62, 45, 6, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = "#1f1f1f"; ctx.fillRect(30, 60, 36, 5); ctx.fillStyle = "#ffd34d"; ctx.fillRect(15, 5, 22, 14); ctx.strokeRect(15, 5, 22, 14); }
+    function drawMeteor(o) { ctx.fillStyle = "#ff9f45"; ctx.beginPath(); ctx.arc(43, 43, 34, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.fillStyle = "#ffd34d"; ctx.beginPath(); ctx.arc(30, 32, 10, 0, Math.PI * 2); ctx.arc(56, 54, 8, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+    function drawHand(o) { ctx.fillStyle = "#d8c5ff"; roundedRect(28, 38, 30, 64, 14); ctx.fill(); ctx.stroke(); for (let i = 0; i < 4; i++) { roundedRect(8 + i * 16, 10 + Math.sin(o.flame + i) * 6, 14, 48, 8); ctx.fill(); ctx.stroke(); } ctx.fillStyle = "#1f1f1f"; ctx.fillRect(35, 74, 5, 5); ctx.fillRect(48, 74, 5, 5); }
+    function drawBarricade(o) { ctx.fillStyle = "#ffffff"; roundedRect(5, 20, o.width - 10, 48, 8); ctx.fill(); ctx.stroke(); ctx.strokeStyle = "#ff9f45"; ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(12, 62); ctx.lineTo(48, 26); ctx.moveTo(48, 62); ctx.lineTo(84, 26); ctx.moveTo(84, 62); ctx.lineTo(110, 36); ctx.stroke(); ctx.strokeStyle = "#1f1f1f"; ctx.lineWidth = 4; ctx.fillStyle = "#6b6257"; ctx.fillRect(18, 68, 10, 18); ctx.fillRect(90, 68, 10, 18); }
+    function drawPortal(o) { const pulse = Math.sin(o.flame) * 5; ctx.fillStyle = "#ff8bd1"; ctx.beginPath(); ctx.ellipse(o.width / 2, o.height / 2, 32 + pulse, 52, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.fillStyle = "#8ed3ff"; ctx.beginPath(); ctx.ellipse(o.width / 2, o.height / 2, 19, 35 + pulse, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.fillStyle = "#1f1f1f"; ctx.font = "900 18px Comic Sans MS, Trebuchet MS, system-ui"; ctx.textAlign = "center"; ctx.fillText("?", o.width / 2, o.height / 2 + 6); }
+    function drawWheel(x, y) { ctx.fillStyle = "#1f1f1f"; ctx.beginPath(); ctx.arc(x, y, 13, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = "white"; ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill(); }
+    function sprinkle(x, y) { ctx.save(); ctx.translate(x, y); ctx.rotate(0.7); ctx.fillStyle = "#1f1f1f"; ctx.fillRect(-5, -2, 10, 4); ctx.restore(); }
+
+    function drawPlayer() { const player = state.player; ctx.save(); ctx.translate(player.x + player.width / 2, player.y + player.height / 2); ctx.scale(1 + (1 - player.squash) * 0.32, player.squash); ctx.fillStyle = "rgba(31,31,31,0.2)"; ctx.beginPath(); ctx.ellipse(0, player.height / 2 + 8, player.width * 0.52, 13, 0, 0, Math.PI * 2); ctx.fill(); if (state.selectedImage && state.selectedImageReady) { const fit = state.imageFit; ctx.save(); ctx.translate(fit.offsetX, fit.offsetY); ctx.rotate((fit.rotate * Math.PI) / 180); ctx.scale(fit.zoom * fit.flip, fit.zoom); ctx.drawImage(state.selectedImage, -player.width / 2, -player.height / 2, player.width, player.height); ctx.restore(); } else { ctx.fillStyle = "#ffd34d"; ctx.beginPath(); ctx.arc(0, -8, 48, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = "#1f1f1f"; ctx.lineWidth = 4; ctx.stroke(); ctx.fillStyle = "#1f1f1f"; ctx.beginPath(); ctx.arc(-15, -18, 6, 0, Math.PI * 2); ctx.arc(15, -18, 6, 0, Math.PI * 2); ctx.fill(); ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(0, -4, 25, 0.2, Math.PI - 0.2); ctx.stroke(); } ctx.restore(); }
     function drawParticles() { state.particles.forEach((particle) => { ctx.globalAlpha = Math.max(0, particle.life / particle.maxLife); ctx.fillStyle = "rgba(255,255,255,0.85)"; ctx.beginPath(); ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; }); }
     function roundedRect(x, y, width, height, radius) { ctx.beginPath(); ctx.moveTo(x + radius, y); ctx.arcTo(x + width, y, x + width, y + height, radius); ctx.arcTo(x + width, y + height, x, y + height, radius); ctx.arcTo(x, y + height, x, y, radius); ctx.arcTo(x, y, x + width, y, radius); ctx.closePath(); }
 
