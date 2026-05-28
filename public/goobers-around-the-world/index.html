@@ -14,14 +14,13 @@
     .world-shell { max-width: 1180px; margin: 0 auto; padding: 16px 22px 70px; display: grid; grid-template-columns: minmax(0, 1fr) 350px; gap: 24px; align-items: start; }
     .postcard, .control-panel { background: var(--card); border: 4px solid var(--ink); border-radius: var(--radius); box-shadow: var(--shadow), 7px 7px 0 var(--ink); overflow: hidden; }
     .postcard { position: relative; background: #fffaf0; }
-    .postcard::before { content: "goober postcard studio"; position: absolute; z-index: 3; top: -4px; left: 28px; background: var(--pink); border: 3px solid var(--ink); border-radius: 999px; padding: 7px 14px; font-size: 0.9rem; font-weight: 900; rotate: -4deg; }
-    .scene-title { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 24px 16px 14px; background: var(--yellow); border-bottom: 4px solid var(--ink); }
+    .scene-title { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 18px 16px 14px; background: var(--yellow); border-bottom: 4px solid var(--ink); }
     .scene-title h2 { margin: 0; font-size: clamp(1.35rem, 3vw, 2.4rem); letter-spacing: -0.04em; line-height: 0.95; }
     .scene-title span { font-weight: 900; color: var(--muted); text-align: right; }
+    .scene-badge { display: inline-block; margin: 0 0 10px; background: var(--pink); border: 3px solid var(--ink); border-radius: 999px; padding: 7px 14px; font-size: 0.9rem; font-weight: 900; rotate: -2deg; }
     .stage-wrap { padding: 16px; position: relative; }
     canvas { display: block; width: 100%; aspect-ratio: 16 / 9; min-height: 360px; max-height: calc(100vh - 240px); background: var(--blue); border: 4px solid var(--ink); border-radius: 24px; box-shadow: 5px 5px 0 var(--ink); touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; }
     canvas:active { cursor: grabbing; }
-    .hint { position: absolute; left: 30px; bottom: 30px; max-width: 360px; background: white; border: 3px solid var(--ink); border-radius: 18px; box-shadow: 4px 4px 0 var(--ink); padding: 10px 12px; font-weight: 900; color: var(--muted); pointer-events: none; }
     .control-panel { padding: 18px; background: var(--blue); position: sticky; top: 14px; }
     .control-panel h2, .control-panel h3 { margin: 0 0 10px; letter-spacing: -0.04em; }
     .control-panel p { margin: 0 0 14px; color: #26333a; line-height: 1.4; font-weight: 800; }
@@ -47,7 +46,7 @@
     .help { display: grid; gap: 8px; margin-top: 16px; color: #26333a; font-size: 0.92rem; line-height: 1.35; font-weight: 800; }
     .pill { display: inline-flex; align-items: center; justify-content: center; min-width: 34px; padding: 3px 8px; border-radius: 999px; border: 2px solid var(--ink); background: white; color: var(--ink); font-weight: 900; }
     @media (max-width: 940px) { .world-shell { grid-template-columns: 1fr; } .control-panel { position: static; } canvas { min-height: 300px; max-height: none; } .goober-grid { grid-template-columns: repeat(4, 1fr); } }
-    @media (max-width: 560px) { .world-hero { padding-top: 20px; } .world-shell { padding-left: 14px; padding-right: 14px; } .scene-title { align-items: flex-start; flex-direction: column; padding-top: 24px; } .scene-title span { text-align: left; } .stage-wrap { padding: 10px; } canvas { min-height: 270px; border-radius: 18px; } .hint { left: 18px; right: 18px; bottom: 20px; max-width: none; font-size: 0.82rem; } .goober-grid { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 560px) { .world-hero { padding-top: 20px; } .world-shell { padding-left: 14px; padding-right: 14px; } .scene-title { align-items: flex-start; flex-direction: column; padding-top: 18px; } .scene-title span { text-align: left; } .stage-wrap { padding: 10px; } canvas { min-height: 270px; border-radius: 18px; } .goober-grid { grid-template-columns: repeat(3, 1fr); } }
   </style>
 </head>
 <body>
@@ -56,7 +55,7 @@
       <div class="logo-mark"><img src="/assets/original-goober.jpg" alt="Miniature Original Goober logo" /></div>
       <span>The Big Goober Website</span>
     </div>
-    <nav><a href="/">Home</a><a href="/#goobers">Goober Gallery</a><a href="/goober-run/">Goober Run</a><a href="/#upload">Add Goober</a></nav>
+    <nav><a href="/">Home</a><a href="/#goobers">Goober Gallery</a><a href="/goober-run/">Goober Run</a><a href="/snowball-goobers/">Snowball Goobers</a><a href="/#upload">Add Goober</a></nav>
   </header>
 
   <section class="world-hero">
@@ -67,12 +66,14 @@
   <main class="world-shell">
     <section class="postcard">
       <div class="scene-title">
-        <h2 id="placeTitle">Paris, France</h2>
+        <div>
+          <div class="scene-badge">goober postcard studio</div>
+          <h2 id="placeTitle">Paris, France</h2>
+        </div>
         <span id="placeSubtitle">Eiffel Tower postcard mode</span>
       </div>
       <div class="stage-wrap">
         <canvas id="worldCanvas" width="1280" height="720" aria-label="Goober postcard canvas"></canvas>
-        <div class="hint">Drag the goober on the postcard. Use the sliders to zoom, rotate, and pose it.</div>
       </div>
     </section>
 
@@ -105,9 +106,10 @@
       </div>
 
       <div class="help">
-        <div><span class="pill">Drag</span> move the goober</div>
-        <div><span class="pill">Sliders</span> fine tune the pose</div>
-        <div><span class="pill">Save</span> downloads a PNG postcard</div>
+        <div><span class="pill">Drag</span> move the goober around the postcard</div>
+        <div><span class="pill">Sliders</span> resize, rotate, and fine tune the pose</div>
+        <div><span class="pill">Flip</span> mirror the goober left or right</div>
+        <div><span class="pill">Save</span> downloads a PNG postcard with the city name on it</div>
       </div>
     </aside>
   </main>
@@ -250,6 +252,7 @@
       place.draw();
       drawPostcardStamp(place);
       drawGoober();
+      drawPostcardCaption(place);
     }
 
     function drawBackground(skyTop = "#8ed3ff", skyBottom = "#fffaf0", ground = "#98e7a7") {
@@ -285,6 +288,23 @@
       ctx.font = "900 15px Comic Sans MS, Trebuchet MS, system-ui";
       ctx.fillText("POSTCARD", 24, 58);
       ctx.strokeRect(158, 18, 42, 42);
+      ctx.restore();
+    }
+
+    function drawPostcardCaption(place) {
+      ctx.save();
+      setStroke(4);
+      ctx.fillStyle = "rgba(255,250,240,0.94)";
+      roundedRect(36, 628, 760, 62, 18); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#ff8bd1";
+      roundedRect(52, 642, 150, 34, 14); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#1f1f1f";
+      ctx.font = "900 15px Comic Sans MS, Trebuchet MS, system-ui";
+      ctx.textAlign = "center";
+      ctx.fillText("AROUND THE WORLD", 127, 664);
+      ctx.textAlign = "left";
+      ctx.font = "900 28px Comic Sans MS, Trebuchet MS, system-ui";
+      ctx.fillText(place.title, 222, 666);
       ctx.restore();
     }
 
