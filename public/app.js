@@ -18,16 +18,20 @@ const featuredGooberTitle = featuredGooberCard?.querySelector("h2");
 const featuredGooberDescription = featuredGooberCard?.querySelector("p");
 
 let activeFilter = "all";
+let adminDeleteUnlocked = false;
 
 function isAdminDeleteUnlocked() {
-  return Boolean(adminDeleteCodeInput?.value.trim());
+  return Boolean(adminDeleteUnlocked && adminDeleteCodeInput?.value.trim());
 }
 
 function updateAdminDeleteVisibility() {
   const isUnlocked = isAdminDeleteUnlocked();
+  document.body.classList.toggle("admin-delete-unlocked", isUnlocked);
 
   document.querySelectorAll(".delete-goober").forEach((button) => {
     button.hidden = !isUnlocked;
+    button.style.display = isUnlocked ? "inline-block" : "none";
+    button.setAttribute("aria-hidden", isUnlocked ? "false" : "true");
   });
 }
 
@@ -82,7 +86,9 @@ function createGooberCard(goober, isCloud = false) {
     deleteButton.className = "delete-goober";
     deleteButton.type = "button";
     deleteButton.textContent = "Admin delete";
-    deleteButton.hidden = !isAdminDeleteUnlocked();
+    deleteButton.hidden = true;
+    deleteButton.style.display = "none";
+    deleteButton.setAttribute("aria-hidden", "true");
     deleteButton.addEventListener("click", () => deleteGoober(goober));
     info.appendChild(deleteButton);
   }
@@ -198,8 +204,9 @@ async function loadCloudGoobers() {
 async function deleteGoober(goober) {
   const adminCode = adminDeleteCodeInput?.value.trim() || "";
 
-  if (!adminCode) {
+  if (!adminCode || !adminDeleteUnlocked) {
     uploadStatus.textContent = "Enter the admin delete code first.";
+    adminDeleteUnlocked = false;
     updateAdminDeleteVisibility();
     return;
   }
@@ -236,7 +243,11 @@ async function deleteGoober(goober) {
 }
 
 if (adminDeleteCodeInput) {
-  adminDeleteCodeInput.addEventListener("input", updateAdminDeleteVisibility);
+  adminDeleteCodeInput.value = "";
+  adminDeleteCodeInput.addEventListener("input", () => {
+    adminDeleteUnlocked = Boolean(adminDeleteCodeInput.value.trim());
+    updateAdminDeleteVisibility();
+  });
 }
 
 if (gooberImageInput) {
@@ -342,4 +353,5 @@ if (reloadCloudGoobersButton) {
   reloadCloudGoobersButton.addEventListener("click", loadCloudGoobers);
 }
 
+updateAdminDeleteVisibility();
 loadCloudGoobers();
