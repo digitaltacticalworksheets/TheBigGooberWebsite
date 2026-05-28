@@ -10,6 +10,10 @@ const gooberImageInput = document.getElementById("gooberImage");
 const filePreview = document.getElementById("filePreview");
 const uploadStatus = document.getElementById("uploadStatus");
 const reloadCloudGoobersButton = document.getElementById("reloadCloudGoobers");
+const featuredGooberCard = document.querySelector(".feature-card");
+const featuredGooberImage = featuredGooberCard?.querySelector("img");
+const featuredGooberTitle = featuredGooberCard?.querySelector("h2");
+const featuredGooberDescription = featuredGooberCard?.querySelector("p");
 
 let activeFilter = "all";
 
@@ -65,6 +69,37 @@ function createGooberCard(goober, isCloud = false) {
   return card;
 }
 
+function setFeaturedGoober(goober) {
+  if (!featuredGooberCard || !featuredGooberImage || !featuredGooberTitle || !featuredGooberDescription) {
+    return;
+  }
+
+  if (!goober || !goober.imageUrl) {
+    featuredGooberImage.src = "/assets/original-goober.jpg";
+    featuredGooberImage.alt = "Original Goober, a hand-drawn cartoon dog";
+    featuredGooberTitle.textContent = "Original Goober";
+    featuredGooberDescription.textContent =
+      "The classic Goober. No gimmicks. No nonsense. Just pure goober geometry.";
+    return;
+  }
+
+  featuredGooberImage.src = goober.imageUrl;
+  featuredGooberImage.alt = goober.name || "Featured uploaded Goober";
+  featuredGooberTitle.textContent = goober.name || "Featured Goober";
+  featuredGooberDescription.textContent =
+    goober.description || "A randomly featured uploaded Goober from the gallery.";
+}
+
+function randomizeFeaturedGoober(goobers) {
+  if (!Array.isArray(goobers) || goobers.length === 0) {
+    setFeaturedGoober(null);
+    return;
+  }
+
+  const randomGoober = goobers[Math.floor(Math.random() * goobers.length)];
+  setFeaturedGoober(randomGoober);
+}
+
 function applyCurrentFilter() {
   document.querySelectorAll(".goober-card").forEach((card) => {
     const shouldShow =
@@ -116,6 +151,7 @@ async function loadCloudGoobers() {
       gooberGrid.appendChild(createGooberCard(goober, true));
     });
 
+    randomizeFeaturedGoober(goobers);
     applyCurrentFilter();
 
     if (uploadStatus && goobers.length > 0) {
@@ -125,6 +161,7 @@ async function loadCloudGoobers() {
     }
   } catch (error) {
     console.error(error);
+    setFeaturedGoober(null);
 
     if (uploadStatus) {
       uploadStatus.textContent =
