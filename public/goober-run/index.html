@@ -1,0 +1,842 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Goober Run | The Big Goober Website</title>
+  <meta name="description" content="Run, jump, and survive with uploaded goobers from The Big Goober Website." />
+  <style>
+    :root {
+      --bg: #12091f;
+      --panel: rgba(255, 255, 255, 0.1);
+      --panel-strong: rgba(255, 255, 255, 0.18);
+      --text: #fff8e8;
+      --muted: rgba(255, 248, 232, 0.72);
+      --accent: #ffcc33;
+      --accent-2: #ff5fa2;
+      --danger: #ff4f4f;
+      --good: #56f0a7;
+    }
+
+    * { box-sizing: border-box; }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      background:
+        radial-gradient(circle at 15% 15%, rgba(255, 204, 51, 0.25), transparent 26rem),
+        radial-gradient(circle at 85% 10%, rgba(255, 95, 162, 0.22), transparent 24rem),
+        linear-gradient(145deg, #12091f, #20103a 50%, #0f1024);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      overflow-x: hidden;
+    }
+
+    a { color: inherit; }
+
+    .shell {
+      width: min(1180px, calc(100vw - 28px));
+      margin: 0 auto;
+      padding: 22px 0 30px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+
+    .brand {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(2rem, 5vw, 4.25rem);
+      line-height: 0.92;
+      letter-spacing: -0.07em;
+      text-transform: uppercase;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.98rem;
+    }
+
+    .home-link,
+    button,
+    select {
+      border: 1px solid rgba(255,255,255,0.16);
+      background: var(--panel);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 11px 15px;
+      font-weight: 800;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.18);
+      backdrop-filter: blur(12px);
+    }
+
+    .home-link {
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    button {
+      cursor: pointer;
+      transition: transform 0.16s ease, background 0.16s ease;
+    }
+
+    button:hover { transform: translateY(-1px); background: var(--panel-strong); }
+    button:active { transform: translateY(1px) scale(0.99); }
+    button.primary { background: linear-gradient(135deg, var(--accent), #ff8a00); color: #251100; border: 0; }
+    button.danger { background: rgba(255, 79, 79, 0.2); }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 320px;
+      gap: 16px;
+      align-items: start;
+    }
+
+    .game-card,
+    .side-card {
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.09);
+      border-radius: 28px;
+      box-shadow: 0 24px 70px rgba(0,0,0,0.28);
+      backdrop-filter: blur(16px);
+      overflow: hidden;
+    }
+
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      padding: 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.11);
+    }
+
+    .stat {
+      background: rgba(0,0,0,0.2);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 18px;
+      padding: 10px 12px;
+      min-width: 0;
+    }
+
+    .stat span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.74rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 900;
+    }
+
+    .stat strong {
+      display: block;
+      font-size: clamp(1.2rem, 3vw, 2rem);
+      line-height: 1.1;
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .canvas-wrap {
+      position: relative;
+      padding: 14px;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      max-height: calc(100vh - 230px);
+      min-height: 360px;
+      border-radius: 22px;
+      background: #75d7ff;
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      pointer-events: none;
+    }
+
+    .message {
+      width: min(540px, 92%);
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(16, 8, 32, 0.82);
+      border-radius: 26px;
+      padding: 24px;
+      text-align: center;
+      box-shadow: 0 22px 60px rgba(0,0,0,0.35);
+      backdrop-filter: blur(14px);
+    }
+
+    .message h2 { margin: 0 0 8px; font-size: clamp(1.8rem, 4vw, 3.2rem); letter-spacing: -0.05em; }
+    .message p { margin: 0 0 16px; color: var(--muted); }
+    .message .actions { pointer-events: auto; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+    .side-card { padding: 16px; }
+    .side-card h2 { margin: 0 0 8px; font-size: 1.2rem; }
+    .side-card p { margin: 0 0 12px; color: var(--muted); line-height: 1.45; }
+
+    .controls {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .controls button,
+    .controls select { width: 100%; }
+
+    .goober-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      max-height: 385px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .goober-option {
+      border: 2px solid transparent;
+      background: rgba(0,0,0,0.2);
+      border-radius: 18px;
+      padding: 8px;
+      cursor: pointer;
+      min-height: 92px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .goober-option.selected { border-color: var(--accent); background: rgba(255,204,51,0.14); }
+    .goober-option img { width: 58px; height: 58px; object-fit: contain; filter: drop-shadow(0 8px 8px rgba(0,0,0,0.35)); }
+    .goober-option span { font-size: 0.73rem; color: var(--muted); width: 100%; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .help {
+      display: grid;
+      gap: 8px;
+      margin-top: 16px;
+      color: var(--muted);
+      font-size: 0.92rem;
+      line-height: 1.4;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 34px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.13);
+      color: var(--text);
+      font-weight: 900;
+    }
+
+    .error {
+      border: 1px solid rgba(255, 79, 79, 0.4);
+      background: rgba(255, 79, 79, 0.12);
+      color: #ffd9d9;
+      border-radius: 16px;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+      display: none;
+    }
+
+    @media (max-width: 880px) {
+      .layout { grid-template-columns: 1fr; }
+      .topbar { align-items: flex-start; }
+      .hud { grid-template-columns: repeat(2, 1fr); }
+      canvas { min-height: 300px; max-height: none; }
+      .goober-grid { grid-template-columns: repeat(4, 1fr); max-height: 250px; }
+    }
+
+    @media (max-width: 520px) {
+      .shell { width: min(100vw - 18px, 1180px); padding-top: 12px; }
+      .home-link { display: none; }
+      .hud { gap: 7px; padding: 10px; }
+      .canvas-wrap { padding: 10px; }
+      .overlay { inset: 10px; }
+      canvas { min-height: 270px; border-radius: 18px; }
+      .goober-grid { grid-template-columns: repeat(3, 1fr); }
+      .message { padding: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <div class="topbar">
+      <div class="brand">
+        <h1>Goober Run</h1>
+        <p class="subtitle">Jump over obstacles using the goobers uploaded to the website.</p>
+      </div>
+      <a class="home-link" href="/">← Back Home</a>
+    </div>
+
+    <section class="layout">
+      <div class="game-card">
+        <div class="hud">
+          <div class="stat"><span>Score</span><strong id="score">0</strong></div>
+          <div class="stat"><span>Best</span><strong id="best">0</strong></div>
+          <div class="stat"><span>Speed</span><strong id="speed">1.0x</strong></div>
+          <div class="stat"><span>Goober</span><strong id="activeName">Loading</strong></div>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="game" width="1280" height="720" aria-label="Goober Run game canvas"></canvas>
+          <div class="overlay" id="overlay">
+            <div class="message">
+              <h2 id="overlayTitle">Goober Run</h2>
+              <p id="overlayText">Press Space, click, or tap to jump. Survive as long as possible.</p>
+              <div class="actions">
+                <button class="primary" id="startBtn">Start Game</button>
+                <button id="randomBtn">Random Goober</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="side-card">
+        <h2>Choose Your Goober</h2>
+        <p>These load from <strong>/api/goobers</strong>. Uploading more approved goobers adds more runners here.</p>
+        <div class="error" id="errorBox"></div>
+        <div class="controls">
+          <button class="primary" id="playBtn">Play / Restart</button>
+          <button id="shuffleBtn">Pick Random Goober</button>
+        </div>
+        <div class="goober-grid" id="gooberGrid" aria-label="Uploaded goober character choices"></div>
+        <div class="help">
+          <div><span class="pill">Space</span> jump on keyboard</div>
+          <div><span class="pill">Click</span> jump with mouse</div>
+          <div><span class="pill">Tap</span> jump on phone or iPad</div>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <script>
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+    const scoreEl = document.getElementById("score");
+    const bestEl = document.getElementById("best");
+    const speedEl = document.getElementById("speed");
+    const activeNameEl = document.getElementById("activeName");
+    const overlay = document.getElementById("overlay");
+    const overlayTitle = document.getElementById("overlayTitle");
+    const overlayText = document.getElementById("overlayText");
+    const startBtn = document.getElementById("startBtn");
+    const playBtn = document.getElementById("playBtn");
+    const randomBtn = document.getElementById("randomBtn");
+    const shuffleBtn = document.getElementById("shuffleBtn");
+    const gooberGrid = document.getElementById("gooberGrid");
+    const errorBox = document.getElementById("errorBox");
+
+    const WORLD = {
+      width: 1280,
+      height: 720,
+      groundY: 585,
+      gravity: 2450,
+      jumpVelocity: -920,
+      baseSpeed: 430
+    };
+
+    const state = {
+      goobers: [],
+      selectedIndex: 0,
+      selectedImage: null,
+      selectedImageReady: false,
+      running: false,
+      gameOver: false,
+      startedOnce: false,
+      score: 0,
+      best: Number(localStorage.getItem("gooberRunBest") || 0),
+      speedMultiplier: 1,
+      distance: 0,
+      lastTime: 0,
+      obstacleTimer: 0,
+      clouds: [],
+      obstacles: [],
+      particles: [],
+      player: {
+        x: 160,
+        y: WORLD.groundY - 110,
+        width: 94,
+        height: 110,
+        vy: 0,
+        onGround: true,
+        squash: 1
+      }
+    };
+
+    bestEl.textContent = state.best;
+
+    function showError(message) {
+      errorBox.textContent = message;
+      errorBox.style.display = message ? "block" : "none";
+    }
+
+    async function loadGoobers() {
+      try {
+        const response = await fetch("/api/goobers", { headers: { "accept": "application/json" } });
+        if (!response.ok) throw new Error("Could not load goobers.");
+        const goobers = await response.json();
+        state.goobers = Array.isArray(goobers) ? goobers : [];
+
+        if (!state.goobers.length) {
+          showError("No approved goobers were returned yet. The game will use a temporary mystery goober.");
+          state.goobers = [{ id: "fallback", name: "Mystery Goober", imageUrl: "" }];
+        }
+
+        renderGooberGrid();
+        selectGoober(Math.floor(Math.random() * state.goobers.length));
+      } catch (error) {
+        showError("The goober API did not respond, so the game is using a temporary mystery goober.");
+        state.goobers = [{ id: "fallback", name: "Mystery Goober", imageUrl: "" }];
+        renderGooberGrid();
+        selectGoober(0);
+      }
+    }
+
+    function renderGooberGrid() {
+      gooberGrid.innerHTML = "";
+      state.goobers.forEach((goober, index) => {
+        const button = document.createElement("button");
+        button.className = "goober-option" + (index === state.selectedIndex ? " selected" : "");
+        button.type = "button";
+        button.title = goober.name || "Goober";
+
+        if (goober.imageUrl) {
+          const img = document.createElement("img");
+          img.src = goober.imageUrl;
+          img.alt = goober.name || "Goober";
+          img.loading = "lazy";
+          button.appendChild(img);
+        } else {
+          const fallback = document.createElement("div");
+          fallback.style.fontSize = "2.4rem";
+          fallback.textContent = "🤪";
+          button.appendChild(fallback);
+        }
+
+        const label = document.createElement("span");
+        label.textContent = goober.name || "Goober";
+        button.appendChild(label);
+        button.addEventListener("click", () => selectGoober(index));
+        gooberGrid.appendChild(button);
+      });
+    }
+
+    function selectGoober(index) {
+      state.selectedIndex = Math.max(0, Math.min(index, state.goobers.length - 1));
+      const goober = state.goobers[state.selectedIndex];
+      activeNameEl.textContent = goober.name || "Goober";
+      state.selectedImageReady = false;
+      state.selectedImage = null;
+
+      if (goober.imageUrl) {
+        const img = new Image();
+        img.onload = () => {
+          state.selectedImage = img;
+          state.selectedImageReady = true;
+        };
+        img.onerror = () => {
+          state.selectedImage = null;
+          state.selectedImageReady = false;
+        };
+        img.src = goober.imageUrl;
+      }
+
+      [...gooberGrid.children].forEach((child, childIndex) => {
+        child.classList.toggle("selected", childIndex === state.selectedIndex);
+      });
+    }
+
+    function pickRandomGoober() {
+      if (!state.goobers.length) return;
+      selectGoober(Math.floor(Math.random() * state.goobers.length));
+    }
+
+    function resetGame() {
+      state.running = true;
+      state.gameOver = false;
+      state.startedOnce = true;
+      state.score = 0;
+      state.speedMultiplier = 1;
+      state.distance = 0;
+      state.lastTime = performance.now();
+      state.obstacleTimer = 0.8;
+      state.obstacles = [];
+      state.particles = [];
+      state.player.y = WORLD.groundY - state.player.height;
+      state.player.vy = 0;
+      state.player.onGround = true;
+      overlay.style.display = "none";
+      scoreEl.textContent = "0";
+      speedEl.textContent = "1.0x";
+      ensureClouds();
+      requestAnimationFrame(loop);
+    }
+
+    function endGame() {
+      state.running = false;
+      state.gameOver = true;
+      state.best = Math.max(state.best, Math.floor(state.score));
+      localStorage.setItem("gooberRunBest", String(state.best));
+      bestEl.textContent = state.best;
+      overlayTitle.textContent = "Game Over";
+      overlayText.textContent = `Score: ${Math.floor(state.score)}. Press Space, click, or tap to run it back.`;
+      startBtn.textContent = "Play Again";
+      overlay.style.display = "flex";
+    }
+
+    function jump() {
+      if (!state.startedOnce || state.gameOver) {
+        resetGame();
+        return;
+      }
+
+      if (!state.running) return;
+
+      if (state.player.onGround) {
+        state.player.vy = WORLD.jumpVelocity;
+        state.player.onGround = false;
+        state.player.squash = 0.86;
+        puff(state.player.x + 30, WORLD.groundY - 12, 10);
+      }
+    }
+
+    function spawnObstacle() {
+      const types = [
+        { label: "Cone", color: "#ff8a00", width: 46, height: 76 },
+        { label: "Trash", color: "#495057", width: 62, height: 92 },
+        { label: "Sign", color: "#ff4f4f", width: 54, height: 116 },
+        { label: "Box", color: "#b98346", width: 76, height: 70 }
+      ];
+      const type = types[Math.floor(Math.random() * types.length)];
+      state.obstacles.push({
+        ...type,
+        x: WORLD.width + 40,
+        y: WORLD.groundY - type.height,
+        passed: false,
+        wobble: Math.random() * Math.PI * 2
+      });
+    }
+
+    function ensureClouds() {
+      if (state.clouds.length) return;
+      for (let i = 0; i < 8; i++) {
+        state.clouds.push({
+          x: Math.random() * WORLD.width,
+          y: 55 + Math.random() * 210,
+          size: 38 + Math.random() * 70,
+          speed: 18 + Math.random() * 34
+        });
+      }
+    }
+
+    function puff(x, y, count) {
+      for (let i = 0; i < count; i++) {
+        state.particles.push({
+          x,
+          y,
+          vx: -80 - Math.random() * 150,
+          vy: -80 + Math.random() * 120,
+          life: 0.4 + Math.random() * 0.3,
+          maxLife: 0.7,
+          radius: 6 + Math.random() * 8
+        });
+      }
+    }
+
+    function loop(now) {
+      if (!state.running) return;
+      const dt = Math.min(0.033, (now - state.lastTime) / 1000 || 0.016);
+      state.lastTime = now;
+      update(dt);
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    function update(dt) {
+      state.distance += WORLD.baseSpeed * state.speedMultiplier * dt;
+      state.speedMultiplier = Math.min(2.65, 1 + state.distance / 5200);
+      state.score += dt * 10 * state.speedMultiplier;
+      scoreEl.textContent = Math.floor(state.score);
+      speedEl.textContent = `${state.speedMultiplier.toFixed(1)}x`;
+
+      const player = state.player;
+      player.vy += WORLD.gravity * dt;
+      player.y += player.vy * dt;
+      player.squash += (1 - player.squash) * Math.min(1, dt * 10);
+
+      if (player.y >= WORLD.groundY - player.height) {
+        if (!player.onGround && player.vy > 0) puff(player.x + 28, WORLD.groundY - 10, 7);
+        player.y = WORLD.groundY - player.height;
+        player.vy = 0;
+        player.onGround = true;
+      }
+
+      state.obstacleTimer -= dt;
+      if (state.obstacleTimer <= 0) {
+        spawnObstacle();
+        const baseDelay = 1.15 - Math.min(0.46, state.speedMultiplier * 0.13);
+        state.obstacleTimer = baseDelay + Math.random() * 0.78;
+      }
+
+      const speed = WORLD.baseSpeed * state.speedMultiplier;
+      state.obstacles.forEach((obstacle) => {
+        obstacle.x -= speed * dt;
+        obstacle.wobble += dt * 5;
+        if (!obstacle.passed && obstacle.x + obstacle.width < player.x) {
+          obstacle.passed = true;
+          state.score += 10;
+        }
+      });
+      state.obstacles = state.obstacles.filter((obstacle) => obstacle.x + obstacle.width > -60);
+
+      state.clouds.forEach((cloud) => {
+        cloud.x -= cloud.speed * dt * state.speedMultiplier;
+        if (cloud.x + cloud.size * 2 < 0) {
+          cloud.x = WORLD.width + Math.random() * 260;
+          cloud.y = 55 + Math.random() * 210;
+        }
+      });
+
+      state.particles.forEach((particle) => {
+        particle.life -= dt;
+        particle.x += particle.vx * dt;
+        particle.y += particle.vy * dt;
+        particle.vy += 250 * dt;
+      });
+      state.particles = state.particles.filter((particle) => particle.life > 0);
+
+      for (const obstacle of state.obstacles) {
+        if (collides(player, obstacle)) {
+          puff(player.x + player.width / 2, player.y + player.height / 2, 20);
+          draw();
+          endGame();
+          break;
+        }
+      }
+    }
+
+    function collides(player, obstacle) {
+      const shrinkX = 20;
+      const shrinkY = 14;
+      return player.x + shrinkX < obstacle.x + obstacle.width &&
+        player.x + player.width - shrinkX > obstacle.x &&
+        player.y + shrinkY < obstacle.y + obstacle.height &&
+        player.y + player.height - 8 > obstacle.y;
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, WORLD.width, WORLD.height);
+      drawSky();
+      drawGround();
+      drawObstacles();
+      drawPlayer();
+      drawParticles();
+    }
+
+    function drawSky() {
+      const gradient = ctx.createLinearGradient(0, 0, 0, WORLD.height);
+      gradient.addColorStop(0, "#76dcff");
+      gradient.addColorStop(0.58, "#ffe28a");
+      gradient.addColorStop(1, "#f59f44");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, WORLD.width, WORLD.height);
+
+      ctx.fillStyle = "rgba(255,255,255,0.82)";
+      state.clouds.forEach((cloud) => {
+        drawCloud(cloud.x, cloud.y, cloud.size);
+      });
+
+      ctx.fillStyle = "rgba(255,255,255,0.2)";
+      for (let i = 0; i < 9; i++) {
+        const x = ((i * 210) - (state.distance * 0.08 % 210));
+        ctx.fillRect(x, 390, 120, 12);
+      }
+    }
+
+    function drawCloud(x, y, size) {
+      ctx.beginPath();
+      ctx.arc(x, y, size * 0.42, 0, Math.PI * 2);
+      ctx.arc(x + size * 0.42, y - size * 0.18, size * 0.48, 0, Math.PI * 2);
+      ctx.arc(x + size * 0.92, y, size * 0.38, 0, Math.PI * 2);
+      ctx.arc(x + size * 0.45, y + size * 0.16, size * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function drawGround() {
+      ctx.fillStyle = "#4fbb5f";
+      ctx.fillRect(0, WORLD.groundY, WORLD.width, WORLD.height - WORLD.groundY);
+      ctx.fillStyle = "#2d7d43";
+      ctx.fillRect(0, WORLD.groundY + 22, WORLD.width, WORLD.height - WORLD.groundY - 22);
+
+      ctx.strokeStyle = "rgba(255,255,255,0.35)";
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(0, WORLD.groundY + 2);
+      ctx.lineTo(WORLD.width, WORLD.groundY + 2);
+      ctx.stroke();
+
+      const offset = state.distance % 90;
+      for (let x = -offset; x < WORLD.width + 90; x += 90) {
+        ctx.fillStyle = "rgba(255,255,255,0.18)";
+        ctx.fillRect(x, WORLD.groundY + 45, 42, 8);
+      }
+    }
+
+    function drawObstacles() {
+      state.obstacles.forEach((obstacle) => {
+        ctx.save();
+        ctx.translate(obstacle.x + obstacle.width / 2, obstacle.y + obstacle.height / 2);
+        ctx.rotate(Math.sin(obstacle.wobble) * 0.025);
+        ctx.translate(-obstacle.width / 2, -obstacle.height / 2);
+
+        if (obstacle.label === "Cone") {
+          ctx.fillStyle = "#ff8a00";
+          ctx.beginPath();
+          ctx.moveTo(obstacle.width / 2, 0);
+          ctx.lineTo(obstacle.width, obstacle.height);
+          ctx.lineTo(0, obstacle.height);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = "rgba(255,255,255,0.72)";
+          ctx.fillRect(12, obstacle.height * 0.58, obstacle.width - 24, 10);
+          ctx.fillStyle = "#5a2500";
+          ctx.fillRect(-8, obstacle.height - 8, obstacle.width + 16, 12);
+        } else if (obstacle.label === "Sign") {
+          ctx.fillStyle = "#754b28";
+          ctx.fillRect(obstacle.width / 2 - 5, 35, 10, obstacle.height - 20);
+          ctx.fillStyle = obstacle.color;
+          roundedRect(0, 0, obstacle.width, 46, 10);
+          ctx.fill();
+          ctx.fillStyle = "white";
+          ctx.font = "900 14px system-ui";
+          ctx.textAlign = "center";
+          ctx.fillText("NO", obstacle.width / 2, 19);
+          ctx.fillText("GOOB", obstacle.width / 2, 35);
+        } else if (obstacle.label === "Trash") {
+          ctx.fillStyle = "#343a40";
+          roundedRect(3, 15, obstacle.width - 6, obstacle.height - 15, 10);
+          ctx.fill();
+          ctx.fillStyle = "#6c757d";
+          ctx.fillRect(0, 8, obstacle.width, 13);
+          ctx.fillRect(12, 0, obstacle.width - 24, 10);
+          ctx.fillStyle = "rgba(255,255,255,0.18)";
+          ctx.fillRect(18, 30, 7, obstacle.height - 34);
+          ctx.fillRect(38, 30, 7, obstacle.height - 34);
+        } else {
+          ctx.fillStyle = obstacle.color;
+          roundedRect(0, 0, obstacle.width, obstacle.height, 12);
+          ctx.fill();
+          ctx.strokeStyle = "rgba(80,45,10,0.45)";
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(0, 20);
+          ctx.lineTo(obstacle.width, 20);
+          ctx.moveTo(obstacle.width / 2, 0);
+          ctx.lineTo(obstacle.width / 2, obstacle.height);
+          ctx.stroke();
+        }
+        ctx.restore();
+      });
+    }
+
+    function drawPlayer() {
+      const player = state.player;
+      ctx.save();
+      ctx.translate(player.x + player.width / 2, player.y + player.height / 2);
+      ctx.scale(1 + (1 - player.squash) * 0.32, player.squash);
+
+      ctx.fillStyle = "rgba(0,0,0,0.22)";
+      ctx.beginPath();
+      ctx.ellipse(0, player.height / 2 + 8, player.width * 0.52, 13, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (state.selectedImage && state.selectedImageReady) {
+        ctx.drawImage(state.selectedImage, -player.width / 2, -player.height / 2, player.width, player.height);
+      } else {
+        ctx.fillStyle = "#ffcc33";
+        ctx.beginPath();
+        ctx.arc(0, -8, 48, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#211100";
+        ctx.beginPath();
+        ctx.arc(-15, -18, 6, 0, Math.PI * 2);
+        ctx.arc(15, -18, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.lineWidth = 6;
+        ctx.strokeStyle = "#211100";
+        ctx.beginPath();
+        ctx.arc(0, -4, 25, 0.2, Math.PI - 0.2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function drawParticles() {
+      state.particles.forEach((particle) => {
+        ctx.globalAlpha = Math.max(0, particle.life / particle.maxLife);
+        ctx.fillStyle = "rgba(255,255,255,0.78)";
+        ctx.beginPath();
+        ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      });
+    }
+
+    function roundedRect(x, y, width, height, radius) {
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.arcTo(x + width, y, x + width, y + height, radius);
+      ctx.arcTo(x + width, y + height, x, y + height, radius);
+      ctx.arcTo(x, y + height, x, y, radius);
+      ctx.arcTo(x, y, x + width, y, radius);
+      ctx.closePath();
+    }
+
+    window.addEventListener("keydown", (event) => {
+      if (event.code === "Space" || event.code === "ArrowUp") {
+        event.preventDefault();
+        jump();
+      }
+    });
+
+    canvas.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      jump();
+    });
+
+    startBtn.addEventListener("click", resetGame);
+    playBtn.addEventListener("click", resetGame);
+    randomBtn.addEventListener("click", pickRandomGoober);
+    shuffleBtn.addEventListener("click", pickRandomGoober);
+
+    ensureClouds();
+    draw();
+    loadGoobers();
+  </script>
+</body>
+</html>
