@@ -1,0 +1,12 @@
+name = "big-goober-api"
+main = "worker/worker.js"
+compatibility_date = "2026-05-28"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "big-goober-db"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+
+[[r2_buckets]]
+binding = "GOOBER_IMAGES"
+bucket_name = "big-goober-images"
