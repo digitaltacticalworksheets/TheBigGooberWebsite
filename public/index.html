@@ -65,6 +65,79 @@
       margin: 0 !important;
     }
 
+    .admin-tools {
+      width: min(360px, 100%);
+      margin: -6px 0 18px auto;
+      position: relative;
+      z-index: 2;
+    }
+
+    .admin-tools summary {
+      list-style: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      float: right;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.72);
+      border: 2px dashed var(--muted);
+      border-radius: 999px;
+      padding: 6px 11px;
+      font-size: 0.78rem;
+      font-weight: 900;
+      cursor: pointer;
+      opacity: 0.55;
+      transition: opacity 0.14s ease, background 0.14s ease, transform 0.14s ease;
+    }
+
+    .admin-tools summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .admin-tools summary::before {
+      content: "⚙️";
+      font-size: 0.85rem;
+    }
+
+    .admin-tools summary:hover,
+    .admin-tools[open] summary {
+      opacity: 1;
+      background: white;
+      transform: translateY(-1px);
+    }
+
+    .admin-delete-panel {
+      clear: both;
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+      background: white;
+      border: 3px solid var(--ink);
+      border-radius: 20px;
+      box-shadow: 4px 4px 0 var(--ink);
+      padding: 12px;
+      font-weight: 900;
+    }
+
+    .admin-delete-panel label {
+      font-size: 0.86rem;
+    }
+
+    .admin-delete-panel input {
+      width: 100%;
+      border: 3px solid var(--ink);
+      border-radius: 999px;
+      padding: 9px 12px;
+      font: inherit;
+      background: #fffaf0;
+    }
+
+    .admin-delete-panel span {
+      color: var(--muted);
+      font-size: 0.78rem;
+      line-height: 1.25;
+    }
+
     @media (max-width: 560px) {
       nav .nav-dropdown,
       nav .nav-dropdown-toggle,
@@ -79,6 +152,15 @@
       nav .nav-dropdown-menu {
         position: static !important;
         margin-top: 8px !important;
+      }
+
+      .admin-tools {
+        margin-left: 0;
+        margin-right: 0;
+      }
+
+      .admin-tools summary {
+        float: none;
       }
     }
   </style>
@@ -159,11 +241,14 @@
     <button class="filter-btn" data-filter="chaos">Chaos</button>
   </div>
 
-  <div class="admin-delete-panel">
-    <label for="adminDeleteCode">Admin delete code</label>
-    <input id="adminDeleteCode" type="password" placeholder="Enter code to delete inappropriate uploads" autocomplete="off" />
-    <span>Enter the admin code once, then use the Admin delete button on uploaded goobers.</span>
-  </div>
+  <details class="admin-tools">
+    <summary>Admin tools</summary>
+    <div class="admin-delete-panel">
+      <label for="adminDeleteCode">Admin delete code</label>
+      <input id="adminDeleteCode" type="password" placeholder="Enter admin code" autocomplete="off" />
+      <span>Open this only when you need to remove an inappropriate uploaded Goober. Then use the Admin delete button on the card.</span>
+    </div>
+  </details>
 
   <div class="goober-grid" id="gooberGrid">
     <article class="goober-card" data-category="classic">
