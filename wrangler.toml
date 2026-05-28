@@ -1,4 +1,4 @@
-name = "big-goober-api"
+name = "thebiggooberwebsite-api"
 main = "worker/worker.js"
 compatibility_date = "2026-05-28"
 
