@@ -15,7 +15,6 @@
       --accent: #ffcc33;
       --accent-2: #ff5fa2;
       --danger: #ff4f4f;
-      --good: #56f0a7;
     }
 
     * { box-sizing: border-box; }
@@ -49,11 +48,7 @@
       margin-bottom: 16px;
     }
 
-    .brand {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
+    .brand { display: flex; flex-direction: column; gap: 2px; }
 
     h1 {
       margin: 0;
@@ -63,11 +58,7 @@
       text-transform: uppercase;
     }
 
-    .subtitle {
-      margin: 0;
-      color: var(--muted);
-      font-size: 0.98rem;
-    }
+    .subtitle { margin: 0; color: var(--muted); font-size: 0.98rem; }
 
     .home-link,
     button,
@@ -82,24 +73,16 @@
       backdrop-filter: blur(12px);
     }
 
-    .home-link {
-      text-decoration: none;
-      white-space: nowrap;
-    }
+    .home-link { text-decoration: none; white-space: nowrap; }
 
-    button {
-      cursor: pointer;
-      transition: transform 0.16s ease, background 0.16s ease;
-    }
-
+    button { cursor: pointer; transition: transform 0.16s ease, background 0.16s ease; }
     button:hover { transform: translateY(-1px); background: var(--panel-strong); }
     button:active { transform: translateY(1px) scale(0.99); }
     button.primary { background: linear-gradient(135deg, var(--accent), #ff8a00); color: #251100; border: 0; }
-    button.danger { background: rgba(255, 79, 79, 0.2); }
 
     .layout {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 320px;
+      grid-template-columns: minmax(0, 1fr) 340px;
       gap: 16px;
       align-items: start;
     }
@@ -149,10 +132,7 @@
       text-overflow: ellipsis;
     }
 
-    .canvas-wrap {
-      position: relative;
-      padding: 14px;
-    }
+    .canvas-wrap { position: relative; padding: 14px; }
 
     canvas {
       display: block;
@@ -194,22 +174,17 @@
 
     .side-card { padding: 16px; }
     .side-card h2 { margin: 0 0 8px; font-size: 1.2rem; }
+    .side-card h3 { margin: 18px 0 8px; font-size: 1rem; }
     .side-card p { margin: 0 0 12px; color: var(--muted); line-height: 1.45; }
 
-    .controls {
-      display: grid;
-      gap: 10px;
-      margin-bottom: 16px;
-    }
-
-    .controls button,
-    .controls select { width: 100%; }
+    .controls { display: grid; gap: 10px; margin-bottom: 16px; }
+    .controls button { width: 100%; }
 
     .goober-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 10px;
-      max-height: 385px;
+      max-height: 250px;
       overflow: auto;
       padding-right: 4px;
     }
@@ -232,26 +207,38 @@
     .goober-option img { width: 58px; height: 58px; object-fit: contain; filter: drop-shadow(0 8px 8px rgba(0,0,0,0.35)); }
     .goober-option span { font-size: 0.73rem; color: var(--muted); width: 100%; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-    .help {
+    .adjust-panel {
       display: grid;
-      gap: 8px;
-      margin-top: 16px;
-      color: var(--muted);
-      font-size: 0.92rem;
-      line-height: 1.4;
+      gap: 10px;
+      margin: 14px 0 8px;
+      padding: 12px;
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 20px;
+      background: rgba(0,0,0,0.18);
     }
 
-    .pill {
-      display: inline-flex;
+    .slider-row {
+      display: grid;
+      grid-template-columns: 72px 1fr 44px;
+      gap: 8px;
       align-items: center;
-      justify-content: center;
-      min-width: 34px;
-      padding: 3px 8px;
-      border-radius: 999px;
-      background: rgba(255,255,255,0.13);
-      color: var(--text);
-      font-weight: 900;
+      color: var(--muted);
+      font-size: 0.82rem;
+      font-weight: 800;
     }
+
+    .slider-row output { color: var(--text); text-align: right; font-size: 0.78rem; }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+
+    .mini-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .mini-actions button { padding: 9px 10px; font-size: 0.82rem; }
+
+    .help { display: grid; gap: 8px; margin-top: 16px; color: var(--muted); font-size: 0.92rem; line-height: 1.4; }
+    .pill { display: inline-flex; align-items: center; justify-content: center; min-width: 34px; padding: 3px 8px; border-radius: 999px; background: rgba(255,255,255,0.13); color: var(--text); font-weight: 900; }
 
     .error {
       border: 1px solid rgba(255, 79, 79, 0.4);
@@ -306,7 +293,7 @@
           <div class="overlay" id="overlay">
             <div class="message">
               <h2 id="overlayTitle">Goober Run</h2>
-              <p id="overlayText">Press Space, click, or tap to jump. Survive as long as possible.</p>
+              <p id="overlayText">Pick a goober, adjust the fit if needed, then press Space, click, or tap to jump.</p>
               <div class="actions">
                 <button class="primary" id="startBtn">Start Game</button>
                 <button id="randomBtn">Random Goober</button>
@@ -325,6 +312,20 @@
           <button id="shuffleBtn">Pick Random Goober</button>
         </div>
         <div class="goober-grid" id="gooberGrid" aria-label="Uploaded goober character choices"></div>
+
+        <h3>Adjust Goober Fit</h3>
+        <p>Use these to make each uploaded image look better as the runner. Settings save on this device.</p>
+        <div class="adjust-panel">
+          <label class="slider-row" for="zoomRange"><span>Zoom</span><input id="zoomRange" type="range" min="0.55" max="2.4" step="0.05" value="1" /><output id="zoomValue">1.00x</output></label>
+          <label class="slider-row" for="rotateRange"><span>Rotate</span><input id="rotateRange" type="range" min="-45" max="45" step="1" value="0" /><output id="rotateValue">0°</output></label>
+          <label class="slider-row" for="offsetXRange"><span>Left/Right</span><input id="offsetXRange" type="range" min="-70" max="70" step="1" value="0" /><output id="offsetXValue">0</output></label>
+          <label class="slider-row" for="offsetYRange"><span>Up/Down</span><input id="offsetYRange" type="range" min="-70" max="70" step="1" value="0" /><output id="offsetYValue">0</output></label>
+          <div class="mini-actions">
+            <button id="flipBtn" type="button">Flip</button>
+            <button id="resetFitBtn" type="button">Reset Fit</button>
+          </div>
+        </div>
+
         <div class="help">
           <div><span class="pill">Space</span> jump on keyboard</div>
           <div><span class="pill">Click</span> jump with mouse</div>
@@ -350,21 +351,26 @@
     const shuffleBtn = document.getElementById("shuffleBtn");
     const gooberGrid = document.getElementById("gooberGrid");
     const errorBox = document.getElementById("errorBox");
+    const zoomRange = document.getElementById("zoomRange");
+    const rotateRange = document.getElementById("rotateRange");
+    const offsetXRange = document.getElementById("offsetXRange");
+    const offsetYRange = document.getElementById("offsetYRange");
+    const zoomValue = document.getElementById("zoomValue");
+    const rotateValue = document.getElementById("rotateValue");
+    const offsetXValue = document.getElementById("offsetXValue");
+    const offsetYValue = document.getElementById("offsetYValue");
+    const flipBtn = document.getElementById("flipBtn");
+    const resetFitBtn = document.getElementById("resetFitBtn");
 
-    const WORLD = {
-      width: 1280,
-      height: 720,
-      groundY: 585,
-      gravity: 2450,
-      jumpVelocity: -920,
-      baseSpeed: 430
-    };
+    const WORLD = { width: 1280, height: 720, groundY: 585, gravity: 2450, jumpVelocity: -920, baseSpeed: 430 };
+    const DEFAULT_FIT = { zoom: 1, rotate: 0, offsetX: 0, offsetY: 0, flip: 1 };
 
     const state = {
       goobers: [],
       selectedIndex: 0,
       selectedImage: null,
       selectedImageReady: false,
+      imageFit: { ...DEFAULT_FIT },
       running: false,
       gameOver: false,
       startedOnce: false,
@@ -377,15 +383,7 @@
       clouds: [],
       obstacles: [],
       particles: [],
-      player: {
-        x: 160,
-        y: WORLD.groundY - 110,
-        width: 94,
-        height: 110,
-        vy: 0,
-        onGround: true,
-        squash: 1
-      }
+      player: { x: 160, y: WORLD.groundY - 110, width: 94, height: 110, vy: 0, onGround: true, squash: 1 }
     };
 
     bestEl.textContent = state.best;
@@ -395,18 +393,55 @@
       errorBox.style.display = message ? "block" : "none";
     }
 
+    function fitStorageKey(goober) {
+      return `gooberRunFit:${goober?.id || goober?.imageUrl || "fallback"}`;
+    }
+
+    function loadFitForGoober(goober) {
+      try {
+        const saved = JSON.parse(localStorage.getItem(fitStorageKey(goober)) || "null");
+        state.imageFit = { ...DEFAULT_FIT, ...(saved || {}) };
+      } catch {
+        state.imageFit = { ...DEFAULT_FIT };
+      }
+      updateFitControls();
+    }
+
+    function saveFitForCurrentGoober() {
+      const goober = state.goobers[state.selectedIndex];
+      if (!goober) return;
+      localStorage.setItem(fitStorageKey(goober), JSON.stringify(state.imageFit));
+    }
+
+    function updateFitControls() {
+      zoomRange.value = state.imageFit.zoom;
+      rotateRange.value = state.imageFit.rotate;
+      offsetXRange.value = state.imageFit.offsetX;
+      offsetYRange.value = state.imageFit.offsetY;
+      zoomValue.textContent = `${Number(state.imageFit.zoom).toFixed(2)}x`;
+      rotateValue.textContent = `${Math.round(state.imageFit.rotate)}°`;
+      offsetXValue.textContent = Math.round(state.imageFit.offsetX);
+      offsetYValue.textContent = Math.round(state.imageFit.offsetY);
+      flipBtn.textContent = state.imageFit.flip === -1 ? "Unflip" : "Flip";
+      if (!state.running) draw();
+    }
+
+    function setFitValue(key, value) {
+      state.imageFit[key] = value;
+      updateFitControls();
+      saveFitForCurrentGoober();
+    }
+
     async function loadGoobers() {
       try {
         const response = await fetch("/api/goobers", { headers: { "accept": "application/json" } });
         if (!response.ok) throw new Error("Could not load goobers.");
         const goobers = await response.json();
         state.goobers = Array.isArray(goobers) ? goobers : [];
-
         if (!state.goobers.length) {
           showError("No approved goobers were returned yet. The game will use a temporary mystery goober.");
           state.goobers = [{ id: "fallback", name: "Mystery Goober", imageUrl: "" }];
         }
-
         renderGooberGrid();
         selectGoober(Math.floor(Math.random() * state.goobers.length));
       } catch (error) {
@@ -424,7 +459,6 @@
         button.className = "goober-option" + (index === state.selectedIndex ? " selected" : "");
         button.type = "button";
         button.title = goober.name || "Goober";
-
         if (goober.imageUrl) {
           const img = document.createElement("img");
           img.src = goober.imageUrl;
@@ -437,7 +471,6 @@
           fallback.textContent = "🤪";
           button.appendChild(fallback);
         }
-
         const label = document.createElement("span");
         label.textContent = goober.name || "Goober";
         button.appendChild(label);
@@ -452,23 +485,17 @@
       activeNameEl.textContent = goober.name || "Goober";
       state.selectedImageReady = false;
       state.selectedImage = null;
+      loadFitForGoober(goober);
 
       if (goober.imageUrl) {
         const img = new Image();
-        img.onload = () => {
-          state.selectedImage = img;
-          state.selectedImageReady = true;
-        };
-        img.onerror = () => {
-          state.selectedImage = null;
-          state.selectedImageReady = false;
-        };
+        img.onload = () => { state.selectedImage = img; state.selectedImageReady = true; if (!state.running) draw(); };
+        img.onerror = () => { state.selectedImage = null; state.selectedImageReady = false; if (!state.running) draw(); };
         img.src = goober.imageUrl;
       }
 
-      [...gooberGrid.children].forEach((child, childIndex) => {
-        child.classList.toggle("selected", childIndex === state.selectedIndex);
-      });
+      [...gooberGrid.children].forEach((child, childIndex) => child.classList.toggle("selected", childIndex === state.selectedIndex));
+      if (!state.running) draw();
     }
 
     function pickRandomGoober() {
@@ -510,13 +537,8 @@
     }
 
     function jump() {
-      if (!state.startedOnce || state.gameOver) {
-        resetGame();
-        return;
-      }
-
+      if (!state.startedOnce || state.gameOver) { resetGame(); return; }
       if (!state.running) return;
-
       if (state.player.onGround) {
         state.player.vy = WORLD.jumpVelocity;
         state.player.onGround = false;
@@ -533,39 +555,16 @@
         { label: "Box", color: "#b98346", width: 76, height: 70 }
       ];
       const type = types[Math.floor(Math.random() * types.length)];
-      state.obstacles.push({
-        ...type,
-        x: WORLD.width + 40,
-        y: WORLD.groundY - type.height,
-        passed: false,
-        wobble: Math.random() * Math.PI * 2
-      });
+      state.obstacles.push({ ...type, x: WORLD.width + 40, y: WORLD.groundY - type.height, passed: false, wobble: Math.random() * Math.PI * 2 });
     }
 
     function ensureClouds() {
       if (state.clouds.length) return;
-      for (let i = 0; i < 8; i++) {
-        state.clouds.push({
-          x: Math.random() * WORLD.width,
-          y: 55 + Math.random() * 210,
-          size: 38 + Math.random() * 70,
-          speed: 18 + Math.random() * 34
-        });
-      }
+      for (let i = 0; i < 8; i++) state.clouds.push({ x: Math.random() * WORLD.width, y: 55 + Math.random() * 210, size: 38 + Math.random() * 70, speed: 18 + Math.random() * 34 });
     }
 
     function puff(x, y, count) {
-      for (let i = 0; i < count; i++) {
-        state.particles.push({
-          x,
-          y,
-          vx: -80 - Math.random() * 150,
-          vy: -80 + Math.random() * 120,
-          life: 0.4 + Math.random() * 0.3,
-          maxLife: 0.7,
-          radius: 6 + Math.random() * 8
-        });
-      }
+      for (let i = 0; i < count; i++) state.particles.push({ x, y, vx: -80 - Math.random() * 150, vy: -80 + Math.random() * 120, life: 0.4 + Math.random() * 0.3, maxLife: 0.7, radius: 6 + Math.random() * 8 });
     }
 
     function loop(now) {
@@ -588,7 +587,6 @@
       player.vy += WORLD.gravity * dt;
       player.y += player.vy * dt;
       player.squash += (1 - player.squash) * Math.min(1, dt * 10);
-
       if (player.y >= WORLD.groundY - player.height) {
         if (!player.onGround && player.vy > 0) puff(player.x + 28, WORLD.groundY - 10, 7);
         player.y = WORLD.groundY - player.height;
@@ -613,40 +611,22 @@
         }
       });
       state.obstacles = state.obstacles.filter((obstacle) => obstacle.x + obstacle.width > -60);
-
       state.clouds.forEach((cloud) => {
         cloud.x -= cloud.speed * dt * state.speedMultiplier;
-        if (cloud.x + cloud.size * 2 < 0) {
-          cloud.x = WORLD.width + Math.random() * 260;
-          cloud.y = 55 + Math.random() * 210;
-        }
+        if (cloud.x + cloud.size * 2 < 0) { cloud.x = WORLD.width + Math.random() * 260; cloud.y = 55 + Math.random() * 210; }
       });
-
-      state.particles.forEach((particle) => {
-        particle.life -= dt;
-        particle.x += particle.vx * dt;
-        particle.y += particle.vy * dt;
-        particle.vy += 250 * dt;
-      });
+      state.particles.forEach((particle) => { particle.life -= dt; particle.x += particle.vx * dt; particle.y += particle.vy * dt; particle.vy += 250 * dt; });
       state.particles = state.particles.filter((particle) => particle.life > 0);
 
       for (const obstacle of state.obstacles) {
-        if (collides(player, obstacle)) {
-          puff(player.x + player.width / 2, player.y + player.height / 2, 20);
-          draw();
-          endGame();
-          break;
-        }
+        if (collides(player, obstacle)) { puff(player.x + player.width / 2, player.y + player.height / 2, 20); draw(); endGame(); break; }
       }
     }
 
     function collides(player, obstacle) {
       const shrinkX = 20;
       const shrinkY = 14;
-      return player.x + shrinkX < obstacle.x + obstacle.width &&
-        player.x + player.width - shrinkX > obstacle.x &&
-        player.y + shrinkY < obstacle.y + obstacle.height &&
-        player.y + player.height - 8 > obstacle.y;
+      return player.x + shrinkX < obstacle.x + obstacle.width && player.x + player.width - shrinkX > obstacle.x && player.y + shrinkY < obstacle.y + obstacle.height && player.y + player.height - 8 > obstacle.y;
     }
 
     function draw() {
@@ -665,17 +645,10 @@
       gradient.addColorStop(1, "#f59f44");
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, WORLD.width, WORLD.height);
-
       ctx.fillStyle = "rgba(255,255,255,0.82)";
-      state.clouds.forEach((cloud) => {
-        drawCloud(cloud.x, cloud.y, cloud.size);
-      });
-
+      state.clouds.forEach((cloud) => drawCloud(cloud.x, cloud.y, cloud.size));
       ctx.fillStyle = "rgba(255,255,255,0.2)";
-      for (let i = 0; i < 9; i++) {
-        const x = ((i * 210) - (state.distance * 0.08 % 210));
-        ctx.fillRect(x, 390, 120, 12);
-      }
+      for (let i = 0; i < 9; i++) ctx.fillRect((i * 210) - (state.distance * 0.08 % 210), 390, 120, 12);
     }
 
     function drawCloud(x, y, size) {
@@ -692,14 +665,12 @@
       ctx.fillRect(0, WORLD.groundY, WORLD.width, WORLD.height - WORLD.groundY);
       ctx.fillStyle = "#2d7d43";
       ctx.fillRect(0, WORLD.groundY + 22, WORLD.width, WORLD.height - WORLD.groundY - 22);
-
       ctx.strokeStyle = "rgba(255,255,255,0.35)";
       ctx.lineWidth = 5;
       ctx.beginPath();
       ctx.moveTo(0, WORLD.groundY + 2);
       ctx.lineTo(WORLD.width, WORLD.groundY + 2);
       ctx.stroke();
-
       const offset = state.distance % 90;
       for (let x = -offset; x < WORLD.width + 90; x += 90) {
         ctx.fillStyle = "rgba(255,255,255,0.18)";
@@ -713,7 +684,6 @@
         ctx.translate(obstacle.x + obstacle.width / 2, obstacle.y + obstacle.height / 2);
         ctx.rotate(Math.sin(obstacle.wobble) * 0.025);
         ctx.translate(-obstacle.width / 2, -obstacle.height / 2);
-
         if (obstacle.label === "Cone") {
           ctx.fillStyle = "#ff8a00";
           ctx.beginPath();
@@ -769,14 +739,21 @@
       ctx.save();
       ctx.translate(player.x + player.width / 2, player.y + player.height / 2);
       ctx.scale(1 + (1 - player.squash) * 0.32, player.squash);
-
       ctx.fillStyle = "rgba(0,0,0,0.22)";
       ctx.beginPath();
       ctx.ellipse(0, player.height / 2 + 8, player.width * 0.52, 13, 0, 0, Math.PI * 2);
       ctx.fill();
 
       if (state.selectedImage && state.selectedImageReady) {
-        ctx.drawImage(state.selectedImage, -player.width / 2, -player.height / 2, player.width, player.height);
+        const fit = state.imageFit;
+        ctx.save();
+        ctx.translate(fit.offsetX, fit.offsetY);
+        ctx.rotate((fit.rotate * Math.PI) / 180);
+        ctx.scale(fit.zoom * fit.flip, fit.zoom);
+        const drawWidth = player.width;
+        const drawHeight = player.height;
+        ctx.drawImage(state.selectedImage, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+        ctx.restore();
       } else {
         ctx.fillStyle = "#ffcc33";
         ctx.beginPath();
@@ -818,21 +795,25 @@
     }
 
     window.addEventListener("keydown", (event) => {
-      if (event.code === "Space" || event.code === "ArrowUp") {
-        event.preventDefault();
-        jump();
-      }
+      if (event.code === "Space" || event.code === "ArrowUp") { event.preventDefault(); jump(); }
     });
 
-    canvas.addEventListener("pointerdown", (event) => {
-      event.preventDefault();
-      jump();
-    });
-
+    canvas.addEventListener("pointerdown", (event) => { event.preventDefault(); jump(); });
     startBtn.addEventListener("click", resetGame);
     playBtn.addEventListener("click", resetGame);
     randomBtn.addEventListener("click", pickRandomGoober);
     shuffleBtn.addEventListener("click", pickRandomGoober);
+
+    zoomRange.addEventListener("input", () => setFitValue("zoom", Number(zoomRange.value)));
+    rotateRange.addEventListener("input", () => setFitValue("rotate", Number(rotateRange.value)));
+    offsetXRange.addEventListener("input", () => setFitValue("offsetX", Number(offsetXRange.value)));
+    offsetYRange.addEventListener("input", () => setFitValue("offsetY", Number(offsetYRange.value)));
+    flipBtn.addEventListener("click", () => setFitValue("flip", state.imageFit.flip === -1 ? 1 : -1));
+    resetFitBtn.addEventListener("click", () => {
+      state.imageFit = { ...DEFAULT_FIT };
+      updateFitControls();
+      saveFitForCurrentGoober();
+    });
 
     ensureClouds();
     draw();
