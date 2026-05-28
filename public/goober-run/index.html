@@ -49,9 +49,7 @@
       overflow: hidden;
     }
 
-    .game-card {
-      position: relative;
-    }
+    .game-card { position: relative; }
 
     .game-card::before {
       content: "goober run";
@@ -76,10 +74,7 @@
     }
 
     .runner-panel h2,
-    .runner-panel h3 {
-      margin: 0 0 10px;
-      letter-spacing: -0.04em;
-    }
+    .runner-panel h3 { margin: 0 0 10px; letter-spacing: -0.04em; }
 
     .runner-panel p {
       margin: 0 0 14px;
@@ -125,11 +120,7 @@
       text-overflow: ellipsis;
     }
 
-    .canvas-wrap {
-      position: relative;
-      padding: 16px;
-      background: #fffaf0;
-    }
+    .canvas-wrap { position: relative; padding: 16px; background: #fffaf0; }
 
     canvas {
       display: block;
@@ -202,12 +193,7 @@
     button.primary,
     .game-button.primary { background: var(--orange); }
 
-    .controls {
-      display: grid;
-      gap: 10px;
-      margin-bottom: 16px;
-    }
-
+    .controls { display: grid; gap: 10px; margin-bottom: 16px; }
     .controls button { width: 100%; }
 
     .runner-grid {
@@ -241,12 +227,7 @@
       background: var(--yellow);
     }
 
-    .goober-option img {
-      width: 58px;
-      height: 58px;
-      object-fit: contain;
-      display: block;
-    }
+    .goober-option img { width: 58px; height: 58px; object-fit: contain; display: block; }
 
     .goober-option span {
       font-size: 0.73rem;
@@ -335,7 +316,7 @@
 
   <section class="game-hero">
     <h1>Goober Run.</h1>
-    <p>Pick an uploaded goober, tune the fit, then jump over ridiculous obstacles. Spacebar, mouse click, and screen tap all work.</p>
+    <p>Pick an uploaded goober, tune the fit, then jump over flaming pits, police cars, and other ridiculous obstacles. Spacebar, mouse click, and screen tap all work.</p>
   </section>
 
   <main class="game-shell">
@@ -508,8 +489,16 @@
     }
 
     function spawnObstacle() {
-      const types = [{ label: "Cone", color: "#ff9f45", width: 46, height: 76 }, { label: "Trash", color: "#6b6257", width: 62, height: 92 }, { label: "Sign", color: "#ff8bd1", width: 54, height: 116 }, { label: "Box", color: "#ffd34d", width: 76, height: 70 }];
-      const type = types[Math.floor(Math.random() * types.length)]; state.obstacles.push({ ...type, x: WORLD.width + 40, y: WORLD.groundY - type.height, passed: false, wobble: Math.random() * Math.PI * 2 });
+      const types = [
+        { label: "Cone", color: "#ff9f45", width: 46, height: 76 },
+        { label: "Trash", color: "#6b6257", width: 62, height: 92 },
+        { label: "Sign", color: "#ff8bd1", width: 54, height: 116 },
+        { label: "Box", color: "#ffd34d", width: 76, height: 70 },
+        { label: "Flaming Pit", color: "#1f1f1f", width: 132, height: 52 },
+        { label: "Police Car", color: "#ffffff", width: 150, height: 82 }
+      ];
+      const type = types[Math.floor(Math.random() * types.length)];
+      state.obstacles.push({ ...type, x: WORLD.width + 40, y: WORLD.groundY - type.height, passed: false, wobble: Math.random() * Math.PI * 2, flame: Math.random() * Math.PI * 2 });
     }
     function ensureClouds() { if (state.clouds.length) return; for (let i = 0; i < 8; i++) state.clouds.push({ x: Math.random() * WORLD.width, y: 55 + Math.random() * 210, size: 38 + Math.random() * 70, speed: 18 + Math.random() * 34 }); }
     function puff(x, y, count) { for (let i = 0; i < count; i++) state.particles.push({ x, y, vx: -80 - Math.random() * 150, vy: -80 + Math.random() * 120, life: 0.4 + Math.random() * 0.3, maxLife: 0.7, radius: 6 + Math.random() * 8 }); }
@@ -521,13 +510,17 @@
       if (player.y >= WORLD.groundY - player.height) { if (!player.onGround && player.vy > 0) puff(player.x + 28, WORLD.groundY - 10, 7); player.y = WORLD.groundY - player.height; player.vy = 0; player.onGround = true; }
       state.obstacleTimer -= dt; if (state.obstacleTimer <= 0) { spawnObstacle(); const baseDelay = 1.15 - Math.min(0.46, state.speedMultiplier * 0.13); state.obstacleTimer = baseDelay + Math.random() * 0.78; }
       const speed = WORLD.baseSpeed * state.speedMultiplier;
-      state.obstacles.forEach((obstacle) => { obstacle.x -= speed * dt; obstacle.wobble += dt * 5; if (!obstacle.passed && obstacle.x + obstacle.width < player.x) { obstacle.passed = true; state.score += 10; } });
+      state.obstacles.forEach((obstacle) => { obstacle.x -= speed * dt; obstacle.wobble += dt * 5; obstacle.flame += dt * 11; if (!obstacle.passed && obstacle.x + obstacle.width < player.x) { obstacle.passed = true; state.score += obstacle.label === "Flaming Pit" || obstacle.label === "Police Car" ? 18 : 10; } });
       state.obstacles = state.obstacles.filter((obstacle) => obstacle.x + obstacle.width > -60);
       state.clouds.forEach((cloud) => { cloud.x -= cloud.speed * dt * state.speedMultiplier; if (cloud.x + cloud.size * 2 < 0) { cloud.x = WORLD.width + Math.random() * 260; cloud.y = 55 + Math.random() * 210; } });
       state.particles.forEach((particle) => { particle.life -= dt; particle.x += particle.vx * dt; particle.y += particle.vy * dt; particle.vy += 250 * dt; }); state.particles = state.particles.filter((particle) => particle.life > 0);
       for (const obstacle of state.obstacles) if (collides(player, obstacle)) { puff(player.x + player.width / 2, player.y + player.height / 2, 20); draw(); endGame(); break; }
     }
-    function collides(player, obstacle) { const shrinkX = 20, shrinkY = 14; return player.x + shrinkX < obstacle.x + obstacle.width && player.x + player.width - shrinkX > obstacle.x && player.y + shrinkY < obstacle.y + obstacle.height && player.y + player.height - 8 > obstacle.y; }
+    function collides(player, obstacle) {
+      const shrinkX = 20, shrinkY = 14;
+      const hitbox = obstacle.hitbox || { x: 0, y: 0, width: obstacle.width, height: obstacle.height };
+      return player.x + shrinkX < obstacle.x + hitbox.x + hitbox.width && player.x + player.width - shrinkX > obstacle.x + hitbox.x && player.y + shrinkY < obstacle.y + hitbox.y + hitbox.height && player.y + player.height - 8 > obstacle.y + hitbox.y;
+    }
 
     function draw() { ctx.clearRect(0, 0, WORLD.width, WORLD.height); drawSky(); drawGround(); drawObstacles(); drawPlayer(); drawParticles(); }
     function drawSky() {
@@ -546,9 +539,35 @@
         ctx.save(); ctx.translate(obstacle.x + obstacle.width / 2, obstacle.y + obstacle.height / 2); ctx.rotate(Math.sin(obstacle.wobble) * 0.025); ctx.translate(-obstacle.width / 2, -obstacle.height / 2); ctx.lineWidth = 4; ctx.strokeStyle = "#1f1f1f";
         if (obstacle.label === "Cone") { ctx.fillStyle = obstacle.color; ctx.beginPath(); ctx.moveTo(obstacle.width / 2, 0); ctx.lineTo(obstacle.width, obstacle.height); ctx.lineTo(0, obstacle.height); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.fillStyle = "white"; ctx.fillRect(12, obstacle.height * 0.58, obstacle.width - 24, 10); ctx.strokeRect(12, obstacle.height * 0.58, obstacle.width - 24, 10); }
         else if (obstacle.label === "Sign") { ctx.fillStyle = "#6b6257"; ctx.fillRect(obstacle.width / 2 - 5, 35, 10, obstacle.height - 20); ctx.strokeRect(obstacle.width / 2 - 5, 35, 10, obstacle.height - 20); ctx.fillStyle = obstacle.color; roundedRect(0, 0, obstacle.width, 46, 10); ctx.fill(); ctx.stroke(); ctx.fillStyle = "#1f1f1f"; ctx.font = "900 14px Comic Sans MS, Trebuchet MS, system-ui"; ctx.textAlign = "center"; ctx.fillText("NO", obstacle.width / 2, 19); ctx.fillText("GOOB", obstacle.width / 2, 35); }
+        else if (obstacle.label === "Flaming Pit") { drawFlamingPit(obstacle); }
+        else if (obstacle.label === "Police Car") { drawPoliceCar(obstacle); }
         else { ctx.fillStyle = obstacle.color; roundedRect(0, 0, obstacle.width, obstacle.height, 12); ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, 20); ctx.lineTo(obstacle.width, 20); ctx.moveTo(obstacle.width / 2, 0); ctx.lineTo(obstacle.width / 2, obstacle.height); ctx.stroke(); }
         ctx.restore();
       });
+    }
+    function drawFlamingPit(obstacle) {
+      ctx.fillStyle = "#2b1a14"; roundedRect(0, 16, obstacle.width, 36, 18); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#1f1f1f"; ctx.beginPath(); ctx.ellipse(obstacle.width / 2, 44, obstacle.width * 0.46, 13, 0, 0, Math.PI * 2); ctx.fill();
+      for (let i = 0; i < 6; i++) {
+        const x = 16 + i * 20;
+        const h = 28 + Math.sin(obstacle.flame + i) * 8;
+        drawFlame(x, 24, h, "#ff9f45", 14);
+        drawFlame(x + 4, 29, h * 0.62, "#ffd34d", 8);
+      }
+      ctx.fillStyle = "#1f1f1f"; ctx.font = "900 14px Comic Sans MS, Trebuchet MS, system-ui"; ctx.textAlign = "center"; ctx.fillText("HOT", obstacle.width / 2, 49);
+    }
+    function drawFlame(x, baseY, height, color, width) {
+      ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(x, baseY); ctx.quadraticCurveTo(x - width, baseY - height * 0.45, x, baseY - height); ctx.quadraticCurveTo(x + width, baseY - height * 0.45, x, baseY); ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+    function drawPoliceCar(obstacle) {
+      ctx.fillStyle = "#ffffff"; roundedRect(6, 30, obstacle.width - 12, 38, 14); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#ffffff"; roundedRect(42, 12, 66, 34, 12); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#8ed3ff"; ctx.fillRect(50, 20, 22, 20); ctx.strokeRect(50, 20, 22, 20); ctx.fillRect(78, 20, 22, 20); ctx.strokeRect(78, 20, 22, 20);
+      ctx.fillStyle = "#1f1f1f"; ctx.fillRect(62, 43, 28, 8);
+      ctx.fillStyle = "#ff8bd1"; ctx.fillRect(68, 5, 14, 9); ctx.strokeRect(68, 5, 14, 9); ctx.fillStyle = "#8ed3ff"; ctx.fillRect(84, 5, 14, 9); ctx.strokeRect(84, 5, 14, 9);
+      ctx.fillStyle = "#1f1f1f"; ctx.font = "900 15px Comic Sans MS, Trebuchet MS, system-ui"; ctx.textAlign = "center"; ctx.fillText("POLICE", obstacle.width / 2, 57);
+      ctx.fillStyle = "#1f1f1f"; ctx.beginPath(); ctx.arc(36, 68, 13, 0, Math.PI * 2); ctx.arc(114, 68, 13, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = "white"; ctx.beginPath(); ctx.arc(36, 68, 5, 0, Math.PI * 2); ctx.arc(114, 68, 5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#ffd34d"; ctx.fillRect(9, 43, 10, 10); ctx.strokeRect(9, 43, 10, 10); ctx.fillStyle = "#ff9f45"; ctx.fillRect(obstacle.width - 20, 43, 10, 10); ctx.strokeRect(obstacle.width - 20, 43, 10, 10);
     }
     function drawPlayer() {
       const player = state.player; ctx.save(); ctx.translate(player.x + player.width / 2, player.y + player.height / 2); ctx.scale(1 + (1 - player.squash) * 0.32, player.squash);
