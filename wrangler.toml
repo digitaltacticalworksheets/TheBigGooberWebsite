@@ -15,3 +15,10 @@ database_id = "58f2457b-a74c-4370-9ad7-bc43067048af"
 binding = "GOOBER_IMAGES"
 bucket_name = "thebiggooberwebsite-images"
 
+[[durable_objects.bindings]]
+name = "CARD_BATTLE_ROOMS"
+class_name = "CardBattleRoom"
+
+[[migrations]]
+tag = "v1-card-battle-rooms"
+new_sqlite_classes = ["CardBattleRoom"]
