@@ -9,7 +9,10 @@ const gooberDescriptionInput = document.getElementById("gooberDescription");
 const gooberImageInput = document.getElementById("gooberImage");
 const gooberUploadCodeInput = document.getElementById("gooberUploadCode");
 const gooberSearchInput = document.getElementById("gooberSearch");
+const gooberSearchButton = document.getElementById("gooberSearchButton");
+const gooberClearSearchButton = document.getElementById("gooberClearSearch");
 const gooberCountText = document.getElementById("gooberCountText");
+const loadMoreGoobersButton = document.getElementById("loadMoreGoobers");
 const filePreview = document.getElementById("filePreview");
 const uploadStatus = document.getElementById("uploadStatus");
 const reloadCloudGoobersButton = document.getElementById("reloadCloudGoobers");
@@ -25,8 +28,12 @@ const viewerCategory = document.getElementById("viewerCategory");
 const viewerClose = document.getElementById("viewerClose");
 const viewerBackdrop = document.querySelector(".viewer-backdrop");
 
+const INITIAL_GALLERY_LIMIT = 24;
+const GALLERY_INCREMENT = 24;
+
 let activeFilter = "all";
 let searchTerm = "";
+let visibleLimit = INITIAL_GALLERY_LIMIT;
 
 function normalizeText(value) {
   return String(value || "").toLowerCase().trim();
@@ -156,31 +163,49 @@ function randomizeFeaturedGoober(goobers) {
   setFeaturedGoober(randomGoober);
 }
 
-function applyCurrentFilter() {
-  let visibleCount = 0;
-  let totalCount = 0;
-
-  document.querySelectorAll(".goober-card").forEach((card) => {
-    totalCount += 1;
-
+function getMatchingCards() {
+  return [...document.querySelectorAll(".goober-card")].filter((card) => {
     const category = card.dataset.category || "classic";
-    const searchableText = normalizeText(`${card.dataset.name || ""} ${card.dataset.description || ""} ${category}`);
+    const gooberName = normalizeText(card.dataset.name || "");
     const matchesFilter = activeFilter === "all" || category === activeFilter;
-    const matchesSearch = !searchTerm || searchableText.includes(searchTerm);
-    const shouldShow = matchesFilter && matchesSearch;
+    const matchesSearch = !searchTerm || gooberName.includes(searchTerm);
 
-    card.style.display = shouldShow ? "block" : "none";
-    if (shouldShow) visibleCount += 1;
+    return matchesFilter && matchesSearch;
+  });
+}
+
+function applyCurrentFilter() {
+  const allCards = [...document.querySelectorAll(".goober-card")];
+  const matchingCards = getMatchingCards();
+  const visibleCards = new Set(matchingCards.slice(0, visibleLimit));
+
+  allCards.forEach((card) => {
+    card.style.display = visibleCards.has(card) ? "block" : "none";
   });
 
   if (gooberCountText) {
-    gooberCountText.textContent = `${visibleCount} of ${totalCount} Goobers showing`;
+    const shown = Math.min(visibleLimit, matchingCards.length);
+    const searchNote = searchTerm ? ` matching “${gooberSearchInput?.value.trim() || searchTerm}” by name` : "";
+    gooberCountText.textContent = `${shown} of ${matchingCards.length} Goobers showing${searchNote}`;
   }
+
+  if (loadMoreGoobersButton) {
+    const hasMore = matchingCards.length > visibleLimit;
+    loadMoreGoobersButton.hidden = !hasMore;
+    loadMoreGoobersButton.textContent = hasMore
+      ? `Load ${Math.min(GALLERY_INCREMENT, matchingCards.length - visibleLimit)} more Goobers`
+      : "All matching Goobers shown";
+  }
+}
+
+function resetGalleryLimit() {
+  visibleLimit = INITIAL_GALLERY_LIMIT;
 }
 
 filterButtons.forEach((button) => {
   button.addEventListener("click", () => {
     activeFilter = button.dataset.filter;
+    resetGalleryLimit();
 
     filterButtons.forEach((btn) => btn.classList.remove("active"));
     button.classList.add("active");
@@ -189,8 +214,30 @@ filterButtons.forEach((button) => {
   });
 });
 
-gooberSearchInput?.addEventListener("input", () => {
-  searchTerm = normalizeText(gooberSearchInput.value);
+function runNameSearch() {
+  searchTerm = normalizeText(gooberSearchInput?.value || "");
+  resetGalleryLimit();
+  applyCurrentFilter();
+}
+
+gooberSearchInput?.addEventListener("input", runNameSearch);
+gooberSearchInput?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    runNameSearch();
+  }
+});
+gooberSearchButton?.addEventListener("click", runNameSearch);
+gooberClearSearchButton?.addEventListener("click", () => {
+  if (gooberSearchInput) {
+    gooberSearchInput.value = "";
+  }
+
+  runNameSearch();
+  gooberSearchInput?.focus();
+});
+loadMoreGoobersButton?.addEventListener("click", () => {
+  visibleLimit += GALLERY_INCREMENT;
   applyCurrentFilter();
 });
 
@@ -229,6 +276,7 @@ async function loadCloudGoobers(options = {}) {
     });
 
     randomizeFeaturedGoober(goobers);
+    resetGalleryLimit();
     applyCurrentFilter();
 
     if (uploadStatus) {
