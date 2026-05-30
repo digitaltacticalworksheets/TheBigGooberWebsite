@@ -63,6 +63,43 @@ function ensureLoadMoreButton() {
   gooberGrid.insertAdjacentElement("afterend", wrapper);
 }
 
+function makeCardClickable(card, goober) {
+  if (!card || card.dataset.viewerReady === "true") return;
+
+  card.dataset.viewerReady = "true";
+  card.tabIndex = 0;
+  card.setAttribute("role", "button");
+  card.setAttribute("aria-label", `View ${goober.name || "Goober"}`);
+
+  card.addEventListener("click", () => openGooberViewer(goober));
+  card.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openGooberViewer(goober);
+    }
+  });
+}
+
+function getGooberFromCard(card) {
+  const image = card.querySelector(".goober-image img");
+  const title = card.querySelector(".goober-info h3");
+  const description = card.querySelector(".tagline");
+
+  return {
+    id: card.dataset.cloudGooberId || card.dataset.name || title?.textContent || "static-goober",
+    name: card.dataset.name || title?.textContent || "Goober",
+    category: card.dataset.category || "classic",
+    description: card.dataset.description || description?.textContent || "A mysterious Goober with powerful Goober energy.",
+    imageUrl: image?.getAttribute("src") || "/assets/original-goober.jpg"
+  };
+}
+
+function initializeExistingGalleryCards() {
+  document.querySelectorAll(".goober-card").forEach((card) => {
+    makeCardClickable(card, getGooberFromCard(card));
+  });
+}
+
 function createGooberCard(goober, isCloud = false) {
   const card = document.createElement("article");
   card.className = "goober-card";
@@ -73,17 +110,6 @@ function createGooberCard(goober, isCloud = false) {
   if (isCloud) {
     card.dataset.cloudGooberId = goober.id;
   }
-
-  card.tabIndex = 0;
-  card.setAttribute("role", "button");
-  card.setAttribute("aria-label", `View ${goober.name || "Goober"}`);
-  card.addEventListener("click", () => openGooberViewer(goober));
-  card.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      openGooberViewer(goober);
-    }
-  });
 
   const imageWrap = document.createElement("div");
   imageWrap.className = "goober-image";
@@ -124,6 +150,7 @@ function createGooberCard(goober, isCloud = false) {
 
   card.appendChild(imageWrap);
   card.appendChild(info);
+  makeCardClickable(card, goober);
 
   return card;
 }
@@ -422,4 +449,5 @@ if (reloadCloudGoobersButton) {
 }
 
 ensureLoadMoreButton();
+initializeExistingGalleryCards();
 loadCloudGoobers({ bustCache: true });
