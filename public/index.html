@@ -84,7 +84,7 @@
 
     .gallery-search-row {
       display: grid;
-      grid-template-columns: minmax(220px, 1fr) auto;
+      grid-template-columns: minmax(220px, 1fr) auto auto auto;
       gap: 12px;
       align-items: center;
     }
@@ -99,6 +99,32 @@
       background: white;
       outline: none;
       box-shadow: 3px 3px 0 var(--ink);
+    }
+
+    .gallery-search-button {
+      color: var(--ink);
+      text-decoration: none;
+      font-weight: 900;
+      border: 3px solid var(--ink);
+      border-radius: 999px;
+      background: white;
+      padding: 11px 15px;
+      box-shadow: 3px 3px 0 var(--ink);
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.98rem;
+      white-space: nowrap;
+      transition: transform 0.14s ease, box-shadow 0.14s ease, background 0.14s ease;
+    }
+
+    .gallery-search-button.primary {
+      background: var(--orange);
+    }
+
+    .gallery-search-button:hover {
+      transform: translate(2px, 2px);
+      box-shadow: 1px 1px 0 var(--ink);
+      background: var(--yellow);
     }
 
     .goober-count {
@@ -221,8 +247,18 @@
       overflow: hidden;
     }
 
+    @media (max-width: 900px) {
+      .gallery-search-row {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .gallery-search-row input,
+      .goober-count {
+        grid-column: 1 / -1;
+      }
+    }
+
     @media (max-width: 760px) {
-      .gallery-search-row,
       .viewer-card {
         grid-template-columns: 1fr;
       }
@@ -321,6 +357,8 @@
   <div class="gallery-tools">
     <div class="gallery-search-row">
       <input id="gooberSearch" type="search" placeholder="Search goobers by name, description, or type..." autocomplete="off" />
+      <button class="gallery-search-button primary" id="gooberSearchButton" type="button">Search</button>
+      <button class="gallery-search-button" id="gooberClearSearch" type="button">Clear</button>
       <span class="goober-count" id="gooberCountText">Loading Goobers...</span>
     </div>
     <div class="filters" aria-label="Goober filters">
@@ -529,6 +567,31 @@
         if (!dropdown.contains(event.target)) {
           dropdown.classList.remove("open");
           dropdown.querySelector(".nav-dropdown-toggle")?.setAttribute("aria-expanded", "false");
+        }
+      });
+    });
+
+    document.addEventListener("DOMContentLoaded", () => {
+      const searchInput = document.getElementById("gooberSearch");
+      const searchButton = document.getElementById("gooberSearchButton");
+      const clearButton = document.getElementById("gooberClearSearch");
+
+      const triggerSearch = () => {
+        searchInput?.dispatchEvent(new Event("input", { bubbles: true }));
+      };
+
+      searchButton?.addEventListener("click", triggerSearch);
+      searchInput?.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          triggerSearch();
+        }
+      });
+      clearButton?.addEventListener("click", () => {
+        if (searchInput) {
+          searchInput.value = "";
+          triggerSearch();
+          searchInput.focus();
         }
       });
     });
