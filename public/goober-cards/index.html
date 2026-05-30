@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Goober Trading Cards | The Big Goober Website</title>
-  <meta name="description" content="Turn uploaded Goobers into collectible trading cards with goofy stats and rarity." />
+  <title>Goober Card Battle | The Big Goober Website</title>
+  <meta name="description" content="Play Goober cards, roll a five-sided stat die, and battle loaf-sitting Goobers." />
   <link rel="apple-touch-icon" href="/assets/original-goober.jpg" />
   <link rel="icon" href="/assets/original-goober.jpg" type="image/jpeg" />
   <link rel="manifest" href="/site.webmanifest" />
@@ -14,42 +14,53 @@
     body { overflow-x: hidden; }
     .cards-hero { max-width: 1180px; margin: 0 auto; padding: 34px 22px 18px; }
     .cards-hero h1 { font-size: clamp(2.8rem, 7vw, 6.8rem); line-height: 0.88; margin: 0 0 18px; letter-spacing: -0.08em; }
-    .cards-hero p { color: var(--muted); font-size: clamp(1.05rem, 2vw, 1.25rem); line-height: 1.45; max-width: 850px; margin: 0; }
-    .cards-shell { max-width: 1180px; margin: 0 auto; padding: 16px 22px 70px; display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; align-items: start; }
-    .card-stage, .side-panel { background: var(--card); border: 4px solid var(--ink); border-radius: var(--radius); box-shadow: var(--shadow), 7px 7px 0 var(--ink); overflow: hidden; }
-    .card-stage { position: relative; padding: clamp(16px, 3vw, 28px); background: radial-gradient(circle at top left, rgba(255, 211, 77, 0.75), transparent 28rem), linear-gradient(135deg, #fffaf0, #ffffff); }
-    .card-stage::before { content: "goober trading cards"; position: absolute; z-index: 3; top: -4px; left: 28px; background: var(--pink); border: 3px solid var(--ink); border-radius: 999px; padding: 7px 14px; font-size: 0.9rem; font-weight: 900; rotate: -4deg; }
-    .pack-row { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin: 12px 0 20px; flex-wrap: wrap; }
-    .pack-row h2 { margin: 0; font-size: clamp(1.6rem, 4vw, 3rem); letter-spacing: -0.05em; line-height: 0.95; }
-    .pack-row span { font-weight: 900; color: var(--muted); }
-    .trading-card-wrap { display: grid; place-items: center; min-height: 620px; }
-    .trading-card { width: min(430px, 92vw); min-height: 590px; background: #fffaf0; border: 6px solid var(--ink); border-radius: 32px; box-shadow: 12px 12px 0 var(--ink), var(--shadow); padding: 16px; position: relative; overflow: hidden; transform-style: preserve-3d; transition: transform 0.2s ease; }
-    .trading-card:hover { transform: rotate(-1deg) translateY(-3px); }
-    .trading-card::after { content: ""; position: absolute; inset: -40%; background: linear-gradient(120deg, transparent 35%, rgba(255,255,255,0.52), transparent 62%); transform: translateX(-65%) rotate(12deg); pointer-events: none; animation: shine 3.5s ease-in-out infinite; }
-    @keyframes shine { 0%, 55% { transform: translateX(-65%) rotate(12deg); } 80%, 100% { transform: translateX(65%) rotate(12deg); } }
-    .card-top { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; background: var(--yellow); border: 4px solid var(--ink); border-radius: 22px; padding: 11px 12px; position: relative; z-index: 1; }
-    .card-top h3 { margin: 0; font-size: clamp(1.35rem, 4vw, 2rem); letter-spacing: -0.05em; line-height: 0.95; overflow-wrap: anywhere; }
-    .rarity { border: 3px solid var(--ink); border-radius: 999px; background: white; padding: 6px 9px; font-size: 0.78rem; font-weight: 900; white-space: nowrap; box-shadow: 2px 2px 0 var(--ink); }
-    .card-image { margin: 14px 0; height: 270px; border: 5px solid var(--ink); border-radius: 24px; background: radial-gradient(circle at center, white, #f2f2f2); display: grid; place-items: center; padding: 16px; position: relative; z-index: 1; }
+    .cards-hero p { color: var(--muted); font-size: clamp(1.05rem, 2vw, 1.25rem); line-height: 1.45; max-width: 900px; margin: 0; }
+    .battle-shell { max-width: 1220px; margin: 0 auto; padding: 16px 22px 70px; display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; align-items: start; }
+    .battle-stage, .side-panel { background: var(--card); border: 4px solid var(--ink); border-radius: var(--radius); box-shadow: var(--shadow), 7px 7px 0 var(--ink); overflow: hidden; }
+    .battle-stage { position: relative; padding: clamp(16px, 3vw, 28px); background: radial-gradient(circle at top left, rgba(255, 211, 77, 0.75), transparent 28rem), linear-gradient(135deg, #fffaf0, #ffffff); }
+    .battle-stage::before { content: "goober card battle"; position: absolute; z-index: 3; top: -4px; left: 28px; background: var(--pink); border: 3px solid var(--ink); border-radius: 999px; padding: 7px 14px; font-size: 0.9rem; font-weight: 900; rotate: -4deg; }
+    .battle-header { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin: 12px 0 18px; flex-wrap: wrap; }
+    .battle-header h2 { margin: 0; font-size: clamp(1.6rem, 4vw, 3rem); letter-spacing: -0.05em; line-height: 0.95; }
+    .battle-header span { color: var(--muted); font-weight: 900; }
+    .scoreboard { display: flex; gap: 10px; flex-wrap: wrap; font-weight: 900; }
+    .score-pill { background: white; border: 3px solid var(--ink); border-radius: 999px; padding: 8px 12px; box-shadow: 3px 3px 0 var(--ink); }
+    .battle-table { display: grid; grid-template-columns: 1fr auto 1fr; gap: 16px; align-items: center; }
+    .versus { font-size: clamp(2rem, 5vw, 4rem); font-weight: 900; letter-spacing: -0.08em; transform: rotate(-8deg); text-align: center; }
+    .trading-card { width: min(380px, 100%); min-height: 545px; background: #fffaf0; border: 6px solid var(--ink); border-radius: 32px; box-shadow: 10px 10px 0 var(--ink), var(--shadow); padding: 14px; position: relative; overflow: hidden; margin: 0 auto; transition: transform 0.2s ease, opacity 0.2s ease; }
+    .trading-card.winner { outline: 8px solid var(--green); transform: translateY(-6px) rotate(-1deg); }
+    .trading-card.loser { opacity: 0.72; }
+    .trading-card::after { content: ""; position: absolute; inset: -40%; background: linear-gradient(120deg, transparent 35%, rgba(255,255,255,0.42), transparent 62%); transform: translateX(-65%) rotate(12deg); pointer-events: none; animation: shine 4s ease-in-out infinite; }
+    @keyframes shine { 0%, 60% { transform: translateX(-65%) rotate(12deg); } 84%, 100% { transform: translateX(65%) rotate(12deg); } }
+    .card-top { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; background: var(--yellow); border: 4px solid var(--ink); border-radius: 22px; padding: 10px 11px; position: relative; z-index: 1; }
+    .card-top h3 { margin: 0; font-size: clamp(1.2rem, 3vw, 1.75rem); letter-spacing: -0.05em; line-height: 0.95; overflow-wrap: anywhere; }
+    .rarity { border: 3px solid var(--ink); border-radius: 999px; background: white; padding: 6px 8px; font-size: 0.72rem; font-weight: 900; white-space: nowrap; box-shadow: 2px 2px 0 var(--ink); }
+    .card-image { margin: 12px 0; height: 210px; border: 5px solid var(--ink); border-radius: 24px; background: radial-gradient(circle at center, white, #f2f2f2); display: grid; place-items: center; padding: 14px; position: relative; z-index: 1; }
     .card-image img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; filter: drop-shadow(5px 6px 0 rgba(31,31,31,0.18)); }
-    .type-line { display: flex; justify-content: space-between; gap: 10px; align-items: center; margin-bottom: 12px; position: relative; z-index: 1; }
-    .type-pill, .serial-pill { border: 3px solid var(--ink); border-radius: 999px; background: white; padding: 6px 10px; font-weight: 900; font-size: 0.84rem; box-shadow: 2px 2px 0 var(--ink); }
-    .stats { display: grid; gap: 9px; position: relative; z-index: 1; }
-    .stat-row { display: grid; grid-template-columns: 112px 1fr 34px; align-items: center; gap: 8px; font-weight: 900; font-size: 0.86rem; }
-    .bar { height: 18px; background: white; border: 3px solid var(--ink); border-radius: 999px; overflow: hidden; }
+    .type-line { display: flex; justify-content: space-between; gap: 10px; align-items: center; margin-bottom: 10px; position: relative; z-index: 1; }
+    .type-pill, .serial-pill { border: 3px solid var(--ink); border-radius: 999px; background: white; padding: 6px 10px; font-weight: 900; font-size: 0.78rem; box-shadow: 2px 2px 0 var(--ink); }
+    .stats { display: grid; gap: 8px; position: relative; z-index: 1; }
+    .stat-row { display: grid; grid-template-columns: 104px 1fr 34px; align-items: center; gap: 7px; font-weight: 900; font-size: 0.8rem; }
+    .stat-row.selected { background: rgba(255, 211, 77, 0.5); border: 2px solid var(--ink); border-radius: 999px; padding: 3px; }
+    .bar { height: 16px; background: white; border: 3px solid var(--ink); border-radius: 999px; overflow: hidden; }
     .bar > span { display: block; height: 100%; background: var(--orange); border-right: 3px solid var(--ink); }
-    .flavor { margin: 14px 0 0; background: white; border: 3px solid var(--ink); border-radius: 18px; padding: 10px 12px; font-weight: 900; color: var(--muted); line-height: 1.3; position: relative; z-index: 1; }
-    .side-panel { padding: 18px; background: var(--blue); position: sticky; top: 14px; }
-    .side-panel h2, .side-panel h3 { margin: 0 0 10px; letter-spacing: -0.04em; }
-    .side-panel p { margin: 0 0 14px; color: #26333a; line-height: 1.4; font-weight: 800; }
+    .flavor { margin: 12px 0 0; background: white; border: 3px solid var(--ink); border-radius: 18px; padding: 9px 11px; font-weight: 900; color: var(--muted); line-height: 1.25; position: relative; z-index: 1; font-size: 0.86rem; }
+    .battle-controls { background: var(--blue); border: 4px solid var(--ink); border-radius: 24px; box-shadow: 5px 5px 0 var(--ink); padding: 14px; margin-top: 18px; display: grid; gap: 12px; }
+    .die-area { display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: center; }
+    .stat-die { width: 96px; height: 96px; border: 5px solid var(--ink); border-radius: 24px; background: var(--yellow); box-shadow: 5px 5px 0 var(--ink); display: grid; place-items: center; font-size: 2.5rem; font-weight: 900; transition: transform 0.18s ease; }
+    .stat-die.rolling { animation: dieRoll 0.58s ease-in-out; }
+    @keyframes dieRoll { 0% { transform: rotate(0) scale(1); } 35% { transform: rotate(22deg) scale(1.08); } 70% { transform: rotate(-18deg) scale(1.04); } 100% { transform: rotate(0) scale(1); } }
+    .die-text { background: white; border: 3px solid var(--ink); border-radius: 18px; box-shadow: 4px 4px 0 var(--ink); padding: 12px; font-weight: 900; color: #26333a; line-height: 1.35; }
     button, .card-button { color: var(--ink); text-decoration: none; font-weight: 900; border: 3px solid var(--ink); border-radius: 999px; background: white; padding: 10px 14px; box-shadow: 3px 3px 0 var(--ink); transition: transform 0.14s ease, box-shadow 0.14s ease, background 0.14s ease; cursor: pointer; font-family: inherit; font-size: 0.96rem; }
     button:hover, .card-button:hover { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); background: var(--yellow); }
     button.primary { background: var(--orange); }
-    .controls { display: grid; gap: 10px; margin-bottom: 16px; }
-    .button-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .search-card { background: white; border: 3px solid var(--ink); border-radius: 20px; box-shadow: 4px 4px 0 var(--ink); padding: 12px; margin-bottom: 16px; display: grid; gap: 8px; }
-    .search-card input, .search-card select { width: 100%; border: 3px solid var(--ink); border-radius: 999px; padding: 9px 12px; font: inherit; font-weight: 900; background: #fffaf0; }
-    .mini-list { display: grid; gap: 8px; max-height: 360px; overflow: auto; padding: 2px 6px 2px 0; }
+    .battle-result { background: white; border: 3px solid var(--ink); border-radius: 18px; box-shadow: 4px 4px 0 var(--ink); padding: 12px; font-weight: 900; color: #26333a; line-height: 1.35; min-height: 52px; }
+    .button-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .side-panel { padding: 18px; background: var(--blue); position: sticky; top: 14px; }
+    .side-panel h2, .side-panel h3 { margin: 0 0 10px; letter-spacing: -0.04em; }
+    .side-panel p { margin: 0 0 14px; color: #26333a; line-height: 1.4; font-weight: 800; }
+    .side-card { background: white; border: 3px solid var(--ink); border-radius: 20px; box-shadow: 4px 4px 0 var(--ink); padding: 12px; margin-bottom: 16px; display: grid; gap: 8px; }
+    .side-card input, .side-card select { width: 100%; border: 3px solid var(--ink); border-radius: 999px; padding: 9px 12px; font: inherit; font-weight: 900; background: #fffaf0; }
+    .mini-list { display: grid; gap: 8px; max-height: 310px; overflow: auto; padding: 2px 6px 2px 0; }
     .mini-card { display: grid; grid-template-columns: 48px 1fr; gap: 8px; align-items: center; text-align: left; border-radius: 18px; padding: 8px; background: white; }
     .mini-card.active { background: var(--yellow); }
     .mini-card img { width: 48px; height: 48px; object-fit: contain; background: #fffaf0; border: 2px solid var(--ink); border-radius: 12px; }
@@ -61,8 +72,9 @@
     nav .nav-dropdown-menu { position: absolute; top: calc(100% + 10px); right: 0; z-index: 100; min-width: 255px; display: none; grid-template-columns: 1fr; gap: 8px; background: white; border: 4px solid var(--ink); border-radius: 22px; box-shadow: 6px 6px 0 var(--ink); padding: 10px; }
     nav .nav-dropdown:hover .nav-dropdown-menu, nav .nav-dropdown:focus-within .nav-dropdown-menu, nav .nav-dropdown.open .nav-dropdown-menu { display: grid; }
     nav .nav-dropdown-menu a { display: block; width: 100%; text-align: left; white-space: nowrap; margin: 0; }
-    @media (max-width: 940px) { .cards-shell { grid-template-columns: 1fr; } .side-panel { position: static; } .trading-card-wrap { min-height: auto; } }
-    @media (max-width: 560px) { .cards-hero { padding-top: 20px; } .cards-shell { padding-left: 14px; padding-right: 14px; } .card-stage { padding: 14px; } .card-stage::before { left: 18px; } .trading-card { min-height: 560px; padding: 12px; } .card-image { height: 230px; } .stat-row { grid-template-columns: 96px 1fr 30px; } nav .nav-dropdown, nav .nav-dropdown-toggle, nav .nav-dropdown-menu { width: 100%; } nav .nav-dropdown { display: grid; } nav .nav-dropdown-menu { position: static; margin-top: 8px; } }
+    @media (max-width: 1080px) { .battle-table { grid-template-columns: 1fr; } .versus { transform: none; } .trading-card { width: min(430px, 100%); } }
+    @media (max-width: 940px) { .battle-shell { grid-template-columns: 1fr; } .side-panel { position: static; } }
+    @media (max-width: 650px) { .battle-shell { padding-left: 14px; padding-right: 14px; } .die-area, .button-row { grid-template-columns: 1fr; } .stat-die { margin: 0 auto; } .trading-card { min-height: 520px; padding: 12px; } .card-image { height: 210px; } .stat-row { grid-template-columns: 96px 1fr 30px; } nav .nav-dropdown, nav .nav-dropdown-toggle, nav .nav-dropdown-menu { width: 100%; } nav .nav-dropdown { display: grid; } nav .nav-dropdown-menu { position: static; margin-top: 8px; } }
   </style>
 </head>
 <body>
@@ -80,7 +92,7 @@
           <a href="/goober-run/">Goober Run</a>
           <a href="/snowball-goobers/">Snowball Goobers</a>
           <a href="/goobers-around-the-world/">Goobers Around the World</a>
-          <a href="/goober-cards/">Goober Trading Cards</a>
+          <a href="/goober-cards/">Goober Card Battle</a>
         </div>
       </div>
       <a href="/#upload">Add Goober</a>
@@ -88,45 +100,49 @@
   </header>
 
   <section class="cards-hero">
-    <h1>Goober Trading Cards.</h1>
-    <p>Every loaf-sitting Goober becomes a collectible card with fake stats, rarity, and a very serious scouting report.</p>
+    <h1>Goober Card Battle.</h1>
+    <p>Play a loaf-sitting Goober card, draw an opponent, then roll the five-sided stat die. The die decides which stat battles.</p>
   </section>
 
-  <main class="cards-shell">
-    <section class="card-stage">
-      <div class="pack-row">
+  <main class="battle-shell">
+    <section class="battle-stage">
+      <div class="battle-header">
         <div>
-          <h2 id="packTitle">Certified Loaf Card</h2>
-          <span id="packSubtitle">Fresh from the official Goober card binder.</span>
+          <h2>Battle Arena</h2>
+          <span>Pick your card. The die picks the stat.</span>
         </div>
-        <button class="primary" id="randomCardBtn" type="button">Draw Random Card</button>
+        <div class="scoreboard">
+          <span class="score-pill">You: <strong id="playerScore">0</strong></span>
+          <span class="score-pill">Opponent: <strong id="opponentScore">0</strong></span>
+          <span class="score-pill">Round: <strong id="roundCount">0</strong></span>
+        </div>
       </div>
 
-      <div class="trading-card-wrap">
-        <article class="trading-card" id="tradingCard">
-          <div class="card-top">
-            <h3 id="cardName">Original Goober</h3>
-            <span class="rarity" id="cardRarity">Common Loaf</span>
-          </div>
-          <div class="card-image">
-            <img id="cardImage" src="/assets/original-goober.jpg" alt="Original Goober trading card art" />
-          </div>
-          <div class="type-line">
-            <span class="type-pill" id="cardType">classic type</span>
-            <span class="serial-pill" id="cardSerial">#000</span>
-          </div>
-          <div class="stats" id="cardStats"></div>
-          <p class="flavor" id="cardFlavor">The original loaf-sitting Goober. A foundational card for any serious collector.</p>
-        </article>
+      <div class="battle-table">
+        <div id="playerCardMount"></div>
+        <div class="versus">VS</div>
+        <div id="opponentCardMount"></div>
+      </div>
+
+      <div class="battle-controls">
+        <div class="die-area">
+          <div class="stat-die" id="statDie">?</div>
+          <div class="die-text" id="dieText">Press Roll the Stat Die. The five-sided die will choose Loaf Level, Snoot Power, Chaos, Sit Strength, or Goober Aura.</div>
+        </div>
+        <div class="battle-result" id="battleResult">Draw cards, roll the die, and let the loaf battle begin.</div>
+        <div class="button-row">
+          <button class="primary" id="rollBattleBtn" type="button">Roll Stat Die & Battle</button>
+          <button id="newBattleBtn" type="button">Draw New Cards</button>
+        </div>
       </div>
     </section>
 
     <aside class="side-panel">
       <h2>Card Binder</h2>
-      <p>Choose a Goober, search by name, or draw a random card from the uploaded collection.</p>
+      <p>Choose your player card from the binder. The opponent is drawn randomly. The stat is chosen by the die.</p>
       <div class="error" id="errorBox"></div>
 
-      <div class="search-card">
+      <div class="side-card">
         <label for="cardSearch"><strong>Search Goober names</strong></label>
         <input id="cardSearch" type="search" placeholder="Example: Wizard" autocomplete="off" />
         <select id="rarityFilter" aria-label="Filter by rarity">
@@ -139,11 +155,9 @@
         </select>
       </div>
 
-      <div class="controls">
-        <div class="button-row">
-          <button id="prevCardBtn" type="button">← Previous</button>
-          <button id="nextCardBtn" type="button">Next →</button>
-        </div>
+      <div class="side-card">
+        <button class="primary" id="randomPlayerBtn" type="button">Pick Random Player Card</button>
+        <button id="resetScoreBtn" type="button">Reset Score</button>
       </div>
 
       <h3>Available Cards</h3>
@@ -154,29 +168,51 @@
   <footer>The Big Goober Website - Built for maximum goober appreciation Created by Leo and Evan</footer>
 
   <script>
-    const state = { goobers: [], filtered: [], selectedIndex: 0 };
-    const cardName = document.getElementById("cardName");
-    const cardRarity = document.getElementById("cardRarity");
-    const cardImage = document.getElementById("cardImage");
-    const cardType = document.getElementById("cardType");
-    const cardSerial = document.getElementById("cardSerial");
-    const cardStats = document.getElementById("cardStats");
-    const cardFlavor = document.getElementById("cardFlavor");
+    const statNames = ["Loaf Level", "Snoot Power", "Chaos", "Sit Strength", "Goober Aura"];
+    const dieFaces = ["🍞", "👃", "🌀", "🪑", "✨"];
+    const state = { goobers: [], filtered: [], selectedIndex: 0, opponentIndex: 0, selectedStat: null, playerScore: 0, opponentScore: 0, round: 0, lastWinner: null, rolling: false };
+    const playerMount = document.getElementById("playerCardMount");
+    const opponentMount = document.getElementById("opponentCardMount");
+    const battleResult = document.getElementById("battleResult");
     const cardList = document.getElementById("cardList");
     const cardSearch = document.getElementById("cardSearch");
     const rarityFilter = document.getElementById("rarityFilter");
-    const randomCardBtn = document.getElementById("randomCardBtn");
-    const prevCardBtn = document.getElementById("prevCardBtn");
-    const nextCardBtn = document.getElementById("nextCardBtn");
+    const playerScoreEl = document.getElementById("playerScore");
+    const opponentScoreEl = document.getElementById("opponentScore");
+    const roundCountEl = document.getElementById("roundCount");
+    const rollBattleBtn = document.getElementById("rollBattleBtn");
+    const newBattleBtn = document.getElementById("newBattleBtn");
+    const randomPlayerBtn = document.getElementById("randomPlayerBtn");
+    const resetScoreBtn = document.getElementById("resetScoreBtn");
     const errorBox = document.getElementById("errorBox");
+    const statDie = document.getElementById("statDie");
+    const dieText = document.getElementById("dieText");
 
     function showError(message) { errorBox.textContent = message; errorBox.style.display = message ? "block" : "none"; }
     function hashString(text) { let h = 2166136261; for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 16777619); } return Math.abs(h >>> 0); }
     function statFor(goober, salt) { return 28 + (hashString(`${goober.id || goober.name}-${salt}`) % 73); }
     function getStats(goober) { return { "Loaf Level": statFor(goober, "loaf"), "Snoot Power": statFor(goober, "snoot"), "Chaos": statFor(goober, "chaos"), "Sit Strength": statFor(goober, "sit"), "Goober Aura": statFor(goober, "aura") }; }
     function getRarity(goober) { const total = Object.values(getStats(goober)).reduce((a, b) => a + b, 0); if (total >= 430) return "Mythic Chaos Loaf"; if (total >= 390) return "Legendary Loaf"; if (total >= 340) return "Ultra Goober"; if (total >= 285) return "Rare Loaf"; return "Common Loaf"; }
-    function getFlavor(goober, rarity) { const category = goober.category || "classic"; const lines = { classic: "A reliable loaf with clean sitting form and timeless Goober fundamentals.", costume: "Dressed for greatness, but still fully committed to the loaf position.", chaos: "Barely contained Goober energy. Handle this card with caution.", spooky: "A suspicious little loaf with haunted hallway energy.", fancy: "A distinguished Goober loaf suitable for formal occasions.", superhero: "A heroic loaf prepared to defend snack time.", food: "A deliciously themed Goober that should not be confused with lunch.", sports: "Elite sitting posture with competitive loaf instincts.", animal: "A creaturely Goober with strong wild-loaf tendencies.", holiday: "Seasonal loaf power wrapped in festive Goober spirit.", funny: "A deeply unserious card for serious collectors.", random: "Nobody knows what this Goober is doing, but collectors respect it." }; return `${rarity}. ${lines[category] || "A collectible Goober with certified loaf posture."}`; }
-    function serialFor(goober, index) { return `#${String((hashString(goober.id || goober.name) % 900) + 100).padStart(3, "0")}`; }
+    function serialFor(goober) { return `#${String((hashString(goober.id || goober.name) % 900) + 100).padStart(3, "0")}`; }
+    function flavorFor(goober) { return goober.description || "A certified loaf-sitting Goober ready for card battle."; }
+    function escapeHtml(value) { return String(value || "").replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char])); }
+
+    function cardHtml(goober, role, outcome) {
+      const stats = getStats(goober);
+      const rarity = getRarity(goober);
+      return `
+        <article class="trading-card ${outcome || ""}">
+          <div class="card-top"><h3>${escapeHtml(goober.name || role)}</h3><span class="rarity">${rarity}</span></div>
+          <div class="card-image"><img src="${goober.imageUrl || "/assets/original-goober.jpg"}" alt="${escapeHtml(goober.name || role)} card art" /></div>
+          <div class="type-line"><span class="type-pill">${escapeHtml(goober.category || "classic")} type</span><span class="serial-pill">${serialFor(goober)}</span></div>
+          <div class="stats">
+            ${Object.entries(stats).map(([label, value]) => `
+              <div class="stat-row ${label === state.selectedStat ? "selected" : ""}"><span>${label}</span><div class="bar"><span style="width:${value}%"></span></div><strong>${value}</strong></div>
+            `).join("")}
+          </div>
+          <p class="flavor">${escapeHtml(flavorFor(goober))}</p>
+        </article>`;
+    }
 
     async function loadGoobers() {
       try {
@@ -184,13 +220,14 @@
         if (!response.ok) throw new Error("Could not load Goobers.");
         const goobers = await response.json();
         state.goobers = Array.isArray(goobers) && goobers.length ? goobers : [{ id: "fallback", name: "Original Goober", category: "classic", description: "The original loaf-sitting Goober.", imageUrl: "/assets/original-goober.jpg" }];
-        if (!goobers.length) showError("No uploaded Goobers were returned yet, so Original Goober is in the binder.");
+        if (!goobers.length) showError("No uploaded Goobers were returned yet, so Original Goober is battling alone.");
       } catch (error) {
         state.goobers = [{ id: "fallback", name: "Original Goober", category: "classic", description: "The original loaf-sitting Goober.", imageUrl: "/assets/original-goober.jpg" }];
-        showError("The Goober API did not respond, so Original Goober is in the binder.");
+        showError("The Goober API did not respond, so Original Goober is battling alone.");
       }
       applyFilters();
-      selectCard(0);
+      drawNewOpponent();
+      renderAll();
     }
 
     function applyFilters() {
@@ -203,11 +240,11 @@
       });
       if (!state.filtered.length) {
         cardList.innerHTML = `<p style="font-weight:900;color:#26333a;">No matching Goober cards found.</p>`;
+        state.selectedIndex = 0;
         return;
       }
       state.selectedIndex = Math.min(state.selectedIndex, state.filtered.length - 1);
-      renderList();
-      renderCard(state.filtered[state.selectedIndex]);
+      renderAll();
     }
 
     function renderList() {
@@ -216,43 +253,103 @@
         const button = document.createElement("button");
         button.type = "button";
         button.className = `mini-card${index === state.selectedIndex ? " active" : ""}`;
-        button.innerHTML = `<img src="${goober.imageUrl}" alt="${goober.name || "Goober"}"><span><strong>${goober.name || "Goober"}</strong><small>${getRarity(goober)}</small></span>`;
-        button.addEventListener("click", () => selectCard(index));
+        button.innerHTML = `<img src="${goober.imageUrl || "/assets/original-goober.jpg"}" alt="${escapeHtml(goober.name || "Goober")}"><span><strong>${escapeHtml(goober.name || "Goober")}</strong><small>${getRarity(goober)}</small></span>`;
+        button.addEventListener("click", () => { state.selectedIndex = index; state.selectedStat = null; state.lastWinner = null; drawNewOpponent(); renderAll(); });
         cardList.appendChild(button);
       });
     }
 
-    function selectCard(index) {
-      if (!state.filtered.length) return;
-      state.selectedIndex = ((index % state.filtered.length) + state.filtered.length) % state.filtered.length;
+    function getPlayer() { return state.filtered[state.selectedIndex] || state.goobers[0]; }
+    function getOpponent() { return state.goobers[state.opponentIndex] || state.goobers[0]; }
+
+    function drawNewOpponent() {
+      if (!state.goobers.length) return;
+      const player = getPlayer();
+      let next = Math.floor(Math.random() * state.goobers.length);
+      if (state.goobers.length > 1) {
+        let guard = 0;
+        while (state.goobers[next]?.id === player?.id && guard < 10) { next = Math.floor(Math.random() * state.goobers.length); guard++; }
+      }
+      state.opponentIndex = next;
+      state.selectedStat = null;
+      state.lastWinner = null;
+      statDie.textContent = "?";
+      dieText.textContent = "Press Roll the Stat Die. The die will pick the battle stat.";
+      battleResult.textContent = "Cards are drawn. Roll the five-sided die to battle.";
+    }
+
+    function rollDieAndBattle() {
+      if (state.rolling) return;
+      const player = getPlayer();
+      const opponent = getOpponent();
+      if (!player || !opponent) return;
+
+      state.rolling = true;
+      rollBattleBtn.disabled = true;
+      statDie.classList.add("rolling");
+      battleResult.textContent = "The Goober stat die is rolling...";
+
+      let ticks = 0;
+      const roller = setInterval(() => {
+        const randomIndex = Math.floor(Math.random() * statNames.length);
+        statDie.textContent = dieFaces[randomIndex];
+        dieText.textContent = `Rolling... ${statNames[randomIndex]}`;
+        ticks += 1;
+        if (ticks >= 10) {
+          clearInterval(roller);
+          const finalIndex = Math.floor(Math.random() * statNames.length);
+          state.selectedStat = statNames[finalIndex];
+          statDie.textContent = dieFaces[finalIndex];
+          dieText.textContent = `The five-sided die chose ${state.selectedStat}.`;
+          statDie.classList.remove("rolling");
+          resolveBattle();
+          state.rolling = false;
+          rollBattleBtn.disabled = false;
+        }
+      }, 70);
+    }
+
+    function resolveBattle() {
+      const player = getPlayer();
+      const opponent = getOpponent();
+      const playerValue = getStats(player)[state.selectedStat];
+      const opponentValue = getStats(opponent)[state.selectedStat];
+      state.round += 1;
+      if (playerValue > opponentValue) {
+        state.playerScore += 1;
+        state.lastWinner = "player";
+        battleResult.textContent = `${player.name} wins with ${state.selectedStat}: ${playerValue} to ${opponentValue}. Certified loaf victory.`;
+      } else if (opponentValue > playerValue) {
+        state.opponentScore += 1;
+        state.lastWinner = "opponent";
+        battleResult.textContent = `${opponent.name} wins with ${state.selectedStat}: ${opponentValue} to ${playerValue}. The opponent loaf was too powerful.`;
+      } else {
+        state.lastWinner = "tie";
+        battleResult.textContent = `Tie! Both Goobers scored ${playerValue} in ${state.selectedStat}. Equal loaf energy.`;
+      }
+      renderAll();
+    }
+
+    function renderAll() {
+      const player = getPlayer();
+      const opponent = getOpponent();
+      const playerOutcome = state.lastWinner === "player" ? "winner" : state.lastWinner === "opponent" ? "loser" : "";
+      const opponentOutcome = state.lastWinner === "opponent" ? "winner" : state.lastWinner === "player" ? "loser" : "";
+      if (player) playerMount.innerHTML = cardHtml(player, "Player Goober", playerOutcome);
+      if (opponent) opponentMount.innerHTML = cardHtml(opponent, "Opponent Goober", opponentOutcome);
+      playerScoreEl.textContent = state.playerScore;
+      opponentScoreEl.textContent = state.opponentScore;
+      roundCountEl.textContent = state.round;
       renderList();
-      renderCard(state.filtered[state.selectedIndex]);
     }
 
-    function renderCard(goober) {
-      const stats = getStats(goober);
-      const rarity = getRarity(goober);
-      cardName.textContent = goober.name || "Untitled Goober";
-      cardRarity.textContent = rarity;
-      cardImage.src = goober.imageUrl || "/assets/original-goober.jpg";
-      cardImage.alt = `${goober.name || "Goober"} trading card art`;
-      cardType.textContent = `${goober.category || "classic"} type`;
-      cardSerial.textContent = serialFor(goober, state.selectedIndex);
-      cardFlavor.textContent = getFlavor(goober, rarity);
-      cardStats.innerHTML = "";
-      Object.entries(stats).forEach(([label, value]) => {
-        const row = document.createElement("div");
-        row.className = "stat-row";
-        row.innerHTML = `<span>${label}</span><div class="bar"><span style="width:${value}%"></span></div><strong>${value}</strong>`;
-        cardStats.appendChild(row);
-      });
-    }
-
-    randomCardBtn.addEventListener("click", () => selectCard(Math.floor(Math.random() * state.filtered.length)));
-    prevCardBtn.addEventListener("click", () => selectCard(state.selectedIndex - 1));
-    nextCardBtn.addEventListener("click", () => selectCard(state.selectedIndex + 1));
+    rollBattleBtn.addEventListener("click", rollDieAndBattle);
+    newBattleBtn.addEventListener("click", () => { drawNewOpponent(); renderAll(); });
+    randomPlayerBtn.addEventListener("click", () => { if (state.filtered.length) state.selectedIndex = Math.floor(Math.random() * state.filtered.length); drawNewOpponent(); renderAll(); });
+    resetScoreBtn.addEventListener("click", () => { state.playerScore = 0; state.opponentScore = 0; state.round = 0; state.selectedStat = null; state.lastWinner = null; statDie.textContent = "?"; dieText.textContent = "Score reset. Roll the die to battle again."; battleResult.textContent = "Score reset. Draw cards and roll the die."; renderAll(); });
     cardSearch.addEventListener("input", () => { state.selectedIndex = 0; applyFilters(); });
     rarityFilter.addEventListener("change", () => { state.selectedIndex = 0; applyFilters(); });
+
     document.querySelectorAll(".nav-dropdown-toggle").forEach((button) => {
       button.addEventListener("click", (event) => {
         event.preventDefault();
@@ -266,6 +363,7 @@
         if (!dropdown.contains(event.target)) dropdown.classList.remove("open");
       });
     });
+
     loadGoobers();
   </script>
 </body>
