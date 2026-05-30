@@ -8,7 +8,8 @@ const gooberCategoryInput = document.getElementById("gooberCategory");
 const gooberDescriptionInput = document.getElementById("gooberDescription");
 const gooberImageInput = document.getElementById("gooberImage");
 const gooberUploadCodeInput = document.getElementById("gooberUploadCode");
-const adminDeleteCodeInput = document.getElementById("adminDeleteCode");
+const gooberSearchInput = document.getElementById("gooberSearch");
+const gooberCountText = document.getElementById("gooberCountText");
 const filePreview = document.getElementById("filePreview");
 const uploadStatus = document.getElementById("uploadStatus");
 const reloadCloudGoobersButton = document.getElementById("reloadCloudGoobers");
@@ -16,47 +17,42 @@ const featuredGooberCard = document.querySelector(".feature-card");
 const featuredGooberImage = featuredGooberCard?.querySelector("img");
 const featuredGooberTitle = featuredGooberCard?.querySelector("h2");
 const featuredGooberDescription = featuredGooberCard?.querySelector("p");
+const gooberViewer = document.getElementById("gooberViewer");
+const viewerImage = document.getElementById("viewerImage");
+const viewerTitle = document.getElementById("viewerTitle");
+const viewerDescription = document.getElementById("viewerDescription");
+const viewerCategory = document.getElementById("viewerCategory");
+const viewerClose = document.getElementById("viewerClose");
+const viewerBackdrop = document.querySelector(".viewer-backdrop");
 
 let activeFilter = "all";
-let adminDeleteUnlocked = false;
+let searchTerm = "";
 
-function isAdminDeleteUnlocked() {
-  return Boolean(adminDeleteUnlocked && adminDeleteCodeInput?.value.trim());
+function normalizeText(value) {
+  return String(value || "").toLowerCase().trim();
 }
-
-function updateAdminDeleteVisibility() {
-  const isUnlocked = isAdminDeleteUnlocked();
-  document.body.classList.toggle("admin-delete-unlocked", isUnlocked);
-
-  document.querySelectorAll(".delete-goober").forEach((button) => {
-    button.hidden = !isUnlocked;
-    button.style.display = isUnlocked ? "inline-block" : "none";
-    button.setAttribute("aria-hidden", isUnlocked ? "false" : "true");
-  });
-}
-
-function closeGamesDropdowns() {
-  document.querySelectorAll(".nav-dropdown.open").forEach((dropdown) => {
-    dropdown.classList.remove("open");
-    dropdown.querySelector(".nav-dropdown-toggle")?.setAttribute("aria-expanded", "false");
-  });
-}
-
-document.querySelectorAll(".nav-dropdown-menu a").forEach((link) => {
-  link.addEventListener("click", () => {
-    closeGamesDropdowns();
-    link.blur();
-  });
-});
 
 function createGooberCard(goober, isCloud = false) {
   const card = document.createElement("article");
   card.className = "goober-card";
   card.dataset.category = goober.category || "classic";
+  card.dataset.name = goober.name || "";
+  card.dataset.description = goober.description || "";
 
   if (isCloud) {
     card.dataset.cloudGooberId = goober.id;
   }
+
+  card.tabIndex = 0;
+  card.setAttribute("role", "button");
+  card.setAttribute("aria-label", `View ${goober.name || "Goober"}`);
+  card.addEventListener("click", () => openGooberViewer(goober));
+  card.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openGooberViewer(goober);
+    }
+  });
 
   const imageWrap = document.createElement("div");
   imageWrap.className = "goober-image";
@@ -95,23 +91,39 @@ function createGooberCard(goober, isCloud = false) {
   info.appendChild(description);
   info.appendChild(tags);
 
-  if (isCloud) {
-    const deleteButton = document.createElement("button");
-    deleteButton.className = "delete-goober";
-    deleteButton.type = "button";
-    deleteButton.textContent = "Admin delete";
-    deleteButton.hidden = true;
-    deleteButton.style.display = "none";
-    deleteButton.setAttribute("aria-hidden", "true");
-    deleteButton.addEventListener("click", () => deleteGoober(goober));
-    info.appendChild(deleteButton);
-  }
-
   card.appendChild(imageWrap);
   card.appendChild(info);
 
   return card;
 }
+
+function openGooberViewer(goober) {
+  if (!gooberViewer || !viewerImage || !viewerTitle || !viewerDescription || !viewerCategory) return;
+
+  viewerImage.src = goober.imageUrl;
+  viewerImage.alt = goober.name || "Selected Goober";
+  viewerTitle.textContent = goober.name || "Goober";
+  viewerDescription.textContent = goober.description || "A mysterious Goober with powerful Goober energy.";
+  viewerCategory.textContent = `${goober.category || "classic"} Goober`;
+  gooberViewer.hidden = false;
+  document.body.classList.add("viewer-open");
+  viewerClose?.focus();
+}
+
+function closeGooberViewer() {
+  if (!gooberViewer) return;
+
+  gooberViewer.hidden = true;
+  document.body.classList.remove("viewer-open");
+}
+
+viewerClose?.addEventListener("click", closeGooberViewer);
+viewerBackdrop?.addEventListener("click", closeGooberViewer);
+window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && gooberViewer && !gooberViewer.hidden) {
+    closeGooberViewer();
+  }
+});
 
 function setFeaturedGoober(goober) {
   if (!featuredGooberCard || !featuredGooberImage || !featuredGooberTitle || !featuredGooberDescription) {
@@ -145,12 +157,25 @@ function randomizeFeaturedGoober(goobers) {
 }
 
 function applyCurrentFilter() {
+  let visibleCount = 0;
+  let totalCount = 0;
+
   document.querySelectorAll(".goober-card").forEach((card) => {
-    const shouldShow =
-      activeFilter === "all" || card.dataset.category === activeFilter;
+    totalCount += 1;
+
+    const category = card.dataset.category || "classic";
+    const searchableText = normalizeText(`${card.dataset.name || ""} ${card.dataset.description || ""} ${category}`);
+    const matchesFilter = activeFilter === "all" || category === activeFilter;
+    const matchesSearch = !searchTerm || searchableText.includes(searchTerm);
+    const shouldShow = matchesFilter && matchesSearch;
 
     card.style.display = shouldShow ? "block" : "none";
+    if (shouldShow) visibleCount += 1;
   });
+
+  if (gooberCountText) {
+    gooberCountText.textContent = `${visibleCount} of ${totalCount} Goobers showing`;
+  }
 }
 
 filterButtons.forEach((button) => {
@@ -162,6 +187,11 @@ filterButtons.forEach((button) => {
 
     applyCurrentFilter();
   });
+});
+
+gooberSearchInput?.addEventListener("input", () => {
+  searchTerm = normalizeText(gooberSearchInput.value);
+  applyCurrentFilter();
 });
 
 function readImageFile(file) {
@@ -199,7 +229,6 @@ async function loadCloudGoobers(options = {}) {
     });
 
     randomizeFeaturedGoober(goobers);
-    updateAdminDeleteVisibility();
     applyCurrentFilter();
 
     if (uploadStatus) {
@@ -216,67 +245,6 @@ async function loadCloudGoobers(options = {}) {
         "Uploaded Goobers could not be loaded. Check the Worker API setup.";
     }
   }
-}
-
-function removeGooberCardFromGallery(gooberId) {
-  document.querySelectorAll("[data-cloud-goober-id]").forEach((card) => {
-    if (card.dataset.cloudGooberId === gooberId) {
-      card.remove();
-    }
-  });
-
-  applyCurrentFilter();
-}
-
-async function deleteGoober(goober) {
-  const adminCode = adminDeleteCodeInput?.value.trim() || "";
-
-  if (!adminCode || !adminDeleteUnlocked) {
-    uploadStatus.textContent = "Enter the admin delete code first.";
-    adminDeleteUnlocked = false;
-    updateAdminDeleteVisibility();
-    return;
-  }
-
-  const confirmed = window.confirm(`Delete ${goober.name || "this Goober"}? This removes it from the gallery and games.`);
-
-  if (!confirmed) {
-    uploadStatus.textContent = "Admin delete canceled.";
-    return;
-  }
-
-  uploadStatus.textContent = `Deleting ${goober.name || "Goober"}...`;
-
-  try {
-    const response = await fetch(`${API_BASE}/api/goobers/${encodeURIComponent(goober.id)}`, {
-      method: "DELETE",
-      headers: {
-        "x-goober-admin-code": adminCode
-      },
-      cache: "no-store"
-    });
-
-    const result = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      throw new Error(result.error || "Delete failed.");
-    }
-
-    removeGooberCardFromGallery(goober.id);
-    uploadStatus.textContent = `${goober.name || "Goober"} deleted.`;
-    await loadCloudGoobers({ bustCache: true });
-  } catch (error) {
-    console.error(error);
-    uploadStatus.textContent = error.message || "Delete failed.";
-  }
-}
-
-if (adminDeleteCodeInput) {
-  adminDeleteCodeInput.value = "";
-  adminDeleteCodeInput.addEventListener("input", () => {
-    adminDeleteUnlocked = Boolean(adminDeleteCodeInput.value.trim());
-    updateAdminDeleteVisibility();
-  });
 }
 
 if (gooberImageInput) {
@@ -383,5 +351,4 @@ if (reloadCloudGoobersButton) {
   reloadCloudGoobersButton.addEventListener("click", () => loadCloudGoobers({ bustCache: true }));
 }
 
-updateAdminDeleteVisibility();
 loadCloudGoobers({ bustCache: true });
