@@ -44,7 +44,11 @@ export class CardBattleRoom {
     this.state = state;
     this.env = env;
     this.sessions = new Map();
-    this.room = {
+    this.room = this.createEmptyRoom();
+  }
+
+  createEmptyRoom() {
+    return {
       roomCode: "",
       players: {},
       scores: { p1: 0, p2: 0 },
@@ -77,13 +81,18 @@ export class CardBattleRoom {
 
     server.accept();
     this.sessions.set(server, { playerId });
+
     this.room.players[playerId] = {
       ...(this.room.players[playerId] || {}),
       id: playerId,
       name: playerName,
-      connected: true
+      connected: true,
+      hand: this.room.players[playerId]?.hand || [],
+      card: this.room.players[playerId]?.card || null
     };
+
     this.updateStatus();
+    await this.ensureHands();
     await this.saveRoom();
 
     server.addEventListener("message", async (event) => {
@@ -113,11 +122,17 @@ export class CardBattleRoom {
   async loadRoom(roomCode) {
     const stored = await this.state.storage.get("room");
     if (stored) {
-      this.room = stored;
+      this.room = {
+        ...this.createEmptyRoom(),
+        ...stored,
+        players: stored.players || {},
+        scores: stored.scores || { p1: 0, p2: 0 }
+      };
       this.room.roomCode = this.room.roomCode || roomCode;
       return;
     }
 
+    this.room = this.createEmptyRoom();
     this.room.roomCode = roomCode;
     await this.saveRoom();
   }
@@ -127,7 +142,7 @@ export class CardBattleRoom {
   }
 
   assignPlayerId(requested) {
-    if ((requested === "p1" || requested === "p2") && (!this.room.players[requested]?.connected || this.room.players[requested])) {
+    if ((requested === "p1" || requested === "p2") && !this.room.players[requested]?.connected) {
       return requested;
     }
 
@@ -140,6 +155,60 @@ export class CardBattleRoom {
     const hasP1 = Boolean(this.room.players.p1);
     const hasP2 = Boolean(this.room.players.p2);
     this.room.status = hasP1 && hasP2 ? "ready" : "waiting";
+  }
+
+  async ensureHands(force = false) {
+    if (!this.room.players.p1 || !this.room.players.p2) return;
+
+    const p1NeedsHand = force || !Array.isArray(this.room.players.p1.hand) || this.room.players.p1.hand.length === 0;
+    const p2NeedsHand = force || !Array.isArray(this.room.players.p2.hand) || this.room.players.p2.hand.length === 0;
+
+    if (!p1NeedsHand && !p2NeedsHand) return;
+
+    const deck = await this.getDeck();
+    const dealt = dealHands(deck, 3);
+
+    if (p1NeedsHand) this.room.players.p1.hand = dealt.p1;
+    if (p2NeedsHand) this.room.players.p2.hand = dealt.p2;
+
+    if (force) {
+      this.room.players.p1.card = null;
+      this.room.players.p2.card = null;
+      this.room.selectedStat = null;
+      this.room.lastWinner = null;
+      this.room.lastResult = "New hands dealt. Each player has three Goober cards.";
+    }
+  }
+
+  async getDeck() {
+    try {
+      const result = await this.env.DB.prepare(`
+        SELECT id, name, category, description, image_key
+        FROM goobers
+        WHERE approved = 1
+        ORDER BY created_at DESC
+      `).all();
+
+      const deck = (result.results || []).map((row) => ({
+        id: row.id,
+        name: row.name,
+        category: row.category,
+        description: row.description,
+        imageUrl: `/api/goober-image/${row.image_key}`
+      }));
+
+      if (deck.length) return deck;
+    } catch (error) {
+      console.error("Could not load Goober deck", error);
+    }
+
+    return [{
+      id: "fallback-original-goober",
+      name: "Original Goober",
+      category: "classic",
+      description: "The original loaf-sitting Goober.",
+      imageUrl: "/assets/original-goober.jpg"
+    }];
   }
 
   async handleMessage(socket, data) {
@@ -160,25 +229,24 @@ export class CardBattleRoom {
       }
     }
 
-    if (message.type === "selectCard") {
-      const card = sanitizeCard(message.card);
-      if (!card) throw new Error("Choose a Goober card first.");
+    if (message.type === "playCard") {
       if (!this.room.players[session.playerId] || session.playerId.startsWith("spectator")) {
-        throw new Error("Only Player 1 and Player 2 can choose cards.");
+        throw new Error("Only Player 1 and Player 2 can play cards.");
       }
+
+      await this.ensureHands();
+      const cardId = cleanText(message.cardId, 120);
+      const hand = this.room.players[session.playerId].hand || [];
+      const card = hand.find((candidate) => candidate.id === cardId);
+
+      if (!card) {
+        throw new Error("That card is not in your three-card hand.");
+      }
+
       this.room.players[session.playerId].card = card;
       this.room.selectedStat = null;
       this.room.lastWinner = null;
       this.room.lastResult = `${this.room.players[session.playerId].name} played ${card.name}.`;
-    }
-
-    if (message.type === "drawRandomOpponent") {
-      const target = session.playerId === "p1" ? "p2" : "p1";
-      const card = sanitizeCard(message.card);
-      if (card && this.room.players[target] && !this.room.players[target].card) {
-        this.room.players[target].card = card;
-        this.room.lastResult = `${this.room.players[target].name} drew a random Goober card.`;
-      }
     }
 
     if (message.type === "roll") {
@@ -186,19 +254,14 @@ export class CardBattleRoom {
     }
 
     if (message.type === "newRound") {
-      this.room.players.p1 && (this.room.players.p1.card = null);
-      this.room.players.p2 && (this.room.players.p2.card = null);
-      this.room.selectedStat = null;
-      this.room.lastWinner = null;
-      this.room.lastResult = "New round. Both players should play a Goober card.";
+      await this.ensureHands(true);
     }
 
     if (message.type === "resetScore") {
       this.room.scores = { p1: 0, p2: 0 };
       this.room.round = 0;
-      this.room.selectedStat = null;
-      this.room.lastWinner = null;
-      this.room.lastResult = "Score reset. Play cards and roll the stat die.";
+      await this.ensureHands(true);
+      this.room.lastResult = "Score reset. Fresh three-card hands were dealt.";
     }
 
     this.updateStatus();
@@ -211,7 +274,7 @@ export class CardBattleRoom {
     const p2 = this.room.players.p2;
 
     if (!p1?.card || !p2?.card) {
-      throw new Error("Both players need to play a card before rolling.");
+      throw new Error("Both players need to play one card from their hand before rolling.");
     }
 
     const statIndex = cryptoRandomInt(0, CARD_STATS.length - 1);
@@ -295,12 +358,6 @@ const NO_STORE_HEADERS = {
 
 async function createCardBattleRoom(env) {
   const roomCode = createRoomCode();
-  const id = env.CARD_BATTLE_ROOMS.idFromName(roomCode);
-  const stub = env.CARD_BATTLE_ROOMS.get(id);
-  await stub.fetch(`https://room.local/api/card-battle/${roomCode}/socket`, {
-    headers: { upgrade: "websocket" }
-  }).catch(() => null);
-
   return jsonResponse({ roomCode, url: `/goober-cards/?room=${roomCode}` }, 201, NO_STORE_HEADERS);
 }
 
@@ -334,16 +391,26 @@ function getRoomCodeFromPath(pathname) {
   return match ? match[1].toUpperCase() : "";
 }
 
-function sanitizeCard(card) {
-  if (!card || typeof card !== "object") return null;
-  const id = cleanText(card.id, 120) || crypto.randomUUID();
-  const name = cleanText(card.name, 80) || "Mystery Goober";
-  const category = cleanText(card.category, 30) || "classic";
-  const description = cleanText(card.description, 280) || "A certified loaf-sitting Goober ready for battle.";
-  const imageUrl = typeof card.imageUrl === "string" && card.imageUrl.startsWith("/api/goober-image/")
-    ? card.imageUrl
-    : "/assets/original-goober.jpg";
-  return { id, name, category, description, imageUrl };
+function dealHands(deck, handSize = 3) {
+  const pool = [...deck];
+  shuffle(pool);
+
+  const needed = handSize * 2;
+  while (pool.length < needed) {
+    pool.push(...deck.map((card) => ({ ...card })));
+  }
+
+  return {
+    p1: pool.slice(0, handSize),
+    p2: pool.slice(handSize, handSize * 2)
+  };
+}
+
+function shuffle(items) {
+  for (let i = items.length - 1; i > 0; i--) {
+    const j = cryptoRandomInt(0, i);
+    [items[i], items[j]] = [items[j], items[i]];
+  }
 }
 
 function cryptoRandomInt(min, max) {
