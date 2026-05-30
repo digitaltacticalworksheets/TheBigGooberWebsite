@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Goober Card Battle | The Big Goober Website</title>
-  <meta name="description" content="Play Goober cards, roll a five-sided stat die, and battle loaf-sitting Goobers." />
+  <meta name="description" content="Play Goober cards, roll a five-sided stat die, and battle loaf-sitting Goobers online." />
   <link rel="apple-touch-icon" href="/assets/original-goober.jpg" />
   <link rel="icon" href="/assets/original-goober.jpg" type="image/jpeg" />
   <link rel="manifest" href="/site.webmanifest" />
@@ -15,7 +15,7 @@
     .cards-hero { max-width: 1180px; margin: 0 auto; padding: 34px 22px 18px; }
     .cards-hero h1 { font-size: clamp(2.8rem, 7vw, 6.8rem); line-height: 0.88; margin: 0 0 18px; letter-spacing: -0.08em; }
     .cards-hero p { color: var(--muted); font-size: clamp(1.05rem, 2vw, 1.25rem); line-height: 1.45; max-width: 900px; margin: 0; }
-    .battle-shell { max-width: 1220px; margin: 0 auto; padding: 16px 22px 70px; display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; align-items: start; }
+    .battle-shell { max-width: 1220px; margin: 0 auto; padding: 16px 22px 70px; display: grid; grid-template-columns: minmax(0, 1fr) 350px; gap: 24px; align-items: start; }
     .battle-stage, .side-panel { background: var(--card); border: 4px solid var(--ink); border-radius: var(--radius); box-shadow: var(--shadow), 7px 7px 0 var(--ink); overflow: hidden; }
     .battle-stage { position: relative; padding: clamp(16px, 3vw, 28px); background: radial-gradient(circle at top left, rgba(255, 211, 77, 0.75), transparent 28rem), linear-gradient(135deg, #fffaf0, #ffffff); }
     .battle-stage::before { content: "goober card battle"; position: absolute; z-index: 3; top: -4px; left: 28px; background: var(--pink); border: 3px solid var(--ink); border-radius: 999px; padding: 7px 14px; font-size: 0.9rem; font-weight: 900; rotate: -4deg; }
@@ -29,8 +29,6 @@
     .trading-card { width: min(380px, 100%); min-height: 545px; background: #fffaf0; border: 6px solid var(--ink); border-radius: 32px; box-shadow: 10px 10px 0 var(--ink), var(--shadow); padding: 14px; position: relative; overflow: hidden; margin: 0 auto; transition: transform 0.2s ease, opacity 0.2s ease; }
     .trading-card.winner { outline: 8px solid var(--green); transform: translateY(-6px) rotate(-1deg); }
     .trading-card.loser { opacity: 0.72; }
-    .trading-card::after { content: ""; position: absolute; inset: -40%; background: linear-gradient(120deg, transparent 35%, rgba(255,255,255,0.42), transparent 62%); transform: translateX(-65%) rotate(12deg); pointer-events: none; animation: shine 4s ease-in-out infinite; }
-    @keyframes shine { 0%, 60% { transform: translateX(-65%) rotate(12deg); } 84%, 100% { transform: translateX(65%) rotate(12deg); } }
     .card-top { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; background: var(--yellow); border: 4px solid var(--ink); border-radius: 22px; padding: 10px 11px; position: relative; z-index: 1; }
     .card-top h3 { margin: 0; font-size: clamp(1.2rem, 3vw, 1.75rem); letter-spacing: -0.05em; line-height: 0.95; overflow-wrap: anywhere; }
     .rarity { border: 3px solid var(--ink); border-radius: 999px; background: white; padding: 6px 8px; font-size: 0.72rem; font-weight: 900; white-space: nowrap; box-shadow: 2px 2px 0 var(--ink); }
@@ -49,17 +47,20 @@
     .stat-die { width: 96px; height: 96px; border: 5px solid var(--ink); border-radius: 24px; background: var(--yellow); box-shadow: 5px 5px 0 var(--ink); display: grid; place-items: center; font-size: 2.5rem; font-weight: 900; transition: transform 0.18s ease; }
     .stat-die.rolling { animation: dieRoll 0.58s ease-in-out; }
     @keyframes dieRoll { 0% { transform: rotate(0) scale(1); } 35% { transform: rotate(22deg) scale(1.08); } 70% { transform: rotate(-18deg) scale(1.04); } 100% { transform: rotate(0) scale(1); } }
-    .die-text { background: white; border: 3px solid var(--ink); border-radius: 18px; box-shadow: 4px 4px 0 var(--ink); padding: 12px; font-weight: 900; color: #26333a; line-height: 1.35; }
+    .die-text, .battle-result { background: white; border: 3px solid var(--ink); border-radius: 18px; box-shadow: 4px 4px 0 var(--ink); padding: 12px; font-weight: 900; color: #26333a; line-height: 1.35; }
+    .battle-result { min-height: 52px; }
     button, .card-button { color: var(--ink); text-decoration: none; font-weight: 900; border: 3px solid var(--ink); border-radius: 999px; background: white; padding: 10px 14px; box-shadow: 3px 3px 0 var(--ink); transition: transform 0.14s ease, box-shadow 0.14s ease, background 0.14s ease; cursor: pointer; font-family: inherit; font-size: 0.96rem; }
     button:hover, .card-button:hover { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); background: var(--yellow); }
     button.primary { background: var(--orange); }
-    .battle-result { background: white; border: 3px solid var(--ink); border-radius: 18px; box-shadow: 4px 4px 0 var(--ink); padding: 12px; font-weight: 900; color: #26333a; line-height: 1.35; min-height: 52px; }
+    button:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
     .button-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
     .side-panel { padding: 18px; background: var(--blue); position: sticky; top: 14px; }
     .side-panel h2, .side-panel h3 { margin: 0 0 10px; letter-spacing: -0.04em; }
     .side-panel p { margin: 0 0 14px; color: #26333a; line-height: 1.4; font-weight: 800; }
     .side-card { background: white; border: 3px solid var(--ink); border-radius: 20px; box-shadow: 4px 4px 0 var(--ink); padding: 12px; margin-bottom: 16px; display: grid; gap: 8px; }
     .side-card input, .side-card select { width: 100%; border: 3px solid var(--ink); border-radius: 999px; padding: 9px 12px; font: inherit; font-weight: 900; background: #fffaf0; }
+    .online-status { background: var(--yellow); border: 3px solid var(--ink); border-radius: 16px; padding: 10px; font-weight: 900; line-height: 1.3; }
+    .room-code { font-size: 1.45rem; letter-spacing: 0.08em; }
     .mini-list { display: grid; gap: 8px; max-height: 310px; overflow: auto; padding: 2px 6px 2px 0; }
     .mini-card { display: grid; grid-template-columns: 48px 1fr; gap: 8px; align-items: center; text-align: left; border-radius: 18px; padding: 8px; background: white; }
     .mini-card.active { background: var(--yellow); }
@@ -101,7 +102,7 @@
 
   <section class="cards-hero">
     <h1>Goober Card Battle.</h1>
-    <p>Play a loaf-sitting Goober card, draw an opponent, then roll the five-sided stat die. The die decides which stat battles.</p>
+    <p>Play solo on one screen, or create an online battle room so two people can play live over the internet. The server rolls the five-sided stat die so both players see the same battle.</p>
   </section>
 
   <main class="battle-shell">
@@ -109,7 +110,7 @@
       <div class="battle-header">
         <div>
           <h2>Battle Arena</h2>
-          <span>Pick your card. The die picks the stat.</span>
+          <span id="battleModeLabel">Solo mode: pick your card. The die picks the stat.</span>
         </div>
         <div class="scoreboard">
           <span class="score-pill">You: <strong id="playerScore">0</strong></span>
@@ -127,7 +128,7 @@
       <div class="battle-controls">
         <div class="die-area">
           <div class="stat-die" id="statDie">?</div>
-          <div class="die-text" id="dieText">Press Roll the Stat Die. The five-sided die will choose Loaf Level, Snoot Power, Chaos, Sit Strength, or Goober Aura.</div>
+          <div class="die-text" id="dieText">Press Roll the Stat Die. The die will choose Loaf Level, Snoot Power, Chaos, Sit Strength, or Goober Aura.</div>
         </div>
         <div class="battle-result" id="battleResult">Draw cards, roll the die, and let the loaf battle begin.</div>
         <div class="button-row">
@@ -138,10 +139,24 @@
     </section>
 
     <aside class="side-panel">
-      <h2>Card Binder</h2>
-      <p>Choose your player card from the binder. The opponent is drawn randomly. The stat is chosen by the die.</p>
+      <h2>Online Battle</h2>
+      <p>Create a room, send the room code or link to someone else, then both players choose a Goober card.</p>
       <div class="error" id="errorBox"></div>
 
+      <div class="side-card">
+        <label for="playerName"><strong>Your player name</strong></label>
+        <input id="playerName" type="text" placeholder="Example: Leo" maxlength="40" autocomplete="nickname" />
+        <button class="primary" id="createRoomBtn" type="button">Create Online Room</button>
+        <div class="button-row">
+          <input id="joinRoomCode" type="text" placeholder="Room code" maxlength="12" autocomplete="off" />
+          <button id="joinRoomBtn" type="button">Join</button>
+        </div>
+        <div class="online-status" id="onlineStatus">Not connected. Solo mode is active.</div>
+        <button id="copyRoomLinkBtn" type="button" hidden>Copy Room Link</button>
+      </div>
+
+      <h2>Card Binder</h2>
+      <p>Choose your player card from the binder. In online mode, clicking a card plays it to the room.</p>
       <div class="side-card">
         <label for="cardSearch"><strong>Search Goober names</strong></label>
         <input id="cardSearch" type="search" placeholder="Example: Wizard" autocomplete="off" />
@@ -170,7 +185,7 @@
   <script>
     const statNames = ["Loaf Level", "Snoot Power", "Chaos", "Sit Strength", "Goober Aura"];
     const dieFaces = ["🍞", "👃", "🌀", "🪑", "✨"];
-    const state = { goobers: [], filtered: [], selectedIndex: 0, opponentIndex: 0, selectedStat: null, playerScore: 0, opponentScore: 0, round: 0, lastWinner: null, rolling: false };
+    const state = { goobers: [], filtered: [], selectedIndex: 0, opponentIndex: 0, selectedStat: null, playerScore: 0, opponentScore: 0, round: 0, lastWinner: null, rolling: false, online: false, socket: null, roomCode: "", playerId: "", room: null };
     const playerMount = document.getElementById("playerCardMount");
     const opponentMount = document.getElementById("opponentCardMount");
     const battleResult = document.getElementById("battleResult");
@@ -187,17 +202,25 @@
     const errorBox = document.getElementById("errorBox");
     const statDie = document.getElementById("statDie");
     const dieText = document.getElementById("dieText");
+    const createRoomBtn = document.getElementById("createRoomBtn");
+    const joinRoomBtn = document.getElementById("joinRoomBtn");
+    const joinRoomCode = document.getElementById("joinRoomCode");
+    const onlineStatus = document.getElementById("onlineStatus");
+    const copyRoomLinkBtn = document.getElementById("copyRoomLinkBtn");
+    const playerNameInput = document.getElementById("playerName");
+    const battleModeLabel = document.getElementById("battleModeLabel");
 
     function showError(message) { errorBox.textContent = message; errorBox.style.display = message ? "block" : "none"; }
-    function hashString(text) { let h = 2166136261; for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 16777619); } return Math.abs(h >>> 0); }
+    function hashString(text) { let h = 2166136261; for (let i = 0; i < String(text).length; i++) { h ^= String(text).charCodeAt(i); h = Math.imul(h, 16777619); } return Math.abs(h >>> 0); }
     function statFor(goober, salt) { return 28 + (hashString(`${goober.id || goober.name}-${salt}`) % 73); }
     function getStats(goober) { return { "Loaf Level": statFor(goober, "loaf"), "Snoot Power": statFor(goober, "snoot"), "Chaos": statFor(goober, "chaos"), "Sit Strength": statFor(goober, "sit"), "Goober Aura": statFor(goober, "aura") }; }
     function getRarity(goober) { const total = Object.values(getStats(goober)).reduce((a, b) => a + b, 0); if (total >= 430) return "Mythic Chaos Loaf"; if (total >= 390) return "Legendary Loaf"; if (total >= 340) return "Ultra Goober"; if (total >= 285) return "Rare Loaf"; return "Common Loaf"; }
     function serialFor(goober) { return `#${String((hashString(goober.id || goober.name) % 900) + 100).padStart(3, "0")}`; }
-    function flavorFor(goober) { return goober.description || "A certified loaf-sitting Goober ready for card battle."; }
+    function flavorFor(goober) { return goober?.description || "A certified loaf-sitting Goober ready for card battle."; }
     function escapeHtml(value) { return String(value || "").replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char])); }
 
     function cardHtml(goober, role, outcome) {
+      if (!goober) goober = { name: role, category: "waiting", description: "Waiting for a Goober card.", imageUrl: "/assets/original-goober.jpg", id: role };
       const stats = getStats(goober);
       const rarity = getRarity(goober);
       return `
@@ -228,6 +251,8 @@
       applyFilters();
       drawNewOpponent();
       renderAll();
+      const roomFromUrl = new URLSearchParams(location.search).get("room");
+      if (roomFromUrl) connectRoom(roomFromUrl.toUpperCase());
     }
 
     function applyFilters() {
@@ -254,15 +279,19 @@
         button.type = "button";
         button.className = `mini-card${index === state.selectedIndex ? " active" : ""}`;
         button.innerHTML = `<img src="${goober.imageUrl || "/assets/original-goober.jpg"}" alt="${escapeHtml(goober.name || "Goober")}"><span><strong>${escapeHtml(goober.name || "Goober")}</strong><small>${getRarity(goober)}</small></span>`;
-        button.addEventListener("click", () => { state.selectedIndex = index; state.selectedStat = null; state.lastWinner = null; drawNewOpponent(); renderAll(); });
+        button.addEventListener("click", () => { state.selectedIndex = index; playSelectedCard(); });
         cardList.appendChild(button);
       });
     }
 
     function getPlayer() { return state.filtered[state.selectedIndex] || state.goobers[0]; }
     function getOpponent() { return state.goobers[state.opponentIndex] || state.goobers[0]; }
+    function getOnlinePlayerCard() { return state.room?.players?.[state.playerId]?.card || null; }
+    function getOnlineOpponentCard() { const other = state.playerId === "p1" ? "p2" : "p1"; return state.room?.players?.[other]?.card || null; }
+    function sendRoom(type, payload = {}) { if (state.socket?.readyState === WebSocket.OPEN) state.socket.send(JSON.stringify({ type, ...payload })); }
 
     function drawNewOpponent() {
+      if (state.online) { sendRoom("newRound"); return; }
       if (!state.goobers.length) return;
       const player = getPlayer();
       let next = Math.floor(Math.random() * state.goobers.length);
@@ -278,17 +307,23 @@
       battleResult.textContent = "Cards are drawn. Roll the five-sided die to battle.";
     }
 
+    function playSelectedCard() {
+      state.selectedStat = null;
+      state.lastWinner = null;
+      if (state.online) sendRoom("selectCard", { card: getPlayer() });
+      renderAll();
+    }
+
     function rollDieAndBattle() {
+      if (state.online) { sendRoom("roll"); return; }
       if (state.rolling) return;
       const player = getPlayer();
       const opponent = getOpponent();
       if (!player || !opponent) return;
-
       state.rolling = true;
       rollBattleBtn.disabled = true;
       statDie.classList.add("rolling");
       battleResult.textContent = "The Goober stat die is rolling...";
-
       let ticks = 0;
       const roller = setInterval(() => {
         const randomIndex = Math.floor(Math.random() * statNames.length);
@@ -315,28 +350,64 @@
       const playerValue = getStats(player)[state.selectedStat];
       const opponentValue = getStats(opponent)[state.selectedStat];
       state.round += 1;
-      if (playerValue > opponentValue) {
-        state.playerScore += 1;
-        state.lastWinner = "player";
-        battleResult.textContent = `${player.name} wins with ${state.selectedStat}: ${playerValue} to ${opponentValue}. Certified loaf victory.`;
-      } else if (opponentValue > playerValue) {
-        state.opponentScore += 1;
-        state.lastWinner = "opponent";
-        battleResult.textContent = `${opponent.name} wins with ${state.selectedStat}: ${opponentValue} to ${playerValue}. The opponent loaf was too powerful.`;
-      } else {
-        state.lastWinner = "tie";
-        battleResult.textContent = `Tie! Both Goobers scored ${playerValue} in ${state.selectedStat}. Equal loaf energy.`;
-      }
+      if (playerValue > opponentValue) { state.playerScore += 1; state.lastWinner = "player"; battleResult.textContent = `${player.name} wins with ${state.selectedStat}: ${playerValue} to ${opponentValue}. Certified loaf victory.`; }
+      else if (opponentValue > playerValue) { state.opponentScore += 1; state.lastWinner = "opponent"; battleResult.textContent = `${opponent.name} wins with ${state.selectedStat}: ${opponentValue} to ${playerValue}. The opponent loaf was too powerful.`; }
+      else { state.lastWinner = "tie"; battleResult.textContent = `Tie! Both Goobers scored ${playerValue} in ${state.selectedStat}. Equal loaf energy.`; }
+      renderAll();
+    }
+
+    async function createRoom() {
+      showError("");
+      const response = await fetch("/api/card-battle/create", { method: "POST", cache: "no-store" });
+      const result = await response.json();
+      if (!response.ok) { showError(result.error || "Could not create room."); return; }
+      history.replaceState(null, "", `/goober-cards/?room=${result.roomCode}`);
+      connectRoom(result.roomCode);
+    }
+
+    function connectRoom(roomCode) {
+      if (!roomCode) return;
+      if (state.socket) state.socket.close();
+      const protocol = location.protocol === "https:" ? "wss" : "ws";
+      const name = encodeURIComponent(playerNameInput.value.trim() || "Goober Player");
+      const socket = new WebSocket(`${protocol}://${location.host}/api/card-battle/${encodeURIComponent(roomCode)}/socket?name=${name}`);
+      state.socket = socket;
+      state.roomCode = roomCode;
+      state.online = true;
+      onlineStatus.innerHTML = `Connecting to room <span class="room-code">${roomCode}</span>...`;
+      copyRoomLinkBtn.hidden = false;
+      socket.addEventListener("open", () => { onlineStatus.innerHTML = `Connected to room <span class="room-code">${roomCode}</span>. Share the link with Player 2.`; battleModeLabel.textContent = "Online mode: both players choose cards. The server rolls the die."; });
+      socket.addEventListener("message", (event) => {
+        const message = JSON.parse(event.data);
+        if (message.type === "joined") { state.playerId = message.playerId; onlineStatus.innerHTML = `Room <span class="room-code">${message.roomCode}</span>. You are ${message.playerId === "p1" ? "Player 1" : message.playerId === "p2" ? "Player 2" : "a spectator"}.`; }
+        if (message.type === "state") { applyRoomState(message.room); }
+        if (message.type === "error") showError(message.message || "Room error.");
+      });
+      socket.addEventListener("close", () => { onlineStatus.textContent = "Disconnected from online room. Solo mode is active until you rejoin."; state.online = false; state.room = null; renderAll(); });
+      socket.addEventListener("error", () => showError("Could not connect to the online room. Check Worker/Durable Object deployment."));
+    }
+
+    function applyRoomState(room) {
+      state.room = room;
+      state.selectedStat = room.selectedStat;
+      state.round = room.round || 0;
+      state.playerScore = room.scores?.[state.playerId] || 0;
+      const other = state.playerId === "p1" ? "p2" : "p1";
+      state.opponentScore = room.scores?.[other] || 0;
+      state.lastWinner = room.lastWinner === state.playerId ? "player" : room.lastWinner === other ? "opponent" : room.lastWinner;
+      battleResult.textContent = room.lastResult || "Online room is ready.";
+      if (room.selectedStat) { const idx = statNames.indexOf(room.selectedStat); statDie.textContent = dieFaces[idx] || "🎲"; dieText.textContent = `The server die chose ${room.selectedStat}.`; }
+      else { statDie.textContent = "?"; dieText.textContent = "Waiting for both players to play cards, then roll the server die."; }
       renderAll();
     }
 
     function renderAll() {
-      const player = getPlayer();
-      const opponent = getOpponent();
+      let player = state.online ? getOnlinePlayerCard() : getPlayer();
+      let opponent = state.online ? getOnlineOpponentCard() : getOpponent();
       const playerOutcome = state.lastWinner === "player" ? "winner" : state.lastWinner === "opponent" ? "loser" : "";
       const opponentOutcome = state.lastWinner === "opponent" ? "winner" : state.lastWinner === "player" ? "loser" : "";
-      if (player) playerMount.innerHTML = cardHtml(player, "Player Goober", playerOutcome);
-      if (opponent) opponentMount.innerHTML = cardHtml(opponent, "Opponent Goober", opponentOutcome);
+      playerMount.innerHTML = cardHtml(player, state.online ? "Your Card" : "Player Goober", playerOutcome);
+      opponentMount.innerHTML = cardHtml(opponent, state.online ? "Opponent Card" : "Opponent Goober", opponentOutcome);
       playerScoreEl.textContent = state.playerScore;
       opponentScoreEl.textContent = state.opponentScore;
       roundCountEl.textContent = state.round;
@@ -345,24 +416,19 @@
 
     rollBattleBtn.addEventListener("click", rollDieAndBattle);
     newBattleBtn.addEventListener("click", () => { drawNewOpponent(); renderAll(); });
-    randomPlayerBtn.addEventListener("click", () => { if (state.filtered.length) state.selectedIndex = Math.floor(Math.random() * state.filtered.length); drawNewOpponent(); renderAll(); });
-    resetScoreBtn.addEventListener("click", () => { state.playerScore = 0; state.opponentScore = 0; state.round = 0; state.selectedStat = null; state.lastWinner = null; statDie.textContent = "?"; dieText.textContent = "Score reset. Roll the die to battle again."; battleResult.textContent = "Score reset. Draw cards and roll the die."; renderAll(); });
+    randomPlayerBtn.addEventListener("click", () => { if (state.filtered.length) state.selectedIndex = Math.floor(Math.random() * state.filtered.length); playSelectedCard(); });
+    resetScoreBtn.addEventListener("click", () => { if (state.online) { sendRoom("resetScore"); return; } state.playerScore = 0; state.opponentScore = 0; state.round = 0; state.selectedStat = null; state.lastWinner = null; statDie.textContent = "?"; dieText.textContent = "Score reset. Roll the die to battle again."; battleResult.textContent = "Score reset. Draw cards and roll the die."; renderAll(); });
     cardSearch.addEventListener("input", () => { state.selectedIndex = 0; applyFilters(); });
     rarityFilter.addEventListener("change", () => { state.selectedIndex = 0; applyFilters(); });
+    createRoomBtn.addEventListener("click", createRoom);
+    joinRoomBtn.addEventListener("click", () => connectRoom(joinRoomCode.value.trim().toUpperCase()));
+    joinRoomCode.addEventListener("keydown", (event) => { if (event.key === "Enter") connectRoom(joinRoomCode.value.trim().toUpperCase()); });
+    copyRoomLinkBtn.addEventListener("click", async () => { const url = `${location.origin}/goober-cards/?room=${state.roomCode}`; await navigator.clipboard.writeText(url).catch(() => null); onlineStatus.innerHTML = `Copied room link for <span class="room-code">${state.roomCode}</span>.`; });
 
     document.querySelectorAll(".nav-dropdown-toggle").forEach((button) => {
-      button.addEventListener("click", (event) => {
-        event.preventDefault();
-        const dropdown = button.closest(".nav-dropdown");
-        const isOpen = dropdown.classList.toggle("open");
-        button.setAttribute("aria-expanded", String(isOpen));
-      });
+      button.addEventListener("click", (event) => { event.preventDefault(); const dropdown = button.closest(".nav-dropdown"); const isOpen = dropdown.classList.toggle("open"); button.setAttribute("aria-expanded", String(isOpen)); });
     });
-    document.addEventListener("click", (event) => {
-      document.querySelectorAll(".nav-dropdown.open").forEach((dropdown) => {
-        if (!dropdown.contains(event.target)) dropdown.classList.remove("open");
-      });
-    });
+    document.addEventListener("click", (event) => { document.querySelectorAll(".nav-dropdown.open").forEach((dropdown) => { if (!dropdown.contains(event.target)) dropdown.classList.remove("open"); }); });
 
     loadGoobers();
   </script>
