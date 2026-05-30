@@ -54,8 +54,10 @@ export class CardBattleRoom {
       scores: { p1: 0, p2: 0 },
       round: 0,
       selectedStat: null,
-      lastResult: "Waiting for players to join the Goober battle room.",
+      lastResult: "Waiting for players to join the Goober Cards room.",
       lastWinner: null,
+      lastDamage: 0,
+      knockout: false,
       status: "waiting"
     };
   }
@@ -87,8 +89,8 @@ export class CardBattleRoom {
       id: playerId,
       name: playerName,
       connected: true,
-      hand: this.room.players[playerId]?.hand || [],
-      card: this.room.players[playerId]?.card || null
+      hand: normalizeHand(this.room.players[playerId]?.hand || []),
+      card: this.room.players[playerId]?.card ? addCardHealth(this.room.players[playerId].card) : null
     };
 
     this.updateStatus();
@@ -129,6 +131,12 @@ export class CardBattleRoom {
         scores: stored.scores || { p1: 0, p2: 0 }
       };
       this.room.roomCode = this.room.roomCode || roomCode;
+      for (const player of ["p1", "p2"]) {
+        if (this.room.players[player]) {
+          this.room.players[player].hand = normalizeHand(this.room.players[player].hand || []);
+          this.room.players[player].card = this.room.players[player].card ? addCardHealth(this.room.players[player].card) : null;
+        }
+      }
       return;
     }
 
@@ -176,7 +184,9 @@ export class CardBattleRoom {
       this.room.players.p2.card = null;
       this.room.selectedStat = null;
       this.room.lastWinner = null;
-      this.room.lastResult = "New hands dealt. Each player has three Goober cards.";
+      this.room.lastDamage = 0;
+      this.room.knockout = false;
+      this.room.lastResult = "Fresh hands dealt. Each player has three Goober cards.";
     }
   }
 
@@ -189,7 +199,7 @@ export class CardBattleRoom {
         ORDER BY created_at DESC
       `).all();
 
-      const deck = (result.results || []).map((row) => ({
+      const deck = (result.results || []).map((row) => addCardHealth({
         id: row.id,
         name: row.name,
         category: row.category,
@@ -202,13 +212,13 @@ export class CardBattleRoom {
       console.error("Could not load Goober deck", error);
     }
 
-    return [{
+    return [addCardHealth({
       id: "fallback-original-goober",
       name: "Original Goober",
       category: "classic",
       description: "The original loaf-sitting Goober.",
       imageUrl: "/assets/original-goober.jpg"
-    }];
+    })];
   }
 
   async handleMessage(socket, data) {
@@ -234,6 +244,10 @@ export class CardBattleRoom {
         throw new Error("Only Player 1 and Player 2 can play cards.");
       }
 
+      if (this.room.knockout) {
+        throw new Error("A Goober has been knocked out. Deal new hands before playing another card.");
+      }
+
       await this.ensureHands();
       const cardId = cleanText(message.cardId, 120);
       const hand = this.room.players[session.playerId].hand || [];
@@ -243,9 +257,10 @@ export class CardBattleRoom {
         throw new Error("That card is not in your three-card hand.");
       }
 
-      this.room.players[session.playerId].card = card;
+      this.room.players[session.playerId].card = addCardHealth(card, FULL_CARD_HP);
       this.room.selectedStat = null;
       this.room.lastWinner = null;
+      this.room.lastDamage = 0;
       this.room.lastResult = `${this.room.players[session.playerId].name} played ${card.name}.`;
     }
 
@@ -254,6 +269,9 @@ export class CardBattleRoom {
     }
 
     if (message.type === "newRound") {
+      if (!this.room.knockout && this.room.players.p1?.card && this.room.players.p2?.card) {
+        throw new Error("New cards are locked until one Goober is knocked out.");
+      }
       await this.ensureHands(true);
     }
 
@@ -273,29 +291,52 @@ export class CardBattleRoom {
     const p1 = this.room.players.p1;
     const p2 = this.room.players.p2;
 
+    if (this.room.knockout) {
+      throw new Error("A Goober has been knocked out. Deal new hands for the next round.");
+    }
+
     if (!p1?.card || !p2?.card) {
       throw new Error("Both players need to play one card from their hand before rolling.");
     }
+
+    p1.card = addCardHealth(p1.card);
+    p2.card = addCardHealth(p2.card);
 
     const statIndex = cryptoRandomInt(0, CARD_STATS.length - 1);
     const stat = CARD_STATS[statIndex];
     const p1Value = getCardStats(p1.card)[stat];
     const p2Value = getCardStats(p2.card)[stat];
+    const difference = Math.abs(p1Value - p2Value);
+    const damage = calculateDamage(difference);
 
     this.room.selectedStat = stat;
     this.room.round += 1;
+    this.room.lastDamage = damage;
 
     if (p1Value > p2Value) {
-      this.room.scores.p1 += 1;
+      p2.card.hp = Math.max(0, p2.card.hp - damage);
       this.room.lastWinner = "p1";
-      this.room.lastResult = `${p1.name} wins with ${stat}: ${p1Value} to ${p2Value}. Certified loaf victory.`;
+      if (p2.card.hp <= 0) {
+        this.room.knockout = true;
+        this.room.scores.p1 += 1;
+        this.room.lastResult = `${p1.name} wins with ${stat}: ${p1Value} to ${p2Value}. ${p2.card.name} loses ${damage} HP and is knocked out!`;
+      } else {
+        this.room.lastResult = `${p1.name} wins with ${stat}: ${p1Value} to ${p2Value}. ${p2.card.name} loses ${damage} HP.`;
+      }
     } else if (p2Value > p1Value) {
-      this.room.scores.p2 += 1;
+      p1.card.hp = Math.max(0, p1.card.hp - damage);
       this.room.lastWinner = "p2";
-      this.room.lastResult = `${p2.name} wins with ${stat}: ${p2Value} to ${p1Value}. The opponent loaf was too powerful.`;
+      if (p1.card.hp <= 0) {
+        this.room.knockout = true;
+        this.room.scores.p2 += 1;
+        this.room.lastResult = `${p2.name} wins with ${stat}: ${p2Value} to ${p1Value}. ${p1.card.name} loses ${damage} HP and is knocked out!`;
+      } else {
+        this.room.lastResult = `${p2.name} wins with ${stat}: ${p2Value} to ${p1Value}. ${p1.card.name} loses ${damage} HP.`;
+      }
     } else {
       this.room.lastWinner = "tie";
-      this.room.lastResult = `Tie! Both Goobers scored ${p1Value} in ${stat}. Equal loaf energy.`;
+      this.room.lastDamage = 0;
+      this.room.lastResult = `Tie! Both Goobers scored ${p1Value} in ${stat}. No HP lost.`;
     }
   }
 
@@ -310,6 +351,8 @@ export class CardBattleRoom {
         selectedStat: this.room.selectedStat,
         lastResult: this.room.lastResult,
         lastWinner: this.room.lastWinner,
+        lastDamage: this.room.lastDamage,
+        knockout: this.room.knockout,
         status: this.room.status
       }
     };
@@ -346,6 +389,7 @@ const ALLOWED_CATEGORIES = new Set([
   "random"
 ]);
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const FULL_CARD_HP = 100;
 const CARD_STATS = ["Loaf Level", "Snoot Power", "Chaos", "Sit Strength", "Goober Aura"];
 const NO_STORE_HEADERS = {
   "cache-control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
@@ -392,18 +436,35 @@ function getRoomCodeFromPath(pathname) {
 }
 
 function dealHands(deck, handSize = 3) {
-  const pool = [...deck];
+  const pool = [...deck].map((card) => addCardHealth(card, FULL_CARD_HP));
   shuffle(pool);
 
   const needed = handSize * 2;
   while (pool.length < needed) {
-    pool.push(...deck.map((card) => ({ ...card })));
+    pool.push(...deck.map((card) => addCardHealth(card, FULL_CARD_HP)));
   }
 
   return {
     p1: pool.slice(0, handSize),
     p2: pool.slice(handSize, handSize * 2)
   };
+}
+
+function normalizeHand(hand) {
+  return Array.isArray(hand) ? hand.map((card) => addCardHealth(card, FULL_CARD_HP)) : [];
+}
+
+function addCardHealth(card, defaultHp = FULL_CARD_HP) {
+  const hp = Number.isFinite(Number(card?.hp)) ? Math.max(0, Math.min(FULL_CARD_HP, Number(card.hp))) : defaultHp;
+  return {
+    ...card,
+    hp,
+    maxHp: FULL_CARD_HP
+  };
+}
+
+function calculateDamage(difference) {
+  return Math.max(12, Math.min(38, Math.ceil(difference / 2) + 8));
 }
 
 function shuffle(items) {
