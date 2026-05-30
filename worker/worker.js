@@ -15,6 +15,14 @@ export default {
         return await uploadGoober(request, env);
       }
 
+      if (url.pathname === "/api/card-battle/create" && request.method === "POST") {
+        return await createCardBattleRoom(env);
+      }
+
+      if (url.pathname.startsWith("/api/card-battle/") && request.method === "GET") {
+        return await routeCardBattleRoom(request, env);
+      }
+
       if (url.pathname.startsWith("/api/goobers/") && request.method === "DELETE") {
         return await deleteGoober(request, env);
       }
@@ -31,6 +39,235 @@ export default {
   }
 };
 
+export class CardBattleRoom {
+  constructor(state, env) {
+    this.state = state;
+    this.env = env;
+    this.sessions = new Map();
+    this.room = {
+      roomCode: "",
+      players: {},
+      scores: { p1: 0, p2: 0 },
+      round: 0,
+      selectedStat: null,
+      lastResult: "Waiting for players to join the Goober battle room.",
+      lastWinner: null,
+      status: "waiting"
+    };
+  }
+
+  async fetch(request) {
+    const url = new URL(request.url);
+    const roomCode = getRoomCodeFromPath(url.pathname);
+
+    if (!roomCode) {
+      return jsonResponse({ error: "Room code is required." }, 400, NO_STORE_HEADERS);
+    }
+
+    await this.loadRoom(roomCode);
+
+    if (request.headers.get("upgrade") !== "websocket") {
+      return jsonResponse({ error: "Expected WebSocket upgrade." }, 426, NO_STORE_HEADERS);
+    }
+
+    const pair = new WebSocketPair();
+    const [client, server] = Object.values(pair);
+    const playerId = this.assignPlayerId(url.searchParams.get("playerId"));
+    const playerName = cleanText(url.searchParams.get("name"), 40) || `Player ${playerId === "p1" ? "1" : "2"}`;
+
+    server.accept();
+    this.sessions.set(server, { playerId });
+    this.room.players[playerId] = {
+      ...(this.room.players[playerId] || {}),
+      id: playerId,
+      name: playerName,
+      connected: true
+    };
+    this.updateStatus();
+    await this.saveRoom();
+
+    server.addEventListener("message", async (event) => {
+      await this.handleMessage(server, event.data).catch((error) => {
+        console.error(error);
+        this.send(server, { type: "error", message: error.message || "Room error." });
+      });
+    });
+
+    server.addEventListener("close", async () => {
+      const session = this.sessions.get(server);
+      this.sessions.delete(server);
+      if (session?.playerId && this.room.players[session.playerId]) {
+        this.room.players[session.playerId].connected = false;
+        this.updateStatus();
+        await this.saveRoom();
+        this.broadcastState();
+      }
+    });
+
+    this.send(server, { type: "joined", roomCode, playerId });
+    this.broadcastState();
+
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  async loadRoom(roomCode) {
+    const stored = await this.state.storage.get("room");
+    if (stored) {
+      this.room = stored;
+      this.room.roomCode = this.room.roomCode || roomCode;
+      return;
+    }
+
+    this.room.roomCode = roomCode;
+    await this.saveRoom();
+  }
+
+  async saveRoom() {
+    await this.state.storage.put("room", this.room);
+  }
+
+  assignPlayerId(requested) {
+    if ((requested === "p1" || requested === "p2") && (!this.room.players[requested]?.connected || this.room.players[requested])) {
+      return requested;
+    }
+
+    if (!this.room.players.p1?.connected) return "p1";
+    if (!this.room.players.p2?.connected) return "p2";
+    return `spectator-${crypto.randomUUID().slice(0, 6)}`;
+  }
+
+  updateStatus() {
+    const hasP1 = Boolean(this.room.players.p1);
+    const hasP2 = Boolean(this.room.players.p2);
+    this.room.status = hasP1 && hasP2 ? "ready" : "waiting";
+  }
+
+  async handleMessage(socket, data) {
+    let message;
+    try {
+      message = JSON.parse(data);
+    } catch {
+      throw new Error("Invalid room message.");
+    }
+
+    const session = this.sessions.get(socket);
+    if (!session) throw new Error("Session not found.");
+
+    if (message.type === "setName") {
+      const name = cleanText(message.name, 40);
+      if (name && this.room.players[session.playerId]) {
+        this.room.players[session.playerId].name = name;
+      }
+    }
+
+    if (message.type === "selectCard") {
+      const card = sanitizeCard(message.card);
+      if (!card) throw new Error("Choose a Goober card first.");
+      if (!this.room.players[session.playerId] || session.playerId.startsWith("spectator")) {
+        throw new Error("Only Player 1 and Player 2 can choose cards.");
+      }
+      this.room.players[session.playerId].card = card;
+      this.room.selectedStat = null;
+      this.room.lastWinner = null;
+      this.room.lastResult = `${this.room.players[session.playerId].name} played ${card.name}.`;
+    }
+
+    if (message.type === "drawRandomOpponent") {
+      const target = session.playerId === "p1" ? "p2" : "p1";
+      const card = sanitizeCard(message.card);
+      if (card && this.room.players[target] && !this.room.players[target].card) {
+        this.room.players[target].card = card;
+        this.room.lastResult = `${this.room.players[target].name} drew a random Goober card.`;
+      }
+    }
+
+    if (message.type === "roll") {
+      this.rollBattle();
+    }
+
+    if (message.type === "newRound") {
+      this.room.players.p1 && (this.room.players.p1.card = null);
+      this.room.players.p2 && (this.room.players.p2.card = null);
+      this.room.selectedStat = null;
+      this.room.lastWinner = null;
+      this.room.lastResult = "New round. Both players should play a Goober card.";
+    }
+
+    if (message.type === "resetScore") {
+      this.room.scores = { p1: 0, p2: 0 };
+      this.room.round = 0;
+      this.room.selectedStat = null;
+      this.room.lastWinner = null;
+      this.room.lastResult = "Score reset. Play cards and roll the stat die.";
+    }
+
+    this.updateStatus();
+    await this.saveRoom();
+    this.broadcastState();
+  }
+
+  rollBattle() {
+    const p1 = this.room.players.p1;
+    const p2 = this.room.players.p2;
+
+    if (!p1?.card || !p2?.card) {
+      throw new Error("Both players need to play a card before rolling.");
+    }
+
+    const statIndex = cryptoRandomInt(0, CARD_STATS.length - 1);
+    const stat = CARD_STATS[statIndex];
+    const p1Value = getCardStats(p1.card)[stat];
+    const p2Value = getCardStats(p2.card)[stat];
+
+    this.room.selectedStat = stat;
+    this.room.round += 1;
+
+    if (p1Value > p2Value) {
+      this.room.scores.p1 += 1;
+      this.room.lastWinner = "p1";
+      this.room.lastResult = `${p1.name} wins with ${stat}: ${p1Value} to ${p2Value}. Certified loaf victory.`;
+    } else if (p2Value > p1Value) {
+      this.room.scores.p2 += 1;
+      this.room.lastWinner = "p2";
+      this.room.lastResult = `${p2.name} wins with ${stat}: ${p2Value} to ${p1Value}. The opponent loaf was too powerful.`;
+    } else {
+      this.room.lastWinner = "tie";
+      this.room.lastResult = `Tie! Both Goobers scored ${p1Value} in ${stat}. Equal loaf energy.`;
+    }
+  }
+
+  getPublicState() {
+    return {
+      type: "state",
+      room: {
+        roomCode: this.room.roomCode,
+        players: this.room.players,
+        scores: this.room.scores,
+        round: this.room.round,
+        selectedStat: this.room.selectedStat,
+        lastResult: this.room.lastResult,
+        lastWinner: this.room.lastWinner,
+        status: this.room.status
+      }
+    };
+  }
+
+  broadcastState() {
+    const payload = this.getPublicState();
+    for (const socket of this.sessions.keys()) {
+      this.send(socket, payload);
+    }
+  }
+
+  send(socket, payload) {
+    try {
+      socket.send(JSON.stringify(payload));
+    } catch (error) {
+      console.error("WebSocket send failed", error);
+    }
+  }
+}
+
 const ALLOWED_CATEGORIES = new Set([
   "classic",
   "costume",
@@ -46,6 +283,7 @@ const ALLOWED_CATEGORIES = new Set([
   "random"
 ]);
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const CARD_STATS = ["Loaf Level", "Snoot Power", "Chaos", "Sit Strength", "Goober Aura"];
 const NO_STORE_HEADERS = {
   "cache-control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
   "pragma": "no-cache",
@@ -54,6 +292,89 @@ const NO_STORE_HEADERS = {
   "cdn-cache-control": "no-store",
   "cloudflare-cdn-cache-control": "no-store"
 };
+
+async function createCardBattleRoom(env) {
+  const roomCode = createRoomCode();
+  const id = env.CARD_BATTLE_ROOMS.idFromName(roomCode);
+  const stub = env.CARD_BATTLE_ROOMS.get(id);
+  await stub.fetch(`https://room.local/api/card-battle/${roomCode}/socket`, {
+    headers: { upgrade: "websocket" }
+  }).catch(() => null);
+
+  return jsonResponse({ roomCode, url: `/goober-cards/?room=${roomCode}` }, 201, NO_STORE_HEADERS);
+}
+
+async function routeCardBattleRoom(request, env) {
+  if (!env.CARD_BATTLE_ROOMS) {
+    return jsonResponse({ error: "Card battle rooms are not configured." }, 500, NO_STORE_HEADERS);
+  }
+
+  const roomCode = getRoomCodeFromPath(new URL(request.url).pathname);
+  if (!roomCode) {
+    return jsonResponse({ error: "Room code is required." }, 400, NO_STORE_HEADERS);
+  }
+
+  const id = env.CARD_BATTLE_ROOMS.idFromName(roomCode);
+  return env.CARD_BATTLE_ROOMS.get(id).fetch(request);
+}
+
+function createRoomCode() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "";
+  const bytes = new Uint8Array(6);
+  crypto.getRandomValues(bytes);
+  for (const byte of bytes) {
+    code += alphabet[byte % alphabet.length];
+  }
+  return code;
+}
+
+function getRoomCodeFromPath(pathname) {
+  const match = pathname.match(/^\/api\/card-battle\/([A-Z0-9]{4,12})(?:\/socket)?$/i);
+  return match ? match[1].toUpperCase() : "";
+}
+
+function sanitizeCard(card) {
+  if (!card || typeof card !== "object") return null;
+  const id = cleanText(card.id, 120) || crypto.randomUUID();
+  const name = cleanText(card.name, 80) || "Mystery Goober";
+  const category = cleanText(card.category, 30) || "classic";
+  const description = cleanText(card.description, 280) || "A certified loaf-sitting Goober ready for battle.";
+  const imageUrl = typeof card.imageUrl === "string" && card.imageUrl.startsWith("/api/goober-image/")
+    ? card.imageUrl
+    : "/assets/original-goober.jpg";
+  return { id, name, category, description, imageUrl };
+}
+
+function cryptoRandomInt(min, max) {
+  const range = max - min + 1;
+  const bytes = new Uint32Array(1);
+  crypto.getRandomValues(bytes);
+  return min + (bytes[0] % range);
+}
+
+function hashString(text) {
+  let h = 2166136261;
+  for (let i = 0; i < String(text).length; i++) {
+    h ^= String(text).charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return Math.abs(h >>> 0);
+}
+
+function statFor(card, salt) {
+  return 28 + (hashString(`${card.id || card.name}-${salt}`) % 73);
+}
+
+function getCardStats(card) {
+  return {
+    "Loaf Level": statFor(card, "loaf"),
+    "Snoot Power": statFor(card, "snoot"),
+    "Chaos": statFor(card, "chaos"),
+    "Sit Strength": statFor(card, "sit"),
+    "Goober Aura": statFor(card, "aura")
+  };
+}
 
 async function listGoobers(env) {
   const result = await env.DB.prepare(`
