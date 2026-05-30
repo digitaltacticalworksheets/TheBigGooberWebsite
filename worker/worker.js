@@ -19,18 +19,13 @@ export default {
 
 export class CardBattleRoom {
   constructor(state, env) { this.state = state; this.env = env; this.sessions = new Map(); this.room = this.createEmptyRoom(); }
-
-  createEmptyRoom() {
-    return { roomCode: "", players: {}, scores: { p1: 0, p2: 0 }, round: 0, selectedStat: null, lastResult: "Waiting for players to join the Goober Cards room.", lastWinner: null, lastDamage: 0, lastEvent: null, knockout: false, battleActive: false, status: "waiting" };
-  }
-
+  createEmptyRoom() { return { roomCode: "", players: {}, scores: { p1: 0, p2: 0 }, round: 0, selectedStat: null, lastResult: "Waiting for players to join the Goober Cards room.", lastWinner: null, lastDamage: 0, lastEvent: null, knockout: false, battleActive: false, status: "waiting" }; }
   async fetch(request) {
     const url = new URL(request.url);
     const roomCode = getRoomCodeFromPath(url.pathname);
     if (!roomCode) return jsonResponse({ error: "Room code is required." }, 400, NO_STORE_HEADERS);
     await this.loadRoom(roomCode);
-    if (request.headers.get("upgrade") !== "websocket") return jsonResponse(this.getPublicState().room, 200, NO_STORE_HEADERS);
-
+    if (request.headers.get("upgrade") !== "websocket") return jsonResponse(this.getPublicState("spectator").room, 200, NO_STORE_HEADERS);
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
     const requestedPlayer = url.searchParams.get("playerId") || url.searchParams.get("player");
@@ -39,137 +34,33 @@ export class CardBattleRoom {
     server.accept();
     this.sessions.set(server, { playerId });
     this.room.players[playerId] = { ...(this.room.players[playerId] || {}), id: playerId, name: playerName, connected: true, ready: Boolean(this.room.players[playerId]?.ready), hand: normalizeHand(this.room.players[playerId]?.hand || []), card: this.room.players[playerId]?.card ? addCardHealth(this.room.players[playerId].card) : null };
-    this.updateStatus();
-    await this.ensureHands();
-    await this.saveRoom();
-    server.addEventListener("message", async event => {
-      await this.handleMessage(server, event.data).catch(error => { console.error(error); this.send(server, { type: "error", message: error.message || "Room error." }); });
-    });
-    server.addEventListener("close", async () => {
-      const session = this.sessions.get(server);
-      this.sessions.delete(server);
-      if (session?.playerId && this.room.players[session.playerId]) {
-        this.room.players[session.playerId].connected = false;
-        this.updateStatus();
-        await this.saveRoom();
-        this.broadcastState();
-      }
-    });
-    this.send(server, { type: "joined", roomCode, playerId });
-    this.broadcastState();
+    this.updateStatus(); await this.ensureHands(); await this.saveRoom();
+    server.addEventListener("message", async event => { await this.handleMessage(server, event.data).catch(error => { console.error(error); this.send(server, { type: "error", message: error.message || "Room error." }); }); });
+    server.addEventListener("close", async () => { const session = this.sessions.get(server); this.sessions.delete(server); if (session?.playerId && this.room.players[session.playerId]) { this.room.players[session.playerId].connected = false; this.updateStatus(); await this.saveRoom(); this.broadcastState(); } });
+    this.send(server, { type: "joined", roomCode, playerId }); this.broadcastState();
     return new Response(null, { status: 101, webSocket: client });
   }
-
-  async loadRoom(roomCode) {
-    const stored = await this.state.storage.get("room");
-    if (stored) {
-      this.room = { ...this.createEmptyRoom(), ...stored, players: stored.players || {}, scores: stored.scores || { p1: 0, p2: 0 } };
-      this.room.roomCode = this.room.roomCode || roomCode;
-      for (const id of ["p1", "p2"]) if (this.room.players[id]) this.room.players[id] = { ...this.room.players[id], ready: Boolean(this.room.players[id].ready), hand: normalizeHand(this.room.players[id].hand || []), card: this.room.players[id].card ? addCardHealth(this.room.players[id].card) : null };
-      return;
-    }
-    this.room = this.createEmptyRoom();
-    this.room.roomCode = roomCode;
-    await this.saveRoom();
-  }
-
+  async loadRoom(roomCode) { const stored = await this.state.storage.get("room"); if (stored) { this.room = { ...this.createEmptyRoom(), ...stored, players: stored.players || {}, scores: stored.scores || { p1: 0, p2: 0 } }; this.room.roomCode = this.room.roomCode || roomCode; for (const id of ["p1", "p2"]) if (this.room.players[id]) this.room.players[id] = { ...this.room.players[id], ready: Boolean(this.room.players[id].ready), hand: normalizeHand(this.room.players[id].hand || []), card: this.room.players[id].card ? addCardHealth(this.room.players[id].card) : null }; return; } this.room = this.createEmptyRoom(); this.room.roomCode = roomCode; await this.saveRoom(); }
   async saveRoom() { await this.state.storage.put("room", this.room); }
   assignPlayerId(requested) { if ((requested === "p1" || requested === "p2") && !this.room.players[requested]?.connected) return requested; if (!this.room.players.p1) return "p1"; if (!this.room.players.p2) return "p2"; if (!this.room.players.p2.connected) return "p2"; if (!this.room.players.p1.connected) return "p1"; return `spectator-${crypto.randomUUID().slice(0, 6)}`; }
   updateStatus() { this.room.status = Boolean(this.room.players.p1) && Boolean(this.room.players.p2) ? "ready" : "waiting"; }
-
-  async ensureHands(force = false) {
-    if (!this.room.players.p1 || !this.room.players.p2) return;
-    const p1NeedsHand = force || !Array.isArray(this.room.players.p1.hand) || this.room.players.p1.hand.length === 0;
-    const p2NeedsHand = force || !Array.isArray(this.room.players.p2.hand) || this.room.players.p2.hand.length === 0;
-    if (!p1NeedsHand && !p2NeedsHand) return;
-    const deck = await this.getDeck();
-    const dealt = dealHands(deck, 3);
-    if (p1NeedsHand) this.room.players.p1.hand = dealt.p1;
-    if (p2NeedsHand) this.room.players.p2.hand = dealt.p2;
-    if (force) {
-      for (const id of ["p1", "p2"]) { this.room.players[id].card = null; this.room.players[id].ready = false; }
-      this.room.selectedStat = null; this.room.lastWinner = null; this.room.lastDamage = 0; this.room.lastEvent = "deal"; this.room.knockout = false; this.room.battleActive = false; this.room.lastResult = "Fresh random hands dealt. Pick one card, then both players press Ready.";
-    }
-  }
-
-  async getDeck() {
-    try {
-      const result = await this.env.DB.prepare(`SELECT id, name, category, description, image_key FROM goobers WHERE approved = 1`).all();
-      const deck = (result.results || []).map(row => addCardHealth({ id: row.id, name: row.name, category: row.category, description: row.description, imageUrl: `/api/goober-image/${row.image_key}` }));
-      shuffle(deck);
-      if (deck.length) return deck;
-    } catch (error) { console.error("Could not load Goober deck", error); }
-    return [addCardHealth({ id: "fallback-original-goober", name: "Original Goober", category: "classic", description: "The original loaf-sitting Goober.", imageUrl: "/assets/original-goober.jpg" })];
-  }
-
+  async ensureHands(force = false) { if (!this.room.players.p1 || !this.room.players.p2) return; const p1NeedsHand = force || !Array.isArray(this.room.players.p1.hand) || this.room.players.p1.hand.length === 0; const p2NeedsHand = force || !Array.isArray(this.room.players.p2.hand) || this.room.players.p2.hand.length === 0; if (!p1NeedsHand && !p2NeedsHand) return; const deck = await this.getDeck(); const dealt = dealHands(deck, 3); if (p1NeedsHand) this.room.players.p1.hand = dealt.p1; if (p2NeedsHand) this.room.players.p2.hand = dealt.p2; if (force) { for (const id of ["p1", "p2"]) { this.room.players[id].card = null; this.room.players[id].ready = false; } this.room.selectedStat = null; this.room.lastWinner = null; this.room.lastDamage = 0; this.room.lastEvent = "deal"; this.room.knockout = false; this.room.battleActive = false; this.room.lastResult = "Fresh random hands dealt. Pick one card, then both players press Ready."; } }
+  async getDeck() { try { const result = await this.env.DB.prepare(`SELECT id, name, category, description, image_key FROM goobers WHERE approved = 1`).all(); const deck = (result.results || []).map(row => addCardHealth({ id: row.id, name: row.name, category: row.category, description: row.description, imageUrl: `/api/goober-image/${row.image_key}` })); shuffle(deck); if (deck.length) return deck; } catch (error) { console.error("Could not load Goober deck", error); } return [addCardHealth({ id: "fallback-original-goober", name: "Original Goober", category: "classic", description: "The original loaf-sitting Goober.", imageUrl: "/assets/original-goober.jpg" })]; }
   async handleMessage(socket, data) {
-    let message;
-    try { message = JSON.parse(data); } catch { throw new Error("Invalid room message."); }
-    const session = this.sessions.get(socket);
-    if (!session) throw new Error("Session not found.");
-    const player = this.room.players[session.playerId];
-
+    let message; try { message = JSON.parse(data); } catch { throw new Error("Invalid room message."); }
+    const session = this.sessions.get(socket); if (!session) throw new Error("Session not found."); const player = this.room.players[session.playerId];
     if (message.type === "setName") { const name = cleanText(message.name, 40); if (name && player) player.name = name; }
-    if (message.type === "playCard") {
-      if (!player || session.playerId.startsWith("spectator")) throw new Error("Only Player 1 and Player 2 can play cards.");
-      if (this.room.battleActive || this.room.knockout) throw new Error("Cards are locked while battle is active or after knockout.");
-      await this.ensureHands();
-      const cardId = cleanText(message.cardId, 120);
-      const card = (player.hand || []).find(candidate => candidate.id === cardId);
-      if (!card) throw new Error("That card is not in your hand.");
-      player.card = addCardHealth(card);
-      player.ready = false;
-      this.room.selectedStat = null; this.room.lastWinner = null; this.room.lastDamage = 0; this.room.lastEvent = "play"; this.room.lastResult = `${player.name} chose ${card.name}. Waiting for both players to press Ready.`;
-    }
-    if (message.type === "ready") {
-      if (!player || session.playerId.startsWith("spectator")) throw new Error("Only players can ready up.");
-      if (!player.card) throw new Error("Choose a card before pressing Ready.");
-      if (this.room.knockout) throw new Error("Deal a new battle before readying up.");
-      player.ready = true;
-      this.room.lastEvent = "ready";
-      if (this.room.players.p1?.ready && this.room.players.p2?.ready && this.room.players.p1?.card && this.room.players.p2?.card) {
-        this.room.battleActive = true;
-        this.room.lastResult = "Both players are ready. Auto-battle has started!";
-      } else {
-        this.room.lastResult = `${player.name} is ready. Waiting for the other player.`;
-      }
-    }
-    if (message.type === "roll") this.rollBattle();
-    if (message.type === "newRound") {
-      if (!this.room.knockout && this.room.players.p1?.card && this.room.players.p2?.card && this.room.battleActive) throw new Error("Battle is still running.");
-      await this.ensureHands(true);
-    }
+    if (message.type === "playCard") { if (!player || session.playerId.startsWith("spectator")) throw new Error("Only Player 1 and Player 2 can play cards."); if (this.room.battleActive || this.room.knockout) throw new Error("Cards are locked while battle is active or after knockout."); await this.ensureHands(); const cardId = cleanText(message.cardId, 120); const card = (player.hand || []).find(candidate => candidate.id === cardId); if (!card) throw new Error("That card is not in your hand."); player.card = addCardHealth(card); player.ready = false; this.room.selectedStat = null; this.room.lastWinner = null; this.room.lastDamage = 0; this.room.lastEvent = "play"; this.room.lastResult = `${player.name} chose a card. Waiting for both players to press Ready.`; }
+    if (message.type === "ready") { if (!player || session.playerId.startsWith("spectator")) throw new Error("Only players can ready up."); if (!player.card) throw new Error("Choose a card before pressing Ready."); if (this.room.knockout) throw new Error("Deal a new battle before readying up."); player.ready = true; this.room.lastEvent = "ready"; if (this.room.players.p1?.ready && this.room.players.p2?.ready && this.room.players.p1?.card && this.room.players.p2?.card) { this.room.battleActive = true; this.room.lastResult = "Both players are ready. Cards are revealed. Player 1 controls the next roll."; } else { this.room.lastResult = `${player.name} is ready. Waiting for the other player.`; } }
+    if (message.type === "roll") { if (session.playerId !== "p1") throw new Error("Player 1 controls the next roll."); this.rollBattle(); }
+    if (message.type === "newRound") { if (!this.room.knockout && this.room.players.p1?.card && this.room.players.p2?.card && this.room.battleActive) throw new Error("Battle is still running."); await this.ensureHands(true); }
     if (message.type === "resetScore") { this.room.scores = { p1: 0, p2: 0 }; this.room.round = 0; await this.ensureHands(true); this.room.lastEvent = "reset"; this.room.lastResult = "Score reset. Fresh random hands were dealt."; }
     this.updateStatus(); await this.saveRoom(); this.broadcastState();
   }
-
-  rollBattle() {
-    const p1 = this.room.players.p1, p2 = this.room.players.p2;
-    if (this.room.knockout) throw new Error("A Goober has been knocked out. Deal new hands for the next round.");
-    if (!p1?.card || !p2?.card) throw new Error("Both players need to choose a card.");
-    if (!p1.ready || !p2.ready || !this.room.battleActive) throw new Error("Both players must press Ready before battle starts.");
-    p1.card = addCardHealth(p1.card); p2.card = addCardHealth(p2.card);
-    const battleStat = BATTLE_STATS[cryptoRandomInt(0, BATTLE_STATS.length - 1)];
-    const matchup = getBattleMatchup(p1.card, p2.card, battleStat);
-    const attackerId = matchup.winnerId, defenderId = attackerId === "p1" ? "p2" : "p1";
-    const attacker = this.room.players[attackerId], defender = this.room.players[defenderId];
-    const result = calculateAttack(attacker.card, defender.card, battleStat, matchup.margin);
-    this.room.selectedStat = battleStat; this.room.round += 1; this.room.lastDamage = result.damage;
-    if (result.dodge) { this.room.lastWinner = "tie"; this.room.lastDamage = 0; this.room.lastEvent = "dodge"; this.room.lastResult = `${battleStat} battle: ${attacker.card.name} won ${matchup.winnerScore} to ${matchup.loserScore}, but ${defender.card.name} dodged the attack.`; return; }
-    defender.card.hp = Math.max(0, defender.card.hp - result.damage);
-    if (result.recoil) attacker.card.hp = Math.max(1, attacker.card.hp - result.recoil);
-    if (result.heal) attacker.card.hp = Math.min(attacker.card.maxHp, attacker.card.hp + result.heal);
-    this.room.lastWinner = attackerId; this.room.lastEvent = result.special.triggered ? "special" : result.crit ? "crit" : result.heal ? "heal" : "hit";
-    let text = `${battleStat} battle: ${attacker.name}'s ${attacker.card.name} won ${matchup.winnerScore} to ${matchup.loserScore}. ${attacker.card.name} hit ${defender.card.name} for ${result.damage} HP${result.crit ? " with a critical goober bonk" : ""}.`;
-    if (result.special.triggered) text += ` SPECIAL HIT: ${attacker.card.specialMove} activated. ${result.special.text}`;
-    if (result.heal && !result.special.triggered) text += ` ${attacker.card.name} healed ${result.heal} HP.`;
-    if (result.recoil) text += ` ${attacker.card.name} took ${result.recoil} recoil HP.`;
-    if (defender.card.hp <= 0) { this.room.knockout = true; this.room.battleActive = false; p1.ready = false; p2.ready = false; this.room.scores[attackerId] += 1; this.room.lastEvent = "knockout"; text += ` ${defender.card.name} is knocked out!`; }
-    this.room.lastDamage = result.damage; this.room.lastResult = text;
-  }
-
-  getPublicState() { return { type: "state", room: { roomCode: this.room.roomCode, players: this.room.players, scores: this.room.scores, round: this.room.round, selectedStat: this.room.selectedStat, lastResult: this.room.lastResult, lastWinner: this.room.lastWinner, lastDamage: this.room.lastDamage, lastEvent: this.room.lastEvent, knockout: this.room.knockout, battleActive: this.room.battleActive, status: this.room.status } }; }
-  broadcastState() { const payload = this.getPublicState(); for (const socket of this.sessions.keys()) this.send(socket, payload); }
+  rollBattle() { const p1 = this.room.players.p1, p2 = this.room.players.p2; if (this.room.knockout) throw new Error("A Goober has been knocked out. Deal new hands for the next round."); if (!p1?.card || !p2?.card) throw new Error("Both players need to choose a card."); if (!p1.ready || !p2.ready || !this.room.battleActive) throw new Error("Both players must press Ready before battle starts."); p1.card = addCardHealth(p1.card); p2.card = addCardHealth(p2.card); const battleStat = BATTLE_STATS[cryptoRandomInt(0, BATTLE_STATS.length - 1)]; const matchup = getBattleMatchup(p1.card, p2.card, battleStat); const attackerId = matchup.winnerId, defenderId = attackerId === "p1" ? "p2" : "p1"; const attacker = this.room.players[attackerId], defender = this.room.players[defenderId]; const result = calculateAttack(attacker.card, defender.card, battleStat, matchup.margin); this.room.selectedStat = battleStat; this.room.round += 1; this.room.lastDamage = result.damage; if (result.dodge) { this.room.lastWinner = "tie"; this.room.lastDamage = 0; this.room.lastEvent = "dodge"; this.room.lastResult = `${battleStat} battle: ${attacker.card.name} won ${matchup.winnerScore} to ${matchup.loserScore}, but ${defender.card.name} dodged the attack. Player 1 controls the next roll.`; return; } defender.card.hp = Math.max(0, defender.card.hp - result.damage); if (result.recoil) attacker.card.hp = Math.max(1, attacker.card.hp - result.recoil); if (result.heal) attacker.card.hp = Math.min(attacker.card.maxHp, attacker.card.hp + result.heal); this.room.lastWinner = attackerId; this.room.lastEvent = result.special.triggered ? "special" : result.crit ? "crit" : result.heal ? "heal" : "hit"; let text = `${battleStat} battle: ${attacker.name}'s ${attacker.card.name} won ${matchup.winnerScore} to ${matchup.loserScore}. ${attacker.card.name} hit ${defender.card.name} for ${result.damage} HP${result.crit ? " with a critical goober bonk" : ""}.`; if (result.special.triggered) text += ` SPECIAL HIT: ${attacker.card.specialMove} activated. ${result.special.text}`; if (result.heal && !result.special.triggered) text += ` ${attacker.card.name} healed ${result.heal} HP.`; if (result.recoil) text += ` ${attacker.card.name} took ${result.recoil} recoil HP.`; if (defender.card.hp <= 0) { this.room.knockout = true; this.room.battleActive = false; p1.ready = false; p2.ready = false; this.room.scores[attackerId] += 1; this.room.lastEvent = "knockout"; text += ` ${defender.card.name} is knocked out!`; } else { text += " Player 1 controls the next roll."; } this.room.lastDamage = result.damage; this.room.lastResult = text; }
+  getPublicState(viewerId = "spectator") { return { type: "state", room: this.getRoomView(viewerId) }; }
+  getRoomView(viewerId = "spectator") { const reveal = Boolean(this.room.battleActive || this.room.knockout || (this.room.players.p1?.ready && this.room.players.p2?.ready)); const players = {}; for (const id of ["p1", "p2"]) { const player = this.room.players[id]; if (!player) continue; const isViewer = viewerId === id; players[id] = { ...player, hand: isViewer ? player.hand : (player.hand || []).map((_, i) => hiddenCard(`${id}-hand-${i}`, "Hidden Card")), card: player.card && (reveal || isViewer) ? player.card : player.card ? hiddenCard(`${id}-chosen`, "Chosen Card") : null }; } return { roomCode: this.room.roomCode, players, scores: this.room.scores, round: this.room.round, selectedStat: this.room.selectedStat, lastResult: this.room.lastResult, lastWinner: this.room.lastWinner, lastDamage: this.room.lastDamage, lastEvent: this.room.lastEvent, knockout: this.room.knockout, battleActive: this.room.battleActive, status: this.room.status }; }
+  broadcastState() { for (const [socket, session] of this.sessions.entries()) this.send(socket, this.getPublicState(session?.playerId || "spectator")); }
   send(socket, payload) { try { socket.send(JSON.stringify(payload)); } catch (error) { console.error("WebSocket send failed", error); } }
 }
 
@@ -185,7 +76,8 @@ function createRoomCode() { const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 function getRoomCodeFromPath(pathname) { const match = pathname.match(/^\/api\/card-battle\/([A-Z0-9]{4,12})(?:\/socket)?$/i); return match ? match[1].toUpperCase() : ""; }
 function dealHands(deck, handSize = 3) { const pool = [...deck].map(card => addCardHealth(card)); shuffle(pool); const needed = handSize * 2; while (pool.length < needed) pool.push(...deck.map(card => addCardHealth(card))); return { p1: pool.slice(0, handSize), p2: pool.slice(handSize, handSize * 2) }; }
 function normalizeHand(hand) { return Array.isArray(hand) ? hand.map(card => addCardHealth(card)) : []; }
-function addCardHealth(card) { const safeCard = card || { id: "fallback-original-goober", name: "Original Goober", category: "classic", description: "The original loaf-sitting Goober.", imageUrl: "/assets/original-goober.jpg" }; const maxHp = Number(safeCard.maxHp) || maxHpFor(safeCard); const hp = Number.isFinite(Number(safeCard.hp)) ? Math.max(0, Math.min(maxHp, Number(safeCard.hp))) : maxHp; const role = getRole(safeCard); return { ...safeCard, hp, maxHp, role, specialMove: ROLE_TEMPLATES[role]?.move || "Goober Move" }; }
+function hiddenCard(id, name = "Hidden Card") { return addCardHealth({ id: `hidden-${id}`, name, category: "hidden", description: "This card is hidden until both players are ready.", imageUrl: "/assets/original-goober.jpg", role: "Balanced", specialMove: "Secret Move" }); }
+function addCardHealth(card) { const safeCard = card || { id: "fallback-original-goober", name: "Original Goober", category: "classic", description: "The original loaf-sitting Goober.", imageUrl: "/assets/original-goober.jpg" }; const maxHp = Number(safeCard.maxHp) || maxHpFor(safeCard); const hp = Number.isFinite(Number(safeCard.hp)) ? Math.max(0, Math.min(maxHp, Number(safeCard.hp))) : maxHp; const role = getRole(safeCard); return { ...safeCard, hp, maxHp, role, specialMove: safeCard.specialMove || ROLE_TEMPLATES[role]?.move || "Goober Move" }; }
 function getBattleMatchup(p1Card, p2Card, battleStat) { const p1Stats = getCardStats(p1Card), p2Stats = getCardStats(p2Card); const p1Score = Math.round(p1Stats[battleStat] + cryptoRandomFloat() * Math.max(2, p1Stats.Luck * 0.45)); const p2Score = Math.round(p2Stats[battleStat] + cryptoRandomFloat() * Math.max(2, p2Stats.Luck * 0.45)); let winnerId = p1Score >= p2Score ? "p1" : "p2"; if (p1Score === p2Score) winnerId = p1Stats.Speed >= p2Stats.Speed ? "p1" : "p2"; return { winnerId, p1Score, p2Score, winnerScore: winnerId === "p1" ? p1Score : p2Score, loserScore: winnerId === "p1" ? p2Score : p1Score, margin: Math.abs(p1Score - p2Score) }; }
 function calculateAttack(attacker, defender, battleStat = "Attack", margin = 0) { const a = getCardStats(attacker), d = getCardStats(defender); const roll = cryptoRandomFloat() * 100; let dodgeChance = Math.min(28, d.Speed * 0.75 + d.Luck * 0.55), critChance = Math.min(32, a.Luck * 1.2); if (battleStat === "Speed") dodgeChance += 4; if (battleStat === "Luck") critChance += 7; if (roll < dodgeChance) return { damage: 0, crit: false, dodge: true, heal: 0, recoil: 0, special: { triggered: false, text: "" } }; const crit = roll > 100 - critChance; const statBonus = Math.round(margin * (battleStat === "Attack" ? 1.15 : battleStat === "Defense" ? 0.7 : battleStat === "Speed" ? 0.8 : 0.9)); let damage = Math.max(5, Math.round((a.Attack * 1.35 - d.Defense * 0.68 + 6 + statBonus) * (crit ? 1.75 : 1))); if (battleStat === "Defense") damage = Math.max(5, damage + Math.round(a.Defense * 0.25)); if (attacker.role === "Brawler") damage += 4; if (attacker.role === "Glass Cannon") damage += 6; if (defender.role === "Tank") damage = Math.max(4, damage - 5); let heal = attacker.role === "Healer" && cryptoRandomFloat() < (battleStat === "Luck" ? 0.36 : 0.28) ? Math.max(6, Math.round(a.Luck * 0.8)) : 0; let recoil = 0; const special = rollSpecialAbility(attacker, defender, battleStat, margin); if (special.triggered) { damage += special.bonusDamage || 0; heal += special.heal || 0; recoil += special.recoil || 0; } return { damage, crit, dodge: false, heal, recoil, special }; }
 function rollSpecialAbility(attacker, defender, battleStat, margin) { const a = getCardStats(attacker); const chance = Math.min(42, 18 + a.Luck * 0.9 + (battleStat === "Luck" ? 8 : 0)); if (cryptoRandomFloat() * 100 >= chance) return { triggered: false, text: "", bonusDamage: 0, heal: 0, recoil: 0 }; const role = attacker.role || getRole(attacker); if (role === "Tank") { const heal = Math.max(5, Math.round(a.Defense * 0.3)), bonusDamage = Math.max(3, Math.round(a.Defense * 0.2)); return { triggered: true, bonusDamage, heal, recoil: 0, text: `Loaf Wall added ${bonusDamage} shield damage and restored ${heal} HP.` }; } if (role === "Brawler") { const bonusDamage = Math.max(8, Math.round(a.Attack * 0.45 + margin * 0.5)); return { triggered: true, bonusDamage, heal: 0, recoil: 0, text: `Heavy Bonk smashed for ${bonusDamage} extra HP.` }; } if (role === "Glass Cannon") { const bonusDamage = Math.max(12, Math.round(a.Attack * 0.65)), recoil = Math.max(4, Math.round(bonusDamage * 0.28)); return { triggered: true, bonusDamage, heal: 0, recoil, text: `Chaos Blast exploded for ${bonusDamage} extra HP, but caused ${recoil} recoil HP.` }; } if (role === "Trickster") { const bonusDamage = Math.max(6, Math.round((a.Speed + a.Luck) * 0.35)); return { triggered: true, bonusDamage, heal: 0, recoil: 0, text: `Silly Dodge turned into a counter for ${bonusDamage} extra HP.` }; } if (role === "Healer") { const heal = Math.max(10, Math.round(a.Luck * 1.15 + a.Defense * 0.2)); return { triggered: true, bonusDamage: 0, heal, recoil: 0, text: `Snack Break restored ${heal} HP.` }; } const bonusDamage = Math.max(5, Math.round((a.Attack + a.Speed) * 0.18)), heal = Math.max(3, Math.round(a.Luck * 0.35)); return { triggered: true, bonusDamage, heal, recoil: 0, text: `Reliable Goob added ${bonusDamage} damage and restored ${heal} HP.` }; }
