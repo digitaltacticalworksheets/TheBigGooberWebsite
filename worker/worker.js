@@ -57,6 +57,7 @@ export class CardBattleRoom {
       lastResult: "Waiting for players to join the Goober Cards room.",
       lastWinner: null,
       lastDamage: 0,
+      lastEvent: null,
       knockout: false,
       status: "waiting"
     };
@@ -185,8 +186,9 @@ export class CardBattleRoom {
       this.room.selectedStat = null;
       this.room.lastWinner = null;
       this.room.lastDamage = 0;
+      this.room.lastEvent = "deal";
       this.room.knockout = false;
-      this.room.lastResult = "Fresh hands dealt. Each player has three Goober cards.";
+      this.room.lastResult = "Fresh hands dealt. Each player has three role-based Goober cards.";
     }
   }
 
@@ -257,10 +259,11 @@ export class CardBattleRoom {
         throw new Error("That card is not in your three-card hand.");
       }
 
-      this.room.players[session.playerId].card = addCardHealth(card, FULL_CARD_HP);
+      this.room.players[session.playerId].card = addCardHealth(card);
       this.room.selectedStat = null;
       this.room.lastWinner = null;
       this.room.lastDamage = 0;
+      this.room.lastEvent = "play";
       this.room.lastResult = `${this.room.players[session.playerId].name} played ${card.name}.`;
     }
 
@@ -279,6 +282,7 @@ export class CardBattleRoom {
       this.room.scores = { p1: 0, p2: 0 };
       this.room.round = 0;
       await this.ensureHands(true);
+      this.room.lastEvent = "reset";
       this.room.lastResult = "Score reset. Fresh three-card hands were dealt.";
     }
 
@@ -302,42 +306,48 @@ export class CardBattleRoom {
     p1.card = addCardHealth(p1.card);
     p2.card = addCardHealth(p2.card);
 
-    const statIndex = cryptoRandomInt(0, CARD_STATS.length - 1);
-    const stat = CARD_STATS[statIndex];
-    const p1Value = getCardStats(p1.card)[stat];
-    const p2Value = getCardStats(p2.card)[stat];
-    const difference = Math.abs(p1Value - p2Value);
-    const damage = calculateDamage(difference);
+    const p1Stats = getCardStats(p1.card);
+    const p2Stats = getCardStats(p2.card);
+    const p1Initiative = p1Stats.Speed + cryptoRandomFloat() * p1Stats.Luck;
+    const p2Initiative = p2Stats.Speed + cryptoRandomFloat() * p2Stats.Luck;
+    const attackerId = p1Initiative >= p2Initiative ? "p1" : "p2";
+    const defenderId = attackerId === "p1" ? "p2" : "p1";
+    const attacker = this.room.players[attackerId];
+    const defender = this.room.players[defenderId];
+    const result = calculateAttack(attacker.card, defender.card);
 
-    this.room.selectedStat = stat;
+    this.room.selectedStat = "Speed";
     this.room.round += 1;
-    this.room.lastDamage = damage;
+    this.room.lastDamage = result.damage;
 
-    if (p1Value > p2Value) {
-      p2.card.hp = Math.max(0, p2.card.hp - damage);
-      this.room.lastWinner = "p1";
-      if (p2.card.hp <= 0) {
-        this.room.knockout = true;
-        this.room.scores.p1 += 1;
-        this.room.lastResult = `${p1.name} wins with ${stat}: ${p1Value} to ${p2Value}. ${p2.card.name} loses ${damage} HP and is knocked out!`;
-      } else {
-        this.room.lastResult = `${p1.name} wins with ${stat}: ${p1Value} to ${p2Value}. ${p2.card.name} loses ${damage} HP.`;
-      }
-    } else if (p2Value > p1Value) {
-      p1.card.hp = Math.max(0, p1.card.hp - damage);
-      this.room.lastWinner = "p2";
-      if (p1.card.hp <= 0) {
-        this.room.knockout = true;
-        this.room.scores.p2 += 1;
-        this.room.lastResult = `${p2.name} wins with ${stat}: ${p2Value} to ${p1Value}. ${p1.card.name} loses ${damage} HP and is knocked out!`;
-      } else {
-        this.room.lastResult = `${p2.name} wins with ${stat}: ${p2Value} to ${p1Value}. ${p1.card.name} loses ${damage} HP.`;
-      }
-    } else {
+    if (result.dodge) {
       this.room.lastWinner = "tie";
       this.room.lastDamage = 0;
-      this.room.lastResult = `Tie! Both Goobers scored ${p1Value} in ${stat}. No HP lost.`;
+      this.room.lastEvent = "dodge";
+      this.room.lastResult = `${defender.card.name} dodged ${attacker.card.name}'s attack. No HP lost.`;
+      return;
     }
+
+    defender.card.hp = Math.max(0, defender.card.hp - result.damage);
+    this.room.lastWinner = attackerId;
+    this.room.lastEvent = result.crit ? "crit" : "hit";
+
+    let resultText = `${attacker.name}'s ${attacker.card.name} (${attacker.card.role}) attacked first with ${attacker.card.specialMove} and hit ${defender.card.name} for ${result.damage} HP${result.crit ? " with a critical goober bonk" : ""}.`;
+
+    if (result.heal) {
+      attacker.card.hp = Math.min(attacker.card.maxHp, attacker.card.hp + result.heal);
+      this.room.lastEvent = "heal";
+      resultText += ` ${attacker.card.name} healed ${result.heal} HP.`;
+    }
+
+    if (defender.card.hp <= 0) {
+      this.room.knockout = true;
+      this.room.scores[attackerId] += 1;
+      this.room.lastEvent = "knockout";
+      resultText += ` ${defender.card.name} is knocked out!`;
+    }
+
+    this.room.lastResult = resultText;
   }
 
   getPublicState() {
@@ -352,6 +362,7 @@ export class CardBattleRoom {
         lastResult: this.room.lastResult,
         lastWinner: this.room.lastWinner,
         lastDamage: this.room.lastDamage,
+        lastEvent: this.room.lastEvent,
         knockout: this.room.knockout,
         status: this.room.status
       }
@@ -389,8 +400,16 @@ const ALLOWED_CATEGORIES = new Set([
   "random"
 ]);
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-const FULL_CARD_HP = 100;
-const CARD_STATS = ["Loaf Level", "Snoot Power", "Chaos", "Sit Strength", "Goober Aura"];
+const CARD_STATS = ["HP", "Attack", "Defense", "Speed", "Luck"];
+const ROLES = ["Tank", "Brawler", "Glass Cannon", "Trickster", "Healer", "Balanced"];
+const ROLE_TEMPLATES = {
+  Tank: { hp: [132, 156], attack: [18, 27], defense: [23, 32], speed: [4, 7], luck: [4, 9], move: "Loaf Wall" },
+  Brawler: { hp: [106, 126], attack: [30, 40], defense: [14, 21], speed: [6, 10], luck: [5, 10], move: "Heavy Bonk" },
+  "Glass Cannon": { hp: [72, 92], attack: [41, 54], defense: [6, 12], speed: [10, 15], luck: [8, 14], move: "Chaos Blast" },
+  Trickster: { hp: [88, 108], attack: [24, 34], defense: [8, 15], speed: [13, 18], luck: [12, 20], move: "Silly Dodge" },
+  Healer: { hp: [96, 118], attack: [17, 27], defense: [13, 21], speed: [6, 10], luck: [10, 16], move: "Snack Break" },
+  Balanced: { hp: [98, 120], attack: [25, 35], defense: [13, 20], speed: [8, 12], luck: [7, 13], move: "Reliable Goob" }
+};
 const NO_STORE_HEADERS = {
   "cache-control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
   "pragma": "no-cache",
@@ -436,12 +455,12 @@ function getRoomCodeFromPath(pathname) {
 }
 
 function dealHands(deck, handSize = 3) {
-  const pool = [...deck].map((card) => addCardHealth(card, FULL_CARD_HP));
+  const pool = [...deck].map((card) => addCardHealth(card));
   shuffle(pool);
 
   const needed = handSize * 2;
   while (pool.length < needed) {
-    pool.push(...deck.map((card) => addCardHealth(card, FULL_CARD_HP)));
+    pool.push(...deck.map((card) => addCardHealth(card)));
   }
 
   return {
@@ -451,20 +470,81 @@ function dealHands(deck, handSize = 3) {
 }
 
 function normalizeHand(hand) {
-  return Array.isArray(hand) ? hand.map((card) => addCardHealth(card, FULL_CARD_HP)) : [];
+  return Array.isArray(hand) ? hand.map((card) => addCardHealth(card)) : [];
 }
 
-function addCardHealth(card, defaultHp = FULL_CARD_HP) {
-  const hp = Number.isFinite(Number(card?.hp)) ? Math.max(0, Math.min(FULL_CARD_HP, Number(card.hp))) : defaultHp;
+function addCardHealth(card) {
+  const safeCard = card || {
+    id: "fallback-original-goober",
+    name: "Original Goober",
+    category: "classic",
+    description: "The original loaf-sitting Goober.",
+    imageUrl: "/assets/original-goober.jpg"
+  };
+  const maxHp = Number(safeCard.maxHp) || maxHpFor(safeCard);
+  const hp = Number.isFinite(Number(safeCard.hp)) ? Math.max(0, Math.min(maxHp, Number(safeCard.hp))) : maxHp;
+  const role = getRole(safeCard);
   return {
-    ...card,
+    ...safeCard,
     hp,
-    maxHp: FULL_CARD_HP
+    maxHp,
+    role,
+    specialMove: ROLE_TEMPLATES[role]?.move || "Goober Move"
   };
 }
 
-function calculateDamage(difference) {
-  return Math.max(12, Math.min(38, Math.ceil(difference / 2) + 8));
+function calculateAttack(attacker, defender) {
+  const a = getCardStats(attacker);
+  const d = getCardStats(defender);
+  const roll = cryptoRandomFloat() * 100;
+  const dodgeChance = Math.min(28, d.Speed * 0.9 + d.Luck * 0.7);
+  const critChance = Math.min(32, a.Luck * 1.4);
+
+  if (roll < dodgeChance) {
+    return { damage: 0, crit: false, dodge: true, heal: 0 };
+  }
+
+  let damage = Math.max(5, Math.round((a.Attack * 1.45 - d.Defense * 0.72 + 6) * (roll > 100 - critChance ? 1.75 : 1)));
+  const crit = roll > 100 - critChance;
+
+  if (attacker.role === "Brawler") damage += 4;
+  if (attacker.role === "Glass Cannon") damage += 6;
+  if (defender.role === "Tank") damage = Math.max(4, damage - 5);
+
+  const heal = attacker.role === "Healer" && cryptoRandomFloat() < 0.28 ? Math.max(6, Math.round(a.Luck * 0.8)) : 0;
+  return { damage, crit, dodge: false, heal };
+}
+
+function maxHpFor(card) {
+  return getCardStats(card).HP;
+}
+
+function getRole(card) {
+  if (card?.role && ROLES.includes(card.role)) return card.role;
+  const text = `${card?.name || ""} ${card?.category || ""} ${card?.description || ""}`.toLowerCase();
+  if (/tank|giant|big|mega|king|queen|wall|boss|chunk|rock/.test(text)) return "Tank";
+  if (/angry|fight|strong|warrior|ninja|pirate|monster|dragon|dino/.test(text)) return "Brawler";
+  if (/laser|fire|wizard|blast|electric|storm|spooky|ghost|demon/.test(text)) return "Glass Cannon";
+  if (/silly|chaos|clown|goofy|sneak|shadow|random|trick/.test(text)) return "Trickster";
+  if (/doctor|nurse|angel|heart|healer|snack|food|cookie|cake/.test(text)) return "Healer";
+  return ROLES[hashString(card?.id || card?.name || "goober") % ROLES.length];
+}
+
+function getCardStats(card) {
+  const role = getRole(card);
+  const template = ROLE_TEMPLATES[role] || ROLE_TEMPLATES.Balanced;
+  return {
+    HP: pickInRange(card, "hp", template.hp),
+    Attack: pickInRange(card, "atk", template.attack),
+    Defense: pickInRange(card, "def", template.defense),
+    Speed: pickInRange(card, "spd", template.speed),
+    Luck: pickInRange(card, "luck", template.luck)
+  };
+}
+
+function pickInRange(card, salt, range) {
+  const [min, max] = range;
+  return min + (hashString(`${card?.id || card?.name || "goober"}-${salt}`) % (max - min + 1));
 }
 
 function shuffle(items) {
@@ -481,6 +561,12 @@ function cryptoRandomInt(min, max) {
   return min + (bytes[0] % range);
 }
 
+function cryptoRandomFloat() {
+  const bytes = new Uint32Array(1);
+  crypto.getRandomValues(bytes);
+  return bytes[0] / 4294967295;
+}
+
 function hashString(text) {
   let h = 2166136261;
   for (let i = 0; i < String(text).length; i++) {
@@ -488,20 +574,6 @@ function hashString(text) {
     h = Math.imul(h, 16777619);
   }
   return Math.abs(h >>> 0);
-}
-
-function statFor(card, salt) {
-  return 28 + (hashString(`${card.id || card.name}-${salt}`) % 73);
-}
-
-function getCardStats(card) {
-  return {
-    "Loaf Level": statFor(card, "loaf"),
-    "Snoot Power": statFor(card, "snoot"),
-    "Chaos": statFor(card, "chaos"),
-    "Sit Strength": statFor(card, "sit"),
-    "Goober Aura": statFor(card, "aura")
-  };
 }
 
 async function listGoobers(env) {
