@@ -60,8 +60,9 @@ export class CardBattleRoom {
 
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
-    const playerId = this.assignPlayerId(url.searchParams.get("playerId"));
-    const playerName = cleanText(url.searchParams.get("name"), 40) || `Player ${playerId === "p1" ? "1" : "2"}`;
+    const requestedPlayer = url.searchParams.get("playerId") || url.searchParams.get("player");
+    const playerId = this.assignPlayerId(requestedPlayer);
+    const playerName = cleanText(url.searchParams.get("name"), 40) || `Player ${playerId === "p1" ? "1" : playerId === "p2" ? "2" : "Spectator"}`;
     server.accept();
     this.sessions.set(server, { playerId });
     this.room.players[playerId] = { ...(this.room.players[playerId] || {}), id: playerId, name: playerName, connected: true, hand: normalizeHand(this.room.players[playerId]?.hand || []), card: this.room.players[playerId]?.card ? addCardHealth(this.room.players[playerId].card) : null };
@@ -114,8 +115,10 @@ export class CardBattleRoom {
 
   assignPlayerId(requested) {
     if ((requested === "p1" || requested === "p2") && !this.room.players[requested]?.connected) return requested;
-    if (!this.room.players.p1?.connected) return "p1";
-    if (!this.room.players.p2?.connected) return "p2";
+    if (!this.room.players.p1) return "p1";
+    if (!this.room.players.p2) return "p2";
+    if (!this.room.players.p2.connected) return "p2";
+    if (!this.room.players.p1.connected) return "p1";
     return `spectator-${crypto.randomUUID().slice(0, 6)}`;
   }
 
