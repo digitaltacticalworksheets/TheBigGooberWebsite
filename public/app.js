@@ -12,7 +12,7 @@ const gooberSearchInput = document.getElementById("gooberSearch");
 const gooberSearchButton = document.getElementById("gooberSearchButton");
 const gooberClearSearchButton = document.getElementById("gooberClearSearch");
 const gooberCountText = document.getElementById("gooberCountText");
-const loadMoreGoobersButton = document.getElementById("loadMoreGoobers");
+let loadMoreGoobersButton = document.getElementById("loadMoreGoobers");
 const filePreview = document.getElementById("filePreview");
 const uploadStatus = document.getElementById("uploadStatus");
 const reloadCloudGoobersButton = document.getElementById("reloadCloudGoobers");
@@ -37,6 +37,30 @@ let visibleLimit = INITIAL_GALLERY_LIMIT;
 
 function normalizeText(value) {
   return String(value || "").toLowerCase().trim();
+}
+
+function ensureLoadMoreButton() {
+  if (loadMoreGoobersButton || !gooberGrid) return;
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "gallery-load-more";
+  wrapper.style.display = "flex";
+  wrapper.style.justifyContent = "center";
+  wrapper.style.margin = "24px 0 0";
+
+  loadMoreGoobersButton = document.createElement("button");
+  loadMoreGoobersButton.id = "loadMoreGoobers";
+  loadMoreGoobersButton.type = "button";
+  loadMoreGoobersButton.className = "gallery-search-button primary";
+  loadMoreGoobersButton.hidden = true;
+  loadMoreGoobersButton.textContent = "Load more Goobers";
+  loadMoreGoobersButton.addEventListener("click", () => {
+    visibleLimit += GALLERY_INCREMENT;
+    applyCurrentFilter();
+  });
+
+  wrapper.appendChild(loadMoreGoobersButton);
+  gooberGrid.insertAdjacentElement("afterend", wrapper);
 }
 
 function createGooberCard(goober, isCloud = false) {
@@ -175,6 +199,8 @@ function getMatchingCards() {
 }
 
 function applyCurrentFilter() {
+  ensureLoadMoreButton();
+
   const allCards = [...document.querySelectorAll(".goober-card")];
   const matchingCards = getMatchingCards();
   const visibleCards = new Set(matchingCards.slice(0, visibleLimit));
@@ -235,10 +261,6 @@ gooberClearSearchButton?.addEventListener("click", () => {
 
   runNameSearch();
   gooberSearchInput?.focus();
-});
-loadMoreGoobersButton?.addEventListener("click", () => {
-  visibleLimit += GALLERY_INCREMENT;
-  applyCurrentFilter();
 });
 
 function readImageFile(file) {
@@ -399,4 +421,5 @@ if (reloadCloudGoobersButton) {
   reloadCloudGoobersButton.addEventListener("click", () => loadCloudGoobers({ bustCache: true }));
 }
 
+ensureLoadMoreButton();
 loadCloudGoobers({ bustCache: true });
