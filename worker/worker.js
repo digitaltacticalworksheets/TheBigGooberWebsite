@@ -31,7 +31,20 @@ export default {
   }
 };
 
-const ALLOWED_CATEGORIES = new Set(["classic", "costume", "chaos"]);
+const ALLOWED_CATEGORIES = new Set([
+  "classic",
+  "costume",
+  "chaos",
+  "funny",
+  "spooky",
+  "animal",
+  "food",
+  "sports",
+  "holiday",
+  "fancy",
+  "superhero",
+  "random"
+]);
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const NO_STORE_HEADERS = {
   "cache-control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
