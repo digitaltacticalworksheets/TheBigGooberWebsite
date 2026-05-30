@@ -1,5 +1,63 @@
 const API_BASE = "";
 
+function initializeSiteTheme() {
+  const themeStyles = document.createElement("link");
+  themeStyles.rel = "stylesheet";
+  themeStyles.href = "/site-theme.css";
+  document.head.appendChild(themeStyles);
+
+  const savedTheme = localStorage.getItem("gooberSiteTheme") || localStorage.getItem("gooberCardsTheme");
+  const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const theme = savedTheme || (prefersDark ? "dark" : "light");
+
+  function applyTheme(nextTheme) {
+    const isDark = nextTheme === "dark";
+    document.body.classList.toggle("dark-site", isDark);
+    document.documentElement.classList.toggle("dark-site", isDark);
+    document.querySelectorAll("[data-theme-toggle]").forEach((button) => {
+      button.textContent = isDark ? "Light Mode" : "Dark Mode";
+      button.setAttribute("aria-label", isDark ? "Switch to light mode" : "Switch to dark mode");
+    });
+  }
+
+  applyTheme(theme);
+
+  const nav = document.querySelector("header nav");
+  if (nav && !document.querySelector("[data-theme-toggle]")) {
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "theme-toggle";
+    toggle.dataset.themeToggle = "true";
+    toggle.addEventListener("click", () => {
+      const nextTheme = document.body.classList.contains("dark-site") ? "light" : "dark";
+      localStorage.setItem("gooberSiteTheme", nextTheme);
+      localStorage.setItem("gooberCardsTheme", nextTheme);
+      applyTheme(nextTheme);
+    });
+    nav.appendChild(toggle);
+    applyTheme(theme);
+  }
+
+  document.querySelectorAll('a[href="/goober-cards/"]').forEach((link) => {
+    if (link.textContent.trim().toLowerCase().includes("trading")) {
+      link.textContent = "Goober Cards";
+    }
+  });
+
+  const heroCopy = document.querySelector(".hero-copy");
+  if (heroCopy && !document.getElementById("playGooberCardsHero")) {
+    const actions = document.createElement("div");
+    actions.className = "hero-actions";
+    actions.innerHTML = `
+      <a class="button primary" id="playGooberCardsHero" href="/goober-cards/">Play Goober Cards</a>
+      <a class="button" href="#goobers">Browse Goobers</a>
+    `;
+    heroCopy.appendChild(actions);
+  }
+}
+
+initializeSiteTheme();
+
 const filterButtons = document.querySelectorAll(".filter-btn");
 const gooberGrid = document.getElementById("gooberGrid");
 const uploadForm = document.getElementById("gooberUploadForm");
