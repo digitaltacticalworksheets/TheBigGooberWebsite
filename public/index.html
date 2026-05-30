@@ -9,7 +9,7 @@
 
 <meta
  name="description"
- content="A growing collection of hand-drawn cartoon dogs called Goobers, each with its own weird little personality."
+ content="A growing collection of hand-drawn cartoon dogs called Goobers, each sitting like a little loaf with its own weird personality."
 />
 
   <link rel="apple-touch-icon" href="/assets/original-goober.jpg" />
@@ -297,49 +297,35 @@
       <span>The Big Goober Website</span>
     </div>
 
-
-<nav>
-  <a href="#goobers">Goober Gallery</a>
-  <div class="nav-dropdown">
-    <button class="nav-dropdown-toggle" type="button" aria-expanded="false">Games ▾</button>
-    <div class="nav-dropdown-menu">
-      <a href="/goober-run/">Goober Run</a>
-      <a href="/snowball-goobers/">Snowball Goobers</a>
-      <a href="/goobers-around-the-world/">Goobers Around the World</a>
-    </div>
-  </div>
-  <a href="#about">What is a Goober?</a>
-  <a href="#upload">Add Goober</a>
-</nav>
-
-
+    <nav>
+      <a href="#goobers">Goober Gallery</a>
+      <div class="nav-dropdown">
+        <button class="nav-dropdown-toggle" type="button" aria-expanded="false">Games ▾</button>
+        <div class="nav-dropdown-menu">
+          <a href="/goober-run/">Goober Run</a>
+          <a href="/snowball-goobers/">Snowball Goobers</a>
+          <a href="/goobers-around-the-world/">Goobers Around the World</a>
+        </div>
+      </div>
+      <a href="#about">What is a Goober?</a>
+      <a href="#upload">Add Goober</a>
+    </nav>
   </header>
 
   <section class="hero">
     <div class="hero-copy">
       <h1>Big Goober energy.</h1>
       <p>
-        Goobers are hand-drawn cartoon dogs with a simple sitting shape and a lot of personality.
-        Some are cool. Some are cowboys. Some are spider-adjacent. All are goobers.
+        Goobers are hand-drawn cartoon dogs sitting like tiny loaves, each with a simple shape and a big personality.
+        Some are cool. Some are cowboys. Some are spider-adjacent. All are loaf-shaped legends.
       </p>
+    </div>
 
-
-  <div class="hero-actions">
-    <a class="button primary" href="/goober-run/">Play Goober Run</a>
-    <a class="button" href="/snowball-goobers/">Play Snowball Goobers</a>
-    <a class="button" href="/goobers-around-the-world/">Pose Goobers Around the World</a>
-    <a class="button" href="#goobers">See the Goober Gallery</a>
-    <a class="button" href="#upload">Add a Goober</a>
-  </div>
-</div>
-
-<article class="feature-card">
-  <img src="/assets/original-goober.jpg" alt="Original Goober, a hand-drawn cartoon dog" />
-  <h2>Original Goober</h2>
-  <p>The classic Goober. No gimmicks. No nonsense. Just pure goober geometry.</p>
-</article>
-
-
+    <article class="feature-card">
+      <img src="/assets/original-goober.jpg" alt="Original Goober, a hand-drawn cartoon dog sitting like a loaf" />
+      <h2>Original Goober</h2>
+      <p>The classic loaf-sitting Goober. Simple shape, big snoot, pure goober geometry.</p>
+    </article>
   </section>
 
   <main>
@@ -349,187 +335,175 @@
           <h2>The Goober Gallery</h2>
         </div>
         <p>
-          Search by name, description, or type. Click any Goober to make it bigger.
+          Browse the full collection of loaf-sitting Goobers. Search by name, filter by type, and click any Goober to view it up close.
         </p>
       </div>
 
-
-  <div class="gallery-tools">
-    <div class="gallery-search-row">
-      <input id="gooberSearch" type="search" placeholder="Search goobers by name, description, or type..." autocomplete="off" />
-      <button class="gallery-search-button primary" id="gooberSearchButton" type="button">Search</button>
-      <button class="gallery-search-button" id="gooberClearSearch" type="button">Clear</button>
-      <span class="goober-count" id="gooberCountText">Loading Goobers...</span>
-    </div>
-    <div class="filters" aria-label="Goober filters">
-      <button class="filter-btn active" data-filter="all">All</button>
-      <button class="filter-btn" data-filter="classic">Classic</button>
-      <button class="filter-btn" data-filter="costume">Costume</button>
-      <button class="filter-btn" data-filter="chaos">Chaos</button>
-      <button class="filter-btn" data-filter="funny">Funny</button>
-      <button class="filter-btn" data-filter="spooky">Spooky</button>
-      <button class="filter-btn" data-filter="animal">Animal</button>
-      <button class="filter-btn" data-filter="food">Food</button>
-      <button class="filter-btn" data-filter="sports">Sports</button>
-      <button class="filter-btn" data-filter="holiday">Holiday</button>
-      <button class="filter-btn" data-filter="fancy">Fancy</button>
-      <button class="filter-btn" data-filter="superhero">Superhero</button>
-      <button class="filter-btn" data-filter="random">Random</button>
-    </div>
-  </div>
-
-  <details class="admin-tools" hidden>
-    <summary>Admin tools</summary>
-    <div class="admin-delete-panel">
-      <label for="adminDeleteCode">Admin delete code</label>
-      <input id="adminDeleteCode" type="password" placeholder="Enter admin code" autocomplete="off" />
-      <span>Hidden for now. Delete inappropriate Goobers directly from Cloudflare.</span>
-    </div>
-  </details>
-
-  <div class="goober-grid" id="gooberGrid">
-    <article class="goober-card" data-category="classic" data-name="Original Goober" data-description="The founding Goober. Soft, simple, and completely unbothered." tabindex="0" role="button" aria-label="View Original Goober">
-      <div class="goober-image">
-        <img src="/assets/original-goober.jpg" alt="Original Goober" />
-      </div>
-      <div class="goober-info">
-        <h3>Original Goober</h3>
-        <p class="tagline">The founding Goober. Soft, simple, and completely unbothered.</p>
-        <div class="goober-tags">
-          <span class="tag">classic</span>
-          <span class="tag">original</span>
+      <div class="gallery-tools">
+        <div class="gallery-search-row">
+          <input id="gooberSearch" type="search" placeholder="Search Goober names..." autocomplete="off" />
+          <button class="gallery-search-button primary" id="gooberSearchButton" type="button">Search</button>
+          <button class="gallery-search-button" id="gooberClearSearch" type="button">Clear</button>
+          <span class="goober-count" id="gooberCountText">Goober gallery is loading...</span>
+        </div>
+        <div class="filters" aria-label="Goober filters">
+          <button class="filter-btn active" data-filter="all">All</button>
+          <button class="filter-btn" data-filter="classic">Classic</button>
+          <button class="filter-btn" data-filter="costume">Costume</button>
+          <button class="filter-btn" data-filter="chaos">Chaos</button>
+          <button class="filter-btn" data-filter="funny">Funny</button>
+          <button class="filter-btn" data-filter="spooky">Spooky</button>
+          <button class="filter-btn" data-filter="animal">Animal</button>
+          <button class="filter-btn" data-filter="food">Food</button>
+          <button class="filter-btn" data-filter="sports">Sports</button>
+          <button class="filter-btn" data-filter="holiday">Holiday</button>
+          <button class="filter-btn" data-filter="fancy">Fancy</button>
+          <button class="filter-btn" data-filter="superhero">Superhero</button>
+          <button class="filter-btn" data-filter="random">Random</button>
         </div>
       </div>
-    </article>
 
-    <article class="goober-card" data-category="costume" data-name="Cowboy Goober" data-description="Rootin’, tootin’, and extremely committed to the yellow hat." tabindex="0" role="button" aria-label="View Cowboy Goober">
-      <div class="goober-image">
-        <img src="/assets/cowboy-goober.jpg" alt="Cowboy Goober" />
+      <div class="goober-grid" id="gooberGrid">
+        <article class="goober-card" data-category="classic" data-name="Original Goober" data-description="The founding Goober. Soft, simple, and completely loafed up." tabindex="0" role="button" aria-label="View Original Goober">
+          <div class="goober-image">
+            <img src="/assets/original-goober.jpg" alt="Original Goober" />
+          </div>
+          <div class="goober-info">
+            <h3>Original Goober</h3>
+            <p class="tagline">The founding Goober. Soft, simple, and completely loafed up.</p>
+            <div class="goober-tags">
+              <span class="tag">classic</span>
+              <span class="tag">original</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="goober-card" data-category="costume" data-name="Cowboy Goober" data-description="Rootin’, tootin’, and sitting like a western loaf." tabindex="0" role="button" aria-label="View Cowboy Goober">
+          <div class="goober-image">
+            <img src="/assets/cowboy-goober.jpg" alt="Cowboy Goober" />
+          </div>
+          <div class="goober-info">
+            <h3>Cowboy Goober</h3>
+            <p class="tagline">Rootin’, tootin’, and sitting like a western loaf.</p>
+            <div class="goober-tags">
+              <span class="tag">costume</span>
+              <span class="tag">western</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="goober-card" data-category="costume" data-name="Cool Goober" data-description="Too cool to explain anything. Still sitting like a loaf." tabindex="0" role="button" aria-label="View Cool Goober">
+          <div class="goober-image">
+            <img src="/assets/cool-goober.jpg" alt="Cool Goober wearing sunglasses" />
+          </div>
+          <div class="goober-info">
+            <h3>Cool Goober</h3>
+            <p class="tagline">Too cool to explain anything. Still sitting like a loaf.</p>
+            <div class="goober-tags">
+              <span class="tag">costume</span>
+              <span class="tag">cool</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="goober-card" data-category="chaos" data-name="Spider Goober" data-description="A mysterious multi-legged Goober loaf. Probably friendly. Probably." tabindex="0" role="button" aria-label="View Spider Goober">
+          <div class="goober-image">
+            <img src="/assets/spider-goober.jpg" alt="Spider Goober, a gray multi-legged version of Goober" />
+          </div>
+          <div class="goober-info">
+            <h3>Spider Goober</h3>
+            <p class="tagline">A mysterious multi-legged Goober loaf. Probably friendly. Probably.</p>
+            <div class="goober-tags">
+              <span class="tag">chaos</span>
+              <span class="tag">spider-ish</span>
+            </div>
+          </div>
+        </article>
       </div>
-      <div class="goober-info">
-        <h3>Cowboy Goober</h3>
-        <p class="tagline">Rootin’, tootin’, and extremely committed to the yellow hat.</p>
-        <div class="goober-tags">
-          <span class="tag">costume</span>
-          <span class="tag">western</span>
+    </section>
+
+    <section id="about" class="about-panel">
+      <div>
+        <h2>What makes a Goober?</h2>
+        <p>
+          A Goober is a hand-drawn cartoon dog with a rounded, seated loaf shape. The body stays simple and recognizable,
+          while the personality changes with every costume, mood, theme, or strange idea.
+        </p>
+      </div>
+
+      <ul>
+        <li>Sits like a loaf</li>
+        <li>Simple rounded body shape</li>
+        <li>Long snoot and big simple nose</li>
+        <li>Hand-drawn, imperfect lines</li>
+        <li>Named by style, costume, mood, or chaos level</li>
+      </ul>
+    </section>
+
+    <section id="upload" class="upload-panel">
+      <div class="upload-copy">
+        <h2>Add a Goober</h2>
+        <p>
+          Add a new loaf-sitting Goober to the collection. Give it a name, choose the type that fits best,
+          describe its personality, and upload the image with the family upload code.
+        </p>
+      </div>
+
+      <form class="upload-form" id="gooberUploadForm">
+        <div class="form-row">
+          <label for="gooberUploadCode">Upload code</label>
+          <input id="gooberUploadCode" type="password" placeholder="Enter upload code" autocomplete="off" required />
         </div>
-      </div>
-    </article>
 
-    <article class="goober-card" data-category="costume" data-name="Cool Goober" data-description="Too cool to explain anything. Sunglasses are mandatory." tabindex="0" role="button" aria-label="View Cool Goober">
-      <div class="goober-image">
-        <img src="/assets/cool-goober.jpg" alt="Cool Goober wearing sunglasses" />
-      </div>
-      <div class="goober-info">
-        <h3>Cool Goober</h3>
-        <p class="tagline">Too cool to explain anything. Sunglasses are mandatory.</p>
-        <div class="goober-tags">
-          <span class="tag">costume</span>
-          <span class="tag">cool</span>
+        <div class="form-row">
+          <label for="gooberName">Goober name</label>
+          <input id="gooberName" type="text" placeholder="Example: Wizard Goober" required />
         </div>
-      </div>
-    </article>
 
-    <article class="goober-card" data-category="chaos" data-name="Spider Goober" data-description="A mysterious multi-legged Goober. Probably friendly. Probably." tabindex="0" role="button" aria-label="View Spider Goober">
-      <div class="goober-image">
-        <img src="/assets/spider-goober.jpg" alt="Spider Goober, a gray multi-legged version of Goober" />
-      </div>
-      <div class="goober-info">
-        <h3>Spider Goober</h3>
-        <p class="tagline">A mysterious multi-legged Goober. Probably friendly. Probably.</p>
-        <div class="goober-tags">
-          <span class="tag">chaos</span>
-          <span class="tag">spider-ish</span>
+        <div class="form-row">
+          <label for="gooberCategory">Category</label>
+          <select id="gooberCategory" required>
+            <option value="classic">Classic</option>
+            <option value="costume">Costume</option>
+            <option value="chaos">Chaos</option>
+            <option value="funny">Funny</option>
+            <option value="spooky">Spooky</option>
+            <option value="animal">Animal</option>
+            <option value="food">Food</option>
+            <option value="sports">Sports</option>
+            <option value="holiday">Holiday</option>
+            <option value="fancy">Fancy</option>
+            <option value="superhero">Superhero</option>
+            <option value="random">Random</option>
+          </select>
         </div>
-      </div>
-    </article>
-  </div>
-</section>
 
-<section id="about" class="about-panel">
-  <div>
-    <h2>What makes a Goober?</h2>
-    <p>
-      A Goober is a hand-drawn cartoon dog with a simple seated shape. The base design
-      stays recognizable, but the personality changes with every version.
-    </p>
-  </div>
+        <div class="form-row">
+          <label for="gooberDescription">Description</label>
+          <textarea
+            id="gooberDescription"
+            placeholder="Example: A loaf-shaped Goober with suspicious magical powers."
+            required
+          ></textarea>
+        </div>
 
-  <ul>
-    <li>Simple rounded body shape</li>
-    <li>Long snoot and big simple nose</li>
-    <li>Hand-drawn, imperfect lines</li>
-    <li>Named by style, costume, mood, or chaos level</li>
-  </ul>
-</section>
+        <div class="form-row">
+          <label for="gooberImage">Goober image</label>
+          <input id="gooberImage" type="file" accept="image/*" required />
+        </div>
 
-<section id="upload" class="upload-panel">
-  <div class="upload-copy">
-    <h2>Add a Goober</h2>
-    <p>
-      Use this lower-page upload tool to add new Goobers after you review the gallery.
-      You now need the upload code before a Goober can be added to the site.
-    </p>
+        <div class="file-preview" id="filePreview">
+          Selected Goober image preview
+        </div>
 
-   
-  </div>
+        <div class="upload-actions">
+          <button class="upload-button primary" type="submit">Add to Gallery</button>
+          <button class="upload-button" id="reloadCloudGoobers" type="button">Reload Goobers</button>
+        </div>
 
-  <form class="upload-form" id="gooberUploadForm">
-    <div class="form-row">
-      <label for="gooberUploadCode">Upload code</label>
-      <input id="gooberUploadCode" type="password" placeholder="Enter upload code" autocomplete="off" required />
-    </div>
-
-    <div class="form-row">
-      <label for="gooberName">Goober name</label>
-      <input id="gooberName" type="text" placeholder="Example: Wizard Goober" required />
-    </div>
-
-    <div class="form-row">
-      <label for="gooberCategory">Category</label>
-      <select id="gooberCategory" required>
-        <option value="classic">Classic</option>
-        <option value="costume">Costume</option>
-        <option value="chaos">Chaos</option>
-        <option value="funny">Funny</option>
-        <option value="spooky">Spooky</option>
-        <option value="animal">Animal</option>
-        <option value="food">Food</option>
-        <option value="sports">Sports</option>
-        <option value="holiday">Holiday</option>
-        <option value="fancy">Fancy</option>
-        <option value="superhero">Superhero</option>
-        <option value="random">Random</option>
-      </select>
-    </div>
-
-    <div class="form-row">
-      <label for="gooberDescription">Description</label>
-      <textarea
-        id="gooberDescription"
-        placeholder="Example: A magical Goober with suspicious powers."
-        required
-      ></textarea>
-    </div>
-
-    <div class="form-row">
-      <label for="gooberImage">Goober image</label>
-      <input id="gooberImage" type="file" accept="image/*" required />
-    </div>
-
-    <div class="file-preview" id="filePreview">
-      Image preview will appear here.
-    </div>
-
-    <div class="upload-actions">
-      <button class="upload-button primary" type="submit">Add to Gallery</button>
-      <button class="upload-button" id="reloadCloudGoobers" type="button">Reload Goobers</button>
-    </div>
-
-    <p class="upload-status" id="uploadStatus"></p>
-  </form>
-</section>
-
+        <p class="upload-status" id="uploadStatus"></p>
+      </form>
+    </section>
   </main>
 
   <div class="goober-viewer" id="gooberViewer" hidden>
@@ -542,7 +516,7 @@
       <div class="viewer-info">
         <span class="viewer-category" id="viewerCategory">classic Goober</span>
         <h2 id="viewerTitle">Original Goober</h2>
-        <p id="viewerDescription">The founding Goober. Soft, simple, and completely unbothered.</p>
+        <p id="viewerDescription">The founding Goober. Soft, simple, and completely loafed up.</p>
         <p>Click outside the card or press Escape to return to the gallery.</p>
       </div>
     </section>
@@ -567,31 +541,6 @@
         if (!dropdown.contains(event.target)) {
           dropdown.classList.remove("open");
           dropdown.querySelector(".nav-dropdown-toggle")?.setAttribute("aria-expanded", "false");
-        }
-      });
-    });
-
-    document.addEventListener("DOMContentLoaded", () => {
-      const searchInput = document.getElementById("gooberSearch");
-      const searchButton = document.getElementById("gooberSearchButton");
-      const clearButton = document.getElementById("gooberClearSearch");
-
-      const triggerSearch = () => {
-        searchInput?.dispatchEvent(new Event("input", { bubbles: true }));
-      };
-
-      searchButton?.addEventListener("click", triggerSearch);
-      searchInput?.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") {
-          event.preventDefault();
-          triggerSearch();
-        }
-      });
-      clearButton?.addEventListener("click", () => {
-        if (searchInput) {
-          searchInput.value = "";
-          triggerSearch();
-          searchInput.focus();
         }
       });
     });
