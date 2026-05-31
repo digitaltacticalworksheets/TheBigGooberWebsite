@@ -91,36 +91,22 @@ export class CardBattleRoom {
       }
     }
     if (message.type === "ready") { if (!player || session.playerId.startsWith("spectator")) throw new Error("Only players can ready up."); if (!player.card) throw new Error("Choose a lead card before pressing Ready."); if (this.room.knockout) throw new Error("Deal new teams before readying up."); player.ready = true; this.room.lastEvent = "ready"; if (this.room.players.p1?.ready && this.room.players.p2?.ready && this.room.players.p1?.card && this.room.players.p2?.card) { this.room.battleActive = true; this.room.lastResult = `Cards revealed: ${this.room.players.p1.card.name} vs ${this.room.players.p2.card.name}. Three-card team battle started. Player 1 controls each roll.`; this.pushLog({ round: 0, title: "Cards revealed", text: `Player 1 leads with ${this.room.players.p1.card.name}. Player 2 leads with ${this.room.players.p2.card.name}. Each side has 3 Goobers.`, stat: "Reveal", p1Hp: `${this.room.players.p1.card.hp}/${this.room.players.p1.card.maxHp}`, p2Hp: `${this.room.players.p2.card.hp}/${this.room.players.p2.card.maxHp}` }); } else { this.room.lastResult = `${player.name} is ready. Waiting for the other player.`; } }
-    if (message.type === "roll") { if (session.playerId !== "p1") throw new Error("Player 1 controls the next roll."); this.rollBattle(false); }
-    if (message.type === "ultimate") { if (!player || session.playerId.startsWith("spectator")) throw new Error("Only players can use ultimates."); if (!this.room.battleActive || this.room.knockout) throw new Error("Ultimates can only be used during an active battle."); this.useUltimate(session.playerId); }
+    if (message.type === "roll") { if (session.playerId !== "p1") throw new Error("Player 1 controls the next roll."); this.rollBattle(); }
+    if (message.type === "ultimate") { if (!player || session.playerId.startsWith("spectator")) throw new Error("Only players can use ultimates."); if (!this.room.battleActive || this.room.knockout) throw new Error("Ultimates can only be charged during an active battle."); this.chargeUltimate(session.playerId); }
     if (message.type === "newRound") { if (!this.room.knockout && this.room.battleActive) throw new Error("Team battle is still running."); await this.ensureTeams(true); }
     if (message.type === "resetScore") { this.room.scores = { p1: 0, p2: 0 }; this.room.round = 0; await this.ensureTeams(true); this.room.lastEvent = "reset"; this.room.lastResult = "Score reset. Fresh 3-card teams were dealt."; }
     this.updateStatus(); await this.saveRoom(); this.broadcastState();
   }
-  useUltimate(playerId) {
-    const attacker = this.room.players[playerId], defender = this.room.players[playerId === "p1" ? "p2" : "p1"];
-    if (!attacker?.card || !defender?.card) throw new Error("Both players need active cards.");
-    attacker.card = addCardHealth(attacker.card); defender.card = addCardHealth(defender.card); syncActive(attacker); syncActive(defender);
-    if (attacker.card.ultimateUsed) throw new Error("That Goober already used its ultimate.");
-    attacker.card.ultimateUsed = true;
-    const startDef = defender.card.hp, startAtt = attacker.card.hp;
-    const result = rollUltimateAbility(attacker.card, defender.card);
-    defender.card.hp = Math.max(0, defender.card.hp - result.damage);
-    if (result.recoil) attacker.card.hp = Math.max(1, attacker.card.hp - result.recoil);
-    if (result.heal) attacker.card.hp = Math.min(attacker.card.maxHp, attacker.card.hp + result.heal);
-    syncActive(attacker); syncActive(defender);
-    this.room.round += 1; this.room.selectedStat = "Ultimate"; this.room.lastWinner = playerId; this.room.lastDamage = result.damage; this.room.lastEvent = "special";
-    let text = `Ultimate ${this.room.round}: ${attacker.card.name} used ${attacker.card.specialMove} on ${defender.card.name} for ${result.damage} HP. ${defender.card.name}: ${startDef} → ${defender.card.hp} HP. ${result.text}`;
-    if (result.heal) text += ` ${attacker.card.name}: ${startAtt} → ${attacker.card.hp} HP.`;
-    if (result.recoil) text += ` ${attacker.card.name} took ${result.recoil} recoil HP.`;
-    if (defender.card.hp <= 0) {
-      text += ` ${defender.card.name} is knocked out!`;
-      const nextIndex = nextAliveIndex(defender.team, defender.activeIndex + 1);
-      if (nextIndex >= 0) { defender.activeIndex = nextIndex; defender.card = addCardHealth(defender.team[nextIndex]); text += ` ${defender.name}'s next Goober enters: ${defender.card.name}. Player 1 controls the next roll.`; this.room.lastEvent = "knockout"; }
-      else { this.room.knockout = true; this.room.battleActive = false; this.room.players.p1.ready = false; this.room.players.p2.ready = false; this.room.matchWinner = playerId; this.room.scores[playerId] += 1; this.room.lastEvent = "knockout"; this.room.rewardSummary = buildRewardSummary(playerId, this.room); text += ` ${defender.name} has no Goobers left. ${attacker.name} wins the team battle!`; }
-    } else text += " Player 1 controls the next roll.";
-    this.room.lastResult = text;
-    this.pushLog({ round: this.room.round, title: `${attacker.card.name} ultimate`, text, stat: "Ultimate", damage: result.damage, special: attacker.card.specialMove, p1Hp: `${this.room.players.p1.card.hp}/${this.room.players.p1.card.maxHp}`, p2Hp: `${this.room.players.p2.card.hp}/${this.room.players.p2.card.maxHp}` });
+  chargeUltimate(playerId) {
+    const player = this.room.players[playerId];
+    if (!player?.card) throw new Error("You need an active card to charge an ultimate.");
+    player.card = addCardHealth(player.card); syncActive(player);
+    if (player.card.ultimateUsed) throw new Error("That Goober already used its ultimate.");
+    if (player.card.ultimatePending) throw new Error("That Goober's ultimate is already charged.");
+    player.card.ultimatePending = true; syncActive(player);
+    this.room.selectedStat = null; this.room.lastWinner = null; this.room.lastDamage = 0; this.room.lastEvent = "ultimateReady";
+    this.room.lastResult = `${player.name} charged ${player.card.name}'s ${player.card.specialMove}. It will trigger on that Goober's next successful attack.`;
+    this.pushLog({ round: this.room.round, title: "Ultimate charged", text: `${player.name} charged ${player.card.name}'s ${player.card.specialMove}. It will affect the next successful attack by that Goober.`, stat: "Ultimate", damage: 0, special: player.card.specialMove, p1Hp: `${this.room.players.p1?.card?.hp || 0}/${this.room.players.p1?.card?.maxHp || 0}`, p2Hp: `${this.room.players.p2?.card?.hp || 0}/${this.room.players.p2?.card?.maxHp || 0}` });
   }
   rollBattle() {
     const p1 = this.room.players.p1, p2 = this.room.players.p2;
@@ -135,12 +121,21 @@ export class CardBattleRoom {
     this.room.selectedStat = battleStat; this.room.round += 1; this.room.lastDamage = result.damage;
     const scoreLine = `${p1.card.name}: ${matchup.p1Score} | ${p2.card.name}: ${matchup.p2Score}`;
     if (result.dodge) { this.room.lastWinner = "tie"; this.room.lastDamage = 0; this.room.lastEvent = "dodge"; const text = `Roll ${this.room.round}: ${battleStat}. ${scoreLine}. ${attacker.card.name} won the stat roll, but ${defender.card.name} dodged. No HP changed.`; this.room.lastResult = `${text} Player 1 controls the next roll.`; this.pushLog({ round: this.room.round, title: `${battleStat} roll: dodge`, text, stat: battleStat, damage: 0, p1Hp: `${p1.card.hp}/${p1.card.maxHp}`, p2Hp: `${p2.card.hp}/${p2.card.maxHp}` }); return; }
+    let ultimate = null;
+    if (attacker.card.ultimatePending) {
+      ultimate = rollUltimateAbility(attacker.card, defender.card);
+      result.damage += ultimate.damage || 0;
+      result.heal += ultimate.heal || 0;
+      result.recoil += ultimate.recoil || 0;
+      attacker.card.ultimatePending = false;
+      attacker.card.ultimateUsed = true;
+    }
     defender.card.hp = Math.max(0, defender.card.hp - result.damage);
     if (result.recoil) attacker.card.hp = Math.max(1, attacker.card.hp - result.recoil);
     if (result.heal) attacker.card.hp = Math.min(attacker.card.maxHp, attacker.card.hp + result.heal);
     syncActive(attacker); syncActive(defender);
-    this.room.lastWinner = attackerId; this.room.lastEvent = result.special.triggered ? "special" : result.crit ? "crit" : result.heal ? "heal" : "hit";
-    const extras = []; if (result.crit) extras.push("Critical hit"); if (result.special.triggered) extras.push(`Special: ${attacker.card.specialMove}. ${result.special.text}`); if (result.heal && !result.special.triggered) extras.push(`${attacker.card.name} healed ${result.heal} HP`); if (result.recoil) extras.push(`${attacker.card.name} took ${result.recoil} recoil HP`);
+    this.room.lastWinner = attackerId; this.room.lastEvent = ultimate ? "special" : result.special.triggered ? "special" : result.crit ? "crit" : result.heal ? "heal" : "hit";
+    const extras = []; if (result.crit) extras.push("Critical hit"); if (ultimate) extras.push(`ULTIMATE: ${attacker.card.specialMove}. ${ultimate.text}`); if (result.special.triggered) extras.push(`Special: ${attacker.card.specialMove}. ${result.special.text}`); if (result.heal && !result.special.triggered && !ultimate) extras.push(`${attacker.card.name} healed ${result.heal} HP`); if (result.recoil) extras.push(`${attacker.card.name} took ${result.recoil} recoil HP`);
     let text = `Roll ${this.room.round}: ${battleStat}. ${scoreLine}. ${attacker.card.name} won and attacked ${defender.card.name} for ${result.damage} HP. ${defender.card.name}: ${defenderStartingHp} → ${defender.card.hp} HP.`;
     if (extras.length) text += ` ${extras.join(" ")}.`;
     if (defender.card.hp <= 0) {
@@ -150,7 +145,7 @@ export class CardBattleRoom {
       else { this.room.knockout = true; this.room.battleActive = false; p1.ready = false; p2.ready = false; this.room.matchWinner = attackerId; this.room.scores[attackerId] += 1; this.room.lastEvent = "knockout"; this.room.rewardSummary = buildRewardSummary(attackerId, this.room); text += ` ${defender.name} has no Goobers left. ${attacker.name} wins the team battle!`; }
     } else text += " Player 1 controls the next roll.";
     this.room.lastDamage = result.damage; this.room.lastResult = text;
-    this.pushLog({ round: this.room.round, title: `${battleStat} roll: ${attacker.card.name} hits`, text, stat: battleStat, p1Score: matchup.p1Score, p2Score: matchup.p2Score, attacker: attacker.card.name, defender: defender.card.name, damage: result.damage, special: result.special.triggered ? attacker.card.specialMove : "", p1Hp: `${p1.card.hp}/${p1.card.maxHp}`, p2Hp: `${p2.card.hp}/${p2.card.maxHp}` });
+    this.pushLog({ round: this.room.round, title: `${battleStat} roll: ${attacker.card.name} hits`, text, stat: battleStat, p1Score: matchup.p1Score, p2Score: matchup.p2Score, attacker: attacker.card.name, defender: defender.card.name, damage: result.damage, special: ultimate ? `${attacker.card.specialMove} Ultimate` : result.special.triggered ? attacker.card.specialMove : "", p1Hp: `${p1.card.hp}/${p1.card.maxHp}`, p2Hp: `${p2.card.hp}/${p2.card.maxHp}` });
   }
   getPublicState(viewerId = "spectator") { return { type: "state", room: this.getRoomView(viewerId) }; }
   getRoomView(viewerId = "spectator") { const reveal = Boolean(this.room.battleActive || this.room.knockout || (this.room.players.p1?.ready && this.room.players.p2?.ready)); const players = {}; for (const id of ["p1", "p2"]) { const player = this.room.players[id]; if (!player) continue; const isViewer = viewerId === id; const safeHand = isViewer || reveal ? (player.hand || player.team || []) : (player.hand || player.team || []).map((_, i) => hiddenCard(`${id}-hand-${i}`, "Hidden Card")); players[id] = { ...player, hand: safeHand, team: safeHand, card: player.card && (reveal || isViewer) ? player.card : player.card ? hiddenCard(`${id}-chosen`, "Chosen Card") : null }; } return { roomCode: this.room.roomCode, players, scores: this.room.scores, round: this.room.round, selectedStat: this.room.selectedStat, lastResult: this.room.lastResult, lastWinner: this.room.lastWinner, lastDamage: this.room.lastDamage, lastEvent: this.room.lastEvent, knockout: this.room.knockout, battleActive: this.room.battleActive, battleLog: this.room.battleLog || [], teamBattle: true, matchWinner: this.room.matchWinner, rewardSummary: this.room.rewardSummary, status: this.room.status }; }
@@ -173,7 +168,7 @@ function getRoomCodeFromPath(pathname) { const match = pathname.match(/^\/api\/c
 function dealHands(deck, handSize = 3) { const pool = [...deck].map(card => addCardHealth(card)); shuffle(pool); while (pool.length < handSize * 2) pool.push(...deck.map(card => addCardHealth(card))); return { p1: pool.slice(0, handSize), p2: pool.slice(handSize, handSize * 2) }; }
 function normalizeHand(hand) { return Array.isArray(hand) ? hand.map(card => addCardHealth(card)) : []; }
 function hiddenCard(id, name = "Hidden Card") { return addCardHealth({ id: `hidden-${id}`, name, category: "hidden", description: "This card is hidden until both players are ready.", imageUrl: "/assets/original-goober.jpg", role: "Balanced", specialMove: "Secret Move" }); }
-function addCardHealth(card) { const safeCard = card || { id: "fallback-original-goober", name: "Original Goober", category: "classic", description: "The original loaf-sitting Goober.", imageUrl: "/assets/original-goober.jpg" }; const maxHp = Number(safeCard.maxHp) || maxHpFor(safeCard); const hp = Number.isFinite(Number(safeCard.hp)) ? Math.max(0, Math.min(maxHp, Number(safeCard.hp))) : maxHp; const role = getRole(safeCard); return { ...safeCard, hp, maxHp, role, ultimateUsed: Boolean(safeCard.ultimateUsed), specialMove: safeCard.specialMove || ROLE_TEMPLATES[role]?.move || "Goober Move" }; }
+function addCardHealth(card) { const safeCard = card || { id: "fallback-original-goober", name: "Original Goober", category: "classic", description: "The original loaf-sitting Goober.", imageUrl: "/assets/original-goober.jpg" }; const maxHp = Number(safeCard.maxHp) || maxHpFor(safeCard); const hp = Number.isFinite(Number(safeCard.hp)) ? Math.max(0, Math.min(maxHp, Number(safeCard.hp))) : maxHp; const role = getRole(safeCard); return { ...safeCard, hp, maxHp, role, ultimateUsed: Boolean(safeCard.ultimateUsed), ultimatePending: Boolean(safeCard.ultimatePending), specialMove: safeCard.specialMove || ROLE_TEMPLATES[role]?.move || "Goober Move" }; }
 function getBattleMatchup(p1Card, p2Card, battleStat) { const p1Stats = getCardStats(p1Card), p2Stats = getCardStats(p2Card); const p1Score = Math.round(p1Stats[battleStat] + cryptoRandomFloat() * Math.max(2, p1Stats.Luck * 0.45)); const p2Score = Math.round(p2Stats[battleStat] + cryptoRandomFloat() * Math.max(2, p2Stats.Luck * 0.45)); let winnerId = p1Score >= p2Score ? "p1" : "p2"; if (p1Score === p2Score) winnerId = p1Stats.Speed >= p2Stats.Speed ? "p1" : "p2"; return { winnerId, p1Score, p2Score, winnerScore: winnerId === "p1" ? p1Score : p2Score, loserScore: winnerId === "p1" ? p2Score : p1Score, margin: Math.abs(p1Score - p2Score) }; }
 function calculateAttack(attacker, defender, battleStat = "Attack", margin = 0) { const a = getCardStats(attacker), d = getCardStats(defender); const roll = cryptoRandomFloat() * 100; let dodgeChance = Math.min(28, d.Speed * 0.75 + d.Luck * 0.55), critChance = Math.min(32, a.Luck * 1.2); if (battleStat === "Speed") dodgeChance += 4; if (battleStat === "Luck") critChance += 7; if (roll < dodgeChance) return { damage: 0, crit: false, dodge: true, heal: 0, recoil: 0, special: { triggered: false, text: "" } }; const crit = roll > 100 - critChance; const statBonus = Math.round(margin * (battleStat === "Attack" ? 1.15 : battleStat === "Defense" ? 0.7 : battleStat === "Speed" ? 0.8 : 0.9)); let damage = Math.max(5, Math.round((a.Attack * 1.35 - d.Defense * 0.68 + 6 + statBonus) * (crit ? 1.75 : 1))); if (battleStat === "Defense") damage = Math.max(5, damage + Math.round(a.Defense * 0.25)); if (attacker.role === "Brawler") damage += 4; if (attacker.role === "Glass Cannon") damage += 6; if (defender.role === "Tank") damage = Math.max(4, damage - 5); let heal = attacker.role === "Healer" && cryptoRandomFloat() < (battleStat === "Luck" ? 0.36 : 0.28) ? Math.max(6, Math.round(a.Luck * 0.8)) : 0; let recoil = 0; const special = rollSpecialAbility(attacker, defender, battleStat, margin); if (special.triggered) { damage += special.bonusDamage || 0; heal += special.heal || 0; recoil += special.recoil || 0; } return { damage, crit, dodge: false, heal, recoil, special }; }
 function rollUltimateAbility(attacker, defender) { const a = getCardStats(attacker), role = attacker.role || getRole(attacker); if (role === "Tank") { const heal = Math.max(10, Math.round(a.Defense * 0.55)), damage = Math.max(8, Math.round(a.Defense * 0.45 + a.Attack * 0.4)); return { damage, heal, recoil: 0, text: `Loaf Wall Ultimate restored ${heal} HP.` }; } if (role === "Brawler") { const damage = Math.max(18, Math.round(a.Attack * 1.25)); return { damage, heal: 0, recoil: 0, text: "Heavy Bonk Ultimate landed a massive smash." }; } if (role === "Glass Cannon") { const damage = Math.max(24, Math.round(a.Attack * 1.55)), recoil = Math.max(5, Math.round(damage * 0.18)); return { damage, heal: 0, recoil, text: "Chaos Blast Ultimate hit extremely hard." }; } if (role === "Trickster") { const damage = Math.max(14, Math.round((a.Speed + a.Luck) * 0.85)); return { damage, heal: 0, recoil: 0, text: "Silly Dodge Ultimate turned speed into damage." }; } if (role === "Healer") { const heal = Math.max(16, Math.round(a.Luck * 1.4 + a.Defense * 0.35)), damage = Math.max(8, Math.round(a.Luck * 0.7)); return { damage, heal, recoil: 0, text: `Snack Break Ultimate restored ${heal} HP.` }; } const damage = Math.max(12, Math.round((a.Attack + a.Speed) * 0.55)), heal = Math.max(6, Math.round(a.Luck * 0.6)); return { damage, heal, recoil: 0, text: `Reliable Goob Ultimate added damage and restored ${heal} HP.` }; }
