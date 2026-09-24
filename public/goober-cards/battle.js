@@ -45,7 +45,7 @@ export class Battle {
         <button class="menu-btn" data-menu aria-label="Menu">☰</button>
       </div>
       <div class="board opp-board"></div>
-      <div class="midline"><span class="turn-label"></span><div class="line"></div><button class="end-turn" data-end>End Turn</button><div class="timer" hidden><i></i></div></div>
+      <div class="midline"><span class="turn-label"></span><div class="history" aria-label="Recently played cards"></div><button class="end-turn" data-end>End Turn</button><div class="timer" hidden><i></i></div></div>
       <div class="board my-board"></div>
       <div class="hero-bar my-bar">
         <div class="hero me" data-uid="h${this.me}" style="background-image:url('${esc(this.opts.heroArt?.[0] || "/assets/original-goober.jpg")}')"><div class="hp"></div><div class="armor" hidden></div></div>
@@ -63,7 +63,7 @@ export class Battle {
       oppBoard: $(".opp-board", root), myBoard: $(".my-board", root),
       hand: $(".hand", root), oppHand: $(".opp-hand", root),
       end: $("[data-end]", root), power: $("[data-power]", root),
-      turnLabel: $(".turn-label", root), timer: $(".timer", root)
+      turnLabel: $(".turn-label", root), timer: $(".timer", root), history: $(".history", root)
     };
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.classList.add("arrow-layer");
@@ -73,6 +73,11 @@ export class Battle {
     this.tip = document.createElement("div");
     this.tip.className = "card-tip";
     this.tip.hidden = true;
+    this.tip.addEventListener("click", e => {
+      if (!e.target.closest("[data-details]") || this.sel?.kind !== "hand") return;
+      const el = this.el.hand.querySelector(`[data-uid="${this.sel.uid}"]`);
+      if (el) this.inspect(el);
+    });
     document.body.appendChild(this.tip);
 
     this.el.end.addEventListener("click", () => this.endTurn());
@@ -101,6 +106,7 @@ export class Battle {
     this.root.remove();
     this.arrow.remove();
     this.tip.remove();
+    this.mulliganEl?.remove();
     document.querySelectorAll(".reveal, .banner, .float-num, .bubble, .emote-menu").forEach(el => el.remove());
   }
 
@@ -120,6 +126,7 @@ export class Battle {
       await this.postEvents(events, first);
       this.animating = false;
       this.render();
+      this.maybeMulligan();
     });
     return this.queue;
   }
@@ -152,6 +159,7 @@ export class Battle {
       hero.classList.toggle("friendly-target", targets.has(uid) && uid === `h${this.me}`);
     }
     this.renderHand(drawn);
+    this.renderHistory();
 
     // Hero power + end turn.
     const pTargets = powerTargets(s, this.me);
@@ -241,7 +249,8 @@ export class Battle {
         if (drawn.has(inst.uid)) { el.classList.add("drawn"); setTimeout(() => el.classList.remove("drawn"), 500); }
       }
       const info = this.canInput ? playInfo(s, this.catalog, this.me, inst.uid) : { playable: false };
-      el.className = ["hcard", info.playable ? "playable" : "", this.sel?.kind === "hand" && this.sel.uid === inst.uid ? "selected" : "", el.classList.contains("drawn") ? "drawn" : ""].filter(Boolean).join(" ");
+      const pricey = (this.def(inst.id)?.cost ?? 0) > me.mana;
+      el.className = ["hcard", info.playable ? "playable" : "", pricey ? "pricey" : "", this.sel?.kind === "hand" && this.sel.uid === inst.uid ? "selected" : "", el.classList.contains("drawn") ? "drawn" : ""].filter(Boolean).join(" ");
       return el;
     });
     this.el.hand.replaceChildren(...nodes);
@@ -264,25 +273,52 @@ export class Battle {
       const y = Math.abs(offset) * Math.abs(offset) * 1.6;
       el.style.zIndex = String(10 + i);
       if (el.classList.contains("selected")) {
-        const clampedX = Math.max(-width / 2 + cw * 0.7, Math.min(width / 2 - cw * 0.7, x));
-        el.style.transform = `translateX(calc(-50% + ${clampedX}px)) translateY(-62%) scale(1.25)`;
+        // Blow the card up so its text is easy to read, keeping it on screen.
+        const scale = Math.max(1.25, Math.min(1.9, (window.innerWidth * 0.5) / cw, (window.innerHeight * 0.42) / (cw * 1.4)));
+        const half = (cw * scale) / 2;
+        const clampedX = Math.max(-width / 2 + half + 6, Math.min(width / 2 - half - 6, x));
+        el.style.transform = `translateX(calc(-50% + ${clampedX}px)) translateY(-72%) scale(${scale})`;
       } else {
         el.style.transform = `translateX(calc(-50% + ${x}px)) translateY(${y}px) rotate(${rot}deg)`;
       }
     });
   }
 
+  renderHistory() {
+    const items = (this.state.history || []).slice(-6);
+    this.el.history.innerHTML = items.map((h, i) => {
+      const def = this.def(h.id);
+      if (!def) return "";
+      const art = def.art?.image ? `<img src="${esc(def.art.image)}" alt="" draggable="false">` : `<span>${esc(def.art?.emoji || "❓")}</span>`;
+      return `<button class="hist ${h.player === this.me ? "mine" : "theirs"} ${def.rarity}" data-hist="${i}" title="${esc(def.name)}">${art}<em>${def.cost}</em></button>`;
+    }).join("");
+  }
+
+  inspectHistory(i) {
+    const h = (this.state.history || []).slice(-6)[i];
+    const def = h && this.def(h.id);
+    if (!def) return;
+    sfx.tap();
+    const who = h.player === this.me ? "You played" : `${esc(this.state.players[h.player].name)} played`;
+    modal(`<div class="inspect">${cardHTML(def, { shiny: h.shiny })}<div class="details"><p><b>${who} this.</b></p>${def.flavor ? `<p><i>${esc(def.flavor)}</i></p>` : ""}${keywordGlossary(def.keywords, def)}</div><button class="btn primary" data-close>Close</button></div>`, { bare: true });
+  }
+
   renderTip() {
     let text = "";
+    let details = false;
     if (this.sel?.kind === "hand") {
+      details = true;
       const def = this.def(this.state.players[this.me].hand.find(c => c.uid === this.sel.uid)?.id);
-      if (this.sel.isMinion && !this.sel.placed) text = this.sel.targets ? `Drop ${def?.name} on the table, then pick a target` : `Tap the table (or the card again) to play ${def?.name}`;
+      if (this.sel.preview) text = `${this.sel.reason || "Can't play this yet"}`;
+      else if (this.sel.isMinion && !this.sel.placed) text = this.sel.targets ? `Drop ${def?.name} on the table, then pick a target` : `Tap the table (or the card again) to play ${def?.name}`;
       else if (this.sel.targets) text = `Pick a glowing target for ${def?.name}`;
       else text = `Tap again or drag up to use ${def?.name}`;
     } else if (this.sel?.kind === "attack") text = "Tap a glowing enemy to attack";
     else if (this.sel?.kind === "power") text = `${HERO_POWER.name} 💨: tap an enemy`;
     this.tip.hidden = !text;
-    this.tip.textContent = text;
+    const mid = this.root.querySelector(".midline")?.getBoundingClientRect();
+    if (mid) this.tip.style.top = `${mid.top + mid.height / 2}px`;
+    this.tip.innerHTML = `<span>${esc(text)}</span>${details ? `<button type="button" data-details>ⓘ Details</button>` : ""}`;
   }
 
   renderTimer() {
@@ -293,23 +329,61 @@ export class Battle {
     this.el.timer.classList.toggle("hurry", left < 15000);
   }
 
+  // Swap cards out of your opening hand, once, before your first move.
+  maybeMulligan() {
+    const s = this.state, me = s?.players[this.me];
+    if (!me || s.over || s.active !== this.me || me.mulliganDone || this.mulliganEl) return;
+    const picks = new Set();
+    const el = document.createElement("div");
+    el.className = "mulligan";
+    const cards = me.hand.filter(c => c.id !== "token-crumb");
+    el.innerHTML = `<div class="mulligan-box">
+      <h2>Starting hand</h2>
+      <p>Tap up to 4 cards to swap them for new ones.</p>
+      <div class="mulligan-cards">${cards.map(c => `<button class="mull-card" data-mull="${esc(c.uid)}">${cardHTML(this.def(c.id), { shiny: c.shiny })}<span class="swap-x">SWAP</span></button>`).join("")}</div>
+      <div class="actions"><button class="btn primary big" data-keep>Keep hand</button></div>
+    </div>`;
+    const keep = el.querySelector("[data-keep]");
+    el.addEventListener("click", async e => {
+      const card = e.target.closest("[data-mull]");
+      if (card) {
+        const uid = card.dataset.mull;
+        if (picks.has(uid)) picks.delete(uid);
+        else if (picks.size < 4) picks.add(uid);
+        card.classList.toggle("picked", picks.has(uid));
+        keep.textContent = picks.size ? `Swap ${picks.size} card${picks.size === 1 ? "" : "s"}` : "Keep hand";
+        sfx.tap();
+        return;
+      }
+      if (e.target.closest("[data-keep]")) {
+        el.remove();
+        this.mulliganEl = null;
+        await this.send({ type: "mulligan", uids: [...picks] });
+      }
+    });
+    document.body.appendChild(el);
+    this.mulliganEl = el;
+  }
+
   // ---------------------------------------------------------------- selection
   currentTargets() {
     if (!this.sel) return [];
-    if (this.sel.kind === "hand") return this.sel.isMinion && !this.sel.placed ? [] : this.sel.targets || [];
+    if (this.sel.kind === "hand") return this.sel.preview || (this.sel.isMinion && !this.sel.placed) ? [] : this.sel.targets || [];
     return this.sel.targets || [];
   }
 
   selectHand(uid) {
     const info = playInfo(this.state, this.catalog, this.me, uid);
     if (!info.playable) {
-      toast(info.reason || "Can't play that yet.", "bad");
-      sfx.error();
-      this.sel = null;
+      // Still show the card big so its text can be read.
+      const need = (info.def || this.def(this.state.players[this.me].hand.find(c => c.uid === uid)?.id))?.cost - this.state.players[this.me].mana;
+      const reason = info.reason === "Not enough Aura." && need > 0 ? `Need ${need} more Aura` : info.reason;
+      sfx.select();
+      this.sel = { kind: "hand", uid, preview: true, reason };
       this.render();
       return;
     }
-    sfx.tap();
+    sfx.select();
     this.sel = { kind: "hand", uid, isMinion: info.def.type === "minion", targets: info.targets, placed: false, position: null };
     this.render();
   }
@@ -342,6 +416,7 @@ export class Battle {
     const sel = this.sel;
     if (!sel) return;
     let action;
+    if (sel.preview) return;
     if (sel.kind === "hand") action = { type: "play", uid: sel.uid, ...(target ? { target } : {}), ...(sel.position !== null && sel.position !== undefined ? { position: sel.position } : {}) };
     else if (sel.kind === "attack") action = { type: "attack", uid: sel.uid, target };
     else if (sel.kind === "power") action = { type: "power", target };
@@ -370,6 +445,7 @@ export class Battle {
       if (!ok) return;
     }
     this.sel = null;
+    sfx.endTurn();
     await this.send({ type: "end" });
   }
 
@@ -455,16 +531,29 @@ export class Battle {
   }
 
   handleTap(t, clientX) {
-    if (!this.canInput) return;
+    const hist = t.closest("[data-hist]");
+    if (hist) { this.inspectHistory(Number(hist.dataset.hist)); return; }
+    if (!this.canInput) {
+      // Reading cards is always allowed, even on their turn.
+      const peek = t.closest(".hcard, .minion");
+      if (peek && !this.animating) this.inspect(peek);
+      return;
+    }
     const uid = t.closest("[data-uid]")?.dataset.uid;
     const sel = this.sel;
     if (sel && uid && this.currentTargets().includes(uid)) { this.commit(uid); return; }
     const hcard = t.closest(".hcard");
     if (hcard) {
-      if (sel?.kind === "hand" && sel.uid === hcard.dataset.uid && !sel.targets) { this.commit(null); return; }
+      if (sel?.kind === "hand" && sel.uid === hcard.dataset.uid) {
+        if (sel.preview || sel.targets) this.inspect(hcard);
+        else this.commit(null);
+        return;
+      }
       this.selectHand(hcard.dataset.uid);
       return;
     }
+    const enemyMinion = t.closest(".opp-board .minion");
+    if (enemyMinion && !this.currentTargets().length) { this.inspect(enemyMinion); return; }
     if (sel?.kind === "hand" && sel.isMinion && !sel.placed && t.closest(".my-board, .midline")) {
       sel.position = this.boardPosition(clientX);
       if (sel.targets) { sel.placed = true; sfx.tap(); this.render(); return; }
@@ -478,13 +567,7 @@ export class Battle {
       this.selectAttacker(myMinion.dataset.uid);
       return;
     }
-    if (myMinion && !sel) {
-      const m = this.state.players[this.me].board.find(x => x.uid === myMinion.dataset.uid);
-      if (m?.frozen) toast("That Goober is muted this turn.");
-      else if (m?.sick) toast("It just got here. It can attack next turn.");
-      else if (m && m.attack <= 0) toast("0 Attack. It's just here for the vibes.");
-      else if (m && !m.attacksLeft) toast("Already attacked this turn. Chill.");
-    }
+    if (myMinion && !sel) { this.inspect(myMinion); return; }
     this.clearSel();
   }
 
@@ -517,7 +600,7 @@ export class Battle {
     if (el.classList.contains("hero")) {
       const idx = uid === `h${this.me}` ? this.me : this.opp;
       const p = s.players[idx];
-      modal(`<h2>${esc(p.name)}</h2><p><b>Health:</b> ${p.hero.hp}/${p.hero.maxHp}${p.hero.armor ? ` · <b>Drip:</b> ${p.hero.armor}` : ""}</p><p><b>Cards in hand:</b> ${p.handCount ?? p.hand.length} · <b>Deck:</b> ${p.deckCount ?? p.deck.length}</p><p><b>${HERO_POWER.name}</b> (${HERO_POWER.cost} Bones): ${HERO_POWER.text}</p><div class="actions"><button class="btn primary" data-close>OK</button></div>`);
+      modal(`<h2>${esc(p.name)}</h2><p><b>Health:</b> ${p.hero.hp}/${p.hero.maxHp}${p.hero.armor ? ` · <b>Drip:</b> ${p.hero.armor}` : ""}</p><p><b>Cards in hand:</b> ${p.handCount ?? p.hand.length} · <b>Deck:</b> ${p.deckCount ?? p.deck.length}</p><p><b>${HERO_POWER.name}</b> (${HERO_POWER.cost} Aura): ${HERO_POWER.text}</p><div class="actions"><button class="btn primary" data-close>OK</button></div>`);
       return;
     }
     if (el.classList.contains("hcard")) {
@@ -530,8 +613,10 @@ export class Battle {
         if (m) {
           def = this.def(m.id); shiny = m.shiny;
           stats = { attack: m.attack, health: m.health };
-          if (m.frozen) notes.push("💤 Asleep: can't attack this turn.");
-          if (m.sick && idx === this.me) notes.push("Just arrived: can attack next turn.");
+          if (m.frozen) notes.push("🔇 Muted: can't attack this turn.");
+          if (m.sick && idx === this.me) notes.push("Just got here: can attack next turn.");
+          if (idx === this.me && !m.sick && !m.frozen && m.attacksLeft <= 0 && m.attack > 0) notes.push("Already attacked this turn.");
+          if (m.attack <= 0) notes.push("0 Attack: it can't attack. Just here for the vibes.");
           if (m.health < m.maxHealth) notes.push(`Hurt: ${m.health}/${m.maxHealth} Health.`);
           const extraKw = (m.keywords || []).filter(k => !(def?.keywords || []).includes(k));
           if (extraKw.length) notes.push(`Gained: ${extraKw.map(k => KEYWORDS[k]?.label).join(", ")}.`);
@@ -602,7 +687,7 @@ export class Battle {
     b.style.left = `${r.right + 8}px`;
     if (seat === this.me) b.style.bottom = `${window.innerHeight - r.top + 4}px`; else b.style.top = `${r.bottom - 10}px`;
     document.body.appendChild(b);
-    sfx.bark();
+    if (key === "woof") sfx.bark(); else sfx.emote();
     setTimeout(() => b.remove(), 2300);
   }
 
@@ -637,9 +722,37 @@ export class Battle {
     await sleep(450);
   }
 
-  banner(text) {
+  // Particle burst on a character (hits, knockouts).
+  burst(uid, count, kind) {
+    const el = this.elFor(uid);
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    const colors = kind === "poof" ? ["#ffffff", "#ffd34d", "#ff8bd1", "#8ed3ff", "#b28dff"] : ["#ffd34d", "#ff9f45", "#ff5d5d", "#ffffff"];
+    for (let i = 0; i < count; i++) {
+      const p = document.createElement("i");
+      p.className = `particle ${kind}`;
+      const angle = Math.random() * Math.PI * 2, dist = 30 + Math.random() * (kind === "poof" ? 70 : 45);
+      p.style.left = `${cx}px`;
+      p.style.top = `${cy}px`;
+      p.style.background = colors[i % colors.length];
+      p.style.setProperty("--dx", `${Math.cos(angle) * dist}px`);
+      p.style.setProperty("--dy", `${Math.sin(angle) * dist}px`);
+      document.body.appendChild(p);
+      setTimeout(() => p.remove(), 800);
+    }
+  }
+
+  screenShake(big) {
+    this.root.classList.remove("quake", "quake-big");
+    void this.root.offsetWidth;
+    this.root.classList.add(big ? "quake-big" : "quake");
+    setTimeout(() => this.root.classList.remove("quake", "quake-big"), 500);
+  }
+
+  banner(text, kind = "") {
     const el = document.createElement("div");
-    el.className = "banner";
+    el.className = `banner ${kind}`;
     el.innerHTML = `<div>${esc(text)}</div>`;
     document.body.appendChild(el);
     setTimeout(() => el.remove(), 1350);
@@ -689,7 +802,7 @@ export class Battle {
     el.className = "reveal";
     el.innerHTML = cardHTML(def, { shiny });
     document.body.appendChild(el);
-    await sleep(1150);
+    await sleep(1750);
     el.remove();
   }
 
@@ -700,15 +813,24 @@ export class Battle {
         case "play":
           if (e.player !== this.me) await this.reveal(e.id, e.shiny);
           if (this.def(e.id)?.type === "spell") sfx.spell(); else sfx.play();
+          if (this.def(e.id)?.rarity === "legendary") { this.banner(`${this.def(e.id).name}!`, "legend"); sfx.shiny(); }
           break;
         case "attack": await this.lunge(e.from, e.to); break;
         case "power": await this.barkFart(e.player === this.me ? this.el.myHero : this.el.oppHero); break;
         case "damage": {
           hits = true;
-          this.floatAt(e.uid, `-${e.amount}`, "dmg");
+          const big = e.amount >= 5;
+          this.floatAt(e.uid, `-${e.amount}`, big ? "dmg big" : "dmg");
           const el = this.elFor(e.uid);
           if (el) { el.classList.remove("shake"); void el.offsetWidth; el.classList.add("shake"); }
-          if (e.uid === `h${this.me}`) buzz([40, 30, 40]);
+          this.burst(e.uid, big ? 14 : 7, "hit");
+          if (big) { sfx.vineBoom(); this.screenShake(true); }
+          else if (e.uid.startsWith("h")) this.screenShake(false);
+          if (e.uid === `h${this.me}`) buzz(big ? [80, 40, 120] : [40, 30, 40]);
+          break;
+        }
+        case "summon": {
+          if (e.player !== this.me || !events.some(x => x.t === "play" && x.player === e.player)) sfx.summon();
           break;
         }
         case "heal": this.floatAt(e.uid, `+${e.amount}`, "heal"); sfx.heal(); break;
@@ -716,7 +838,7 @@ export class Battle {
         case "shield": { sfx.shield(); this.floatAt(e.uid, "Plot armor!", "info"); const el = this.elFor(e.uid); if (el) el.classList.add("pop-shield"); break; }
         case "freeze": this.floatAt(e.uid, "🔇 Muted", "info"); break;
         case "armor": this.floatAt(`h${e.player}`, `+${e.amount} Drip`, "info"); break;
-        case "death": { hits = true; const el = this.elFor(e.uid); if (el) el.classList.add("dying"); sfx.death(); break; }
+        case "death": { hits = true; const el = this.elFor(e.uid); if (el) el.classList.add("dying"); this.burst(e.uid, 18, "poof"); sfx.death(); break; }
         case "fatigue": toast(`${e.player === this.me ? "You're" : "They're"} out of cards! ${e.amount} burnout damage.`, "bad"); break;
         case "burn": toast(`${e.player === this.me ? "Your" : "Their"} hand was full. ${this.def(e.id)?.name || "A card"} got yeeted into the void.`); break;
         case "timeout": toast(`${e.player === this.me ? "You went AFK" : "They went AFK"}. Turn skipped.`); break;

@@ -8,6 +8,7 @@ export default {
       if (request.method === "OPTIONS") return corsResponse(null, 204);
       if (url.pathname === "/api/goobers" && request.method === "GET") return await listGoobers(env);
       if (url.pathname === "/api/goobers" && request.method === "POST") return await uploadGoober(request, env);
+      if (url.pathname.startsWith("/api/auth/") || url.pathname === "/api/profile") return await routeAccounts(request, env, url);
       if (url.pathname === "/api/card-battle/create" && request.method === "POST") return await createCardBattleRoom();
       if (url.pathname.startsWith("/api/card-battle/") && request.method === "GET") return await routeCardBattleRoom(request, env);
       if (url.pathname === "/api/goobers/pending" && request.method === "GET") return await listPendingGoobers(request, env);
@@ -238,6 +239,7 @@ function sanitizeAction(action) {
   if (typeof action.uid === "string") out.uid = cleanText(action.uid, 24);
   if (typeof action.target === "string") out.target = cleanText(action.target, 24);
   if (Number.isInteger(action.position)) out.position = action.position;
+  if (Array.isArray(action.uids)) out.uids = action.uids.slice(0, 10).filter(u => typeof u === "string").map(u => cleanText(u, 24));
   return out;
 }
 
@@ -261,26 +263,35 @@ function getRoomCodeFromPath(pathname) { const match = pathname.match(/^\/api\/c
 async function listGoobers(env) { const result = await env.DB.prepare(`SELECT id, name, category, description, image_key, image_type, created_at FROM goobers WHERE approved = 1 ORDER BY created_at DESC`).all(); return jsonResponse((result.results || []).map(row => ({ id: row.id, name: row.name, category: row.category, description: row.description, imageUrl: `/api/goober-image/${row.image_key}`, createdAt: row.created_at })), 200, NO_STORE_HEADERS); }
 async function uploadGoober(request, env) {
   const formData = await request.formData();
-  const uploadCode = cleanText(formData.get("uploadCode"), 120), name = cleanText(formData.get("name"), 80), category = cleanText(formData.get("category"), 30), description = cleanText(formData.get("description"), 280), image = formData.get("image");
-  if (!hasValidUploadCode(uploadCode, env)) return jsonResponse({ error: "Invalid upload code." }, 403, NO_STORE_HEADERS);
+  const name = cleanText(formData.get("name"), 80), category = cleanText(formData.get("category"), 30), description = cleanText(formData.get("description"), 280), image = formData.get("image");
+  // No upload code anymore: the auto-mod checks every upload, and each network
+  // gets a daily cap so nobody can flood the gallery.
+  const ip = request.headers.get("cf-connecting-ip") || "unknown";
+  const day = new Date().toISOString().slice(0, 10);
   if (!name) return jsonResponse({ error: "Goober name is required." }, 400, NO_STORE_HEADERS);
   if (!description) return jsonResponse({ error: "Goober description is required." }, 400, NO_STORE_HEADERS);
   if (!ALLOWED_CATEGORIES.has(category)) return jsonResponse({ error: "Invalid category." }, 400, NO_STORE_HEADERS);
   if (!(image instanceof File)) return jsonResponse({ error: "Image file is required." }, 400, NO_STORE_HEADERS);
-  if (!image.type.startsWith("image/")) return jsonResponse({ error: "File must be an image." }, 400, NO_STORE_HEADERS);
   if (image.size > MAX_IMAGE_BYTES) return jsonResponse({ error: "Image is too large. Max size is 5 MB." }, 400, NO_STORE_HEADERS);
 
+  // Reserve a slot atomically (so parallel requests can't sneak past the cap).
+  // Blocked uploads still use up a slot.
+  if (await bumpDailyCount(env, "upload_counts", ip, day) > MAX_UPLOADS_PER_DAY) return jsonResponse({ error: `That's ${MAX_UPLOADS_PER_DAY} uploads today from here. Come back tomorrow!` }, 429, NO_STORE_HEADERS);
+
+  // Trust the file's bytes, not its claimed type: only plain raster images (no SVG/HTML).
   const bytes = new Uint8Array(await image.arrayBuffer());
-  const moderation = await moderateUpload(env, { name, description, category, bytes, type: image.type });
+  const kind = sniffImage(bytes);
+  if (!kind) return jsonResponse({ error: "Only JPG, PNG, WebP, or GIF images, please." }, 400, NO_STORE_HEADERS);
+  const moderation = await moderateUpload(env, { name, description, category, bytes, type: kind.type });
   if (moderation.verdict === "block") {
     console.log("Upload blocked by auto-mod", { name, reason: moderation.reason });
     return jsonResponse({ error: `Auto-mod blocked this Goober: ${moderation.reason}`, moderation: "blocked", reason: moderation.reason }, 422, NO_STORE_HEADERS);
   }
 
   const approved = moderation.verdict === "allow" ? 1 : PENDING_REVIEW;
-  const id = crypto.randomUUID(), extension = getExtension(image.name, image.type), imageKey = `goobers/${id}.${extension}`;
-  await env.GOOBER_IMAGES.put(imageKey, bytes, { httpMetadata: { contentType: image.type }, customMetadata: { originalName: image.name || "goober-upload", gooberName: name, moderation: moderation.verdict, moderationReason: moderation.reason.slice(0, 200) } });
-  await env.DB.prepare(`INSERT INTO goobers (id, name, category, description, image_key, image_type, approved, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`).bind(id, name, category, description, imageKey, image.type, approved).run();
+  const id = crypto.randomUUID(), extension = kind.ext, imageKey = `goobers/${id}.${extension}`;
+  await env.GOOBER_IMAGES.put(imageKey, bytes, { httpMetadata: { contentType: kind.type }, customMetadata: { originalName: image.name || "goober-upload", gooberName: name, moderation: moderation.verdict, moderationReason: moderation.reason.slice(0, 200) } });
+  await env.DB.prepare(`INSERT INTO goobers (id, name, category, description, image_key, image_type, approved, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`).bind(id, name, category, description, imageKey, kind.type, approved).run();
   const body = { id, name, category, description, imageUrl: `/api/goober-image/${imageKey}`, moderation: approved === 1 ? "approved" : "pending", reason: moderation.reason };
   return jsonResponse(body, approved === 1 ? 201 : 202, NO_STORE_HEADERS);
 }
@@ -288,6 +299,25 @@ async function uploadGoober(request, env) {
 // --- Auto-moderation ---------------------------------------------------------
 // approved: 1 = live, 0 = deleted, 2 = waiting for a human to review.
 const PENDING_REVIEW = 2;
+const SAFE_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+
+// Identify an image from its first bytes. Returns null for anything else (SVG, HTML, ...).
+function sniffImage(bytes) {
+  const b = i => bytes[i];
+  if (bytes.length < 12) return null;
+  if (b(0) === 0xff && b(1) === 0xd8 && b(2) === 0xff) return { type: "image/jpeg", ext: "jpg" };
+  if (b(0) === 0x89 && b(1) === 0x50 && b(2) === 0x4e && b(3) === 0x47 && b(4) === 0x0d && b(5) === 0x0a && b(6) === 0x1a && b(7) === 0x0a) return { type: "image/png", ext: "png" };
+  if (b(0) === 0x47 && b(1) === 0x49 && b(2) === 0x46 && b(3) === 0x38) return { type: "image/gif", ext: "gif" };
+  if (b(0) === 0x52 && b(1) === 0x49 && b(2) === 0x46 && b(3) === 0x46 && b(8) === 0x57 && b(9) === 0x45 && b(10) === 0x42 && b(11) === 0x50) return { type: "image/webp", ext: "webp" };
+  return null;
+}
+
+// Atomically add one to a per-network daily counter and return the new total.
+async function bumpDailyCount(env, table, ip, day) {
+  const row = await env.DB.prepare(`INSERT INTO ${table} (ip, day, count) VALUES (?, ?, 1) ON CONFLICT(ip, day) DO UPDATE SET count = count + 1 RETURNING count`).bind(ip, day).first();
+  return Number(row?.count) || 1;
+}
+const MAX_UPLOADS_PER_DAY = 8;
 const MODERATION_IMAGE_LIMIT = 3.5 * 1024 * 1024;
 const VISION_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct";
 const TEXT_GUARD_MODEL = "@cf/meta/llama-guard-3-8b";
@@ -371,11 +401,217 @@ async function approveGoober(request, env) {
 }
 async function deleteGoober(request, env) { const url = new URL(request.url), id = decodeURIComponent(url.pathname.replace("/api/goobers/", "")).trim(); if (!id || id.includes("/") || id.includes("..")) return jsonResponse({ error: "Invalid goober id." }, 400, NO_STORE_HEADERS); const adminCode = await readAdminCode(request); if (!hasValidAdminCode(adminCode, env)) return jsonResponse({ error: "Invalid admin delete code." }, 403, NO_STORE_HEADERS); const row = await env.DB.prepare(`SELECT id, image_key FROM goobers WHERE id = ?`).bind(id).first(); if (!row) return jsonResponse({ error: "Goober not found." }, 404, NO_STORE_HEADERS); await env.DB.prepare(`UPDATE goobers SET approved = 0 WHERE id = ?`).bind(id).run(); try { if (row.image_key) await env.GOOBER_IMAGES.delete(row.image_key); } catch (error) { console.error("R2 image delete failed after DB soft delete", error); } return jsonResponse({ ok: true, id, deleted: true }, 200, NO_STORE_HEADERS); }
 async function readAdminCode(request) { const headerCode = cleanText(request.headers.get("x-goober-admin-code"), 120); if (headerCode) return headerCode; const contentType = request.headers.get("content-type") || ""; if (contentType.includes("application/json")) { const body = await request.json().catch(() => ({})); return cleanText(body.adminCode, 120); } if (contentType.includes("multipart/form-data") || contentType.includes("application/x-www-form-urlencoded")) { const formData = await request.formData().catch(() => null); return cleanText(formData?.get("adminCode"), 120); } return ""; }
-function hasValidUploadCode(code, env) { const expected = cleanText(env.GOOBER_UPLOAD_CODE, 120); return Boolean(expected && code && safeEqual(code, expected)); }
 function hasValidAdminCode(code, env) { const expected = cleanText(env.GOOBER_ADMIN_CODE || env.GOOBER_UPLOAD_CODE, 120); return Boolean(expected && code && safeEqual(code, expected)); }
 function safeEqual(a, b) { if (a.length !== b.length) return false; let result = 0; for (let i = 0; i < a.length; i++) result |= a.charCodeAt(i) ^ b.charCodeAt(i); return result === 0; }
-async function getGooberImage(request, env) { const url = new URL(request.url), imageKey = decodeURIComponent(url.pathname.replace("/api/goober-image/", "")); if (!imageKey || imageKey.includes("..") || !imageKey.startsWith("goobers/")) return jsonResponse({ error: "Invalid image key." }, 400, NO_STORE_HEADERS); const object = await env.GOOBER_IMAGES.get(imageKey); if (!object) return jsonResponse({ error: "Image not found" }, 404, NO_STORE_HEADERS); const headers = new Headers(); object.writeHttpMetadata(headers); headers.set("etag", object.httpEtag); headers.set("cache-control", "public, max-age=31536000, immutable"); return new Response(object.body, { headers }); }
+async function getGooberImage(request, env) { const url = new URL(request.url), imageKey = decodeURIComponent(url.pathname.replace("/api/goober-image/", "")); if (!imageKey || imageKey.includes("..") || !imageKey.startsWith("goobers/")) return jsonResponse({ error: "Invalid image key." }, 400, NO_STORE_HEADERS); const object = await env.GOOBER_IMAGES.get(imageKey); if (!object) return jsonResponse({ error: "Image not found" }, 404, NO_STORE_HEADERS); const headers = new Headers(); object.writeHttpMetadata(headers); headers.set("etag", object.httpEtag); headers.set("cache-control", "public, max-age=31536000, immutable");
+  // Uploads are only ever displayed as images: no scripts, no sniffing, and anything that
+  // isn't a known raster type (e.g. an old SVG) is served as a download instead.
+  headers.set("content-security-policy", "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox");
+  headers.set("x-content-type-options", "nosniff");
+  if (!SAFE_IMAGE_TYPES.has((headers.get("content-type") || "").split(";")[0].trim().toLowerCase())) {
+    headers.set("content-type", "application/octet-stream");
+    headers.set("content-disposition", "attachment");
+  }
+  return new Response(object.body, { headers }); }
 function cleanText(value, maxLength) { if (typeof value !== "string") return ""; return value.trim().replace(/\s+/g, " ").slice(0, maxLength); }
-function getExtension(filename = "", contentType = "") { const lower = filename.toLowerCase(); if (lower.endsWith(".png")) return "png"; if (lower.endsWith(".webp")) return "webp"; if (lower.endsWith(".gif")) return "gif"; if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "jpg"; if (contentType.includes("png")) return "png"; if (contentType.includes("webp")) return "webp"; if (contentType.includes("gif")) return "gif"; return "jpg"; }
 function jsonResponse(data, status = 200, headers = {}) { return corsResponse(JSON.stringify(data), status, { "content-type": "application/json; charset=utf-8", ...headers }); }
-function corsResponse(body, status = 200, headers = {}) { return new Response(body, { status, headers: { "access-control-allow-origin": "*", "access-control-allow-methods": "GET, POST, DELETE, OPTIONS", "access-control-allow-headers": "content-type, x-goober-admin-code, cache-control, pragma", ...headers } }); }
+function corsResponse(body, status = 200, headers = {}) { return new Response(body, { status, headers: { "access-control-allow-origin": "*", "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS", "access-control-allow-headers": "content-type, authorization, x-goober-admin-code, cache-control, pragma", ...headers } }); }
+
+// --- Accounts ------------------------------------------------------------------
+// Username + password logins (no email). Passwords: PBKDF2-SHA256 with a random
+// salt. Sessions: a random bearer token; only its SHA-256 is stored.
+const PBKDF2_ITERATIONS = 100000;
+const SESSION_DAYS = 90;
+const MAX_PROFILE_BYTES = 256 * 1024;
+const MAX_SIGNUPS_PER_DAY = 10;
+const MAX_LOGIN_TRIES = 5;
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const USERNAME_RE = /^[A-Za-z0-9_]{3,20}$/;
+const RESERVED_NAMES = new Set(["admin", "administrator", "mod", "moderator", "goober", "system", "support", "npc", "tryhard", "finalboss"]);
+
+async function routeAccounts(request, env, url) {
+  try {
+    return await handleAccounts(request, env, url);
+  } catch (error) {
+    if (error.message === "Request is too big.") return jsonResponse({ error: "Save data is too big." }, 413, NO_STORE_HEADERS);
+    if (error.message === "Invalid request.") return jsonResponse({ error: "Invalid request." }, 400, NO_STORE_HEADERS);
+    throw error;
+  }
+}
+
+async function handleAccounts(request, env, url) {
+  const path = url.pathname, method = request.method;
+  if (path === "/api/auth/signup" && method === "POST") return signup(request, env);
+  if (path === "/api/auth/login" && method === "POST") return login(request, env);
+  if (path === "/api/auth/logout" && method === "POST") return logout(request, env);
+  if (path === "/api/auth/me" && method === "GET") {
+    const user = await requireUser(request, env);
+    return user ? jsonResponse({ user: publicUser(user) }, 200, NO_STORE_HEADERS) : unauthorized();
+  }
+  if (path === "/api/profile" && method === "GET") return getProfile(request, env);
+  if (path === "/api/profile" && method === "PUT") return putProfile(request, env);
+  return jsonResponse({ error: "Not found" }, 404, NO_STORE_HEADERS);
+}
+
+function unauthorized() { return jsonResponse({ error: "Please log in again." }, 401, NO_STORE_HEADERS); }
+function publicUser(user) { return { id: user.id, username: user.username }; }
+
+async function readJson(request) {
+  const text = await request.text();
+  if (text.length > MAX_PROFILE_BYTES + 1024) throw new Error("Request is too big.");
+  try { return JSON.parse(text || "{}"); } catch { throw new Error("Invalid request."); }
+}
+
+function hex(bytes) { return [...new Uint8Array(bytes)].map(b => b.toString(16).padStart(2, "0")).join(""); }
+function unhex(text) { const out = new Uint8Array(text.length / 2); for (let i = 0; i < out.length; i++) out[i] = parseInt(text.substr(i * 2, 2), 16); return out; }
+
+async function hashPassword(password, saltHex) {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: unhex(saltHex), iterations: PBKDF2_ITERATIONS }, key, 256);
+  return hex(bits);
+}
+
+async function sha256Hex(text) { return hex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text))); }
+
+async function createSession(env, userId) {
+  const token = hex(crypto.getRandomValues(new Uint8Array(32)));
+  const expires = new Date(Date.now() + SESSION_DAYS * 86400000).toISOString();
+  await env.DB.prepare(`INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)`).bind(await sha256Hex(token), userId, expires).run();
+  return token;
+}
+
+async function requireUser(request, env) {
+  const auth = request.headers.get("authorization") || "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+  if (!/^[0-9a-f]{64}$/.test(token)) return null;
+  const row = await env.DB.prepare(`SELECT u.id, u.username, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?`).bind(await sha256Hex(token)).first();
+  if (!row || Date.parse(row.expires_at) < Date.now()) return null;
+  return row;
+}
+
+function validateCredentials(body) {
+  const username = typeof body.username === "string" ? body.username.trim() : "";
+  const password = typeof body.password === "string" ? body.password : "";
+  if (!USERNAME_RE.test(username)) return { error: "Usernames are 3-20 letters, numbers, or underscores." };
+  if (password.length < 6) return { error: "Passwords need at least 6 characters." };
+  if (password.length > 200) return { error: "That password is way too long." };
+  return { username, password, key: username.toLowerCase() };
+}
+
+// Keep gamertags clean. Fails open (allows) if the AI is unavailable.
+async function usernameAllowed(env, username) {
+  if (RESERVED_NAMES.has(username.toLowerCase())) return { ok: false, reason: "That name is reserved." };
+  if (!env.AI) return { ok: true };
+  try {
+    const guard = await env.AI.run(TEXT_GUARD_MODEL, { messages: [{ role: "user", content: `Gamer tag: ${username}` }] });
+    if (!parseGuard(guard?.response).safe) return { ok: false, reason: "Pick a different username." };
+    const result = await env.AI.run(VISION_MODEL, {
+      messages: [
+        { role: "system", content: 'You check gamer tags for a game played by middle schoolers. Block swear words (including misspelled, spaced, or leetspeak versions), sexual words, slurs, drug references, and real full names. Silly or meme names are fine. Reply with JSON only: {"ok":true|false}' },
+        { role: "user", content: username }
+      ],
+      response_format: { type: "json_object" }, max_tokens: 20, temperature: 0
+    });
+    let data = result?.response;
+    if (typeof data === "string") { const m = data.match(/\{[\s\S]*\}/); data = m ? JSON.parse(m[0]) : {}; }
+    return data && data.ok === false ? { ok: false, reason: "Pick a different username." } : { ok: true };
+  } catch (error) {
+    console.error("Username check failed", error);
+    return { ok: true };
+  }
+}
+
+async function signup(request, env) {
+  const body = await readJson(request);
+  const creds = validateCredentials(body);
+  if (creds.error) return jsonResponse({ error: creds.error }, 400, NO_STORE_HEADERS);
+  const ip = request.headers.get("cf-connecting-ip") || "unknown";
+  const day = new Date().toISOString().slice(0, 10);
+  if (await bumpDailyCount(env, "signup_counts", ip, day) > MAX_SIGNUPS_PER_DAY) return jsonResponse({ error: "Too many new accounts from here today. Try tomorrow." }, 429, NO_STORE_HEADERS);
+  const taken = await env.DB.prepare(`SELECT id FROM users WHERE username_key = ?`).bind(creds.key).first();
+  if (taken) return jsonResponse({ error: "That username is taken." }, 409, NO_STORE_HEADERS);
+  const allowed = await usernameAllowed(env, creds.username);
+  if (!allowed.ok) return jsonResponse({ error: allowed.reason }, 422, NO_STORE_HEADERS);
+
+  const id = crypto.randomUUID();
+  const salt = hex(crypto.getRandomValues(new Uint8Array(16)));
+  const hash = await hashPassword(creds.password, salt);
+  try {
+    await env.DB.prepare(`INSERT INTO users (id, username, username_key, pass_hash, pass_salt) VALUES (?, ?, ?, ?, ?)`).bind(id, creds.username, creds.key, hash, salt).run();
+  } catch (error) {
+    return jsonResponse({ error: "That username is taken." }, 409, NO_STORE_HEADERS);
+  }
+  // Start the account with the player's current device progress, if sent.
+  if (body.profile && typeof body.profile === "object") {
+    const data = JSON.stringify(body.profile);
+    if (data.length <= MAX_PROFILE_BYTES) await env.DB.prepare(`INSERT INTO profiles (user_id, data, version) VALUES (?, ?, 1)`).bind(id, data).run();
+  }
+  const token = await createSession(env, id);
+  return jsonResponse({ token, user: { id, username: creds.username } }, 201, NO_STORE_HEADERS);
+}
+
+async function login(request, env) {
+  const body = await readJson(request);
+  const username = typeof body.username === "string" ? body.username.trim() : "";
+  const password = typeof body.password === "string" ? body.password : "";
+  const key = username.toLowerCase();
+  if (!username || !password) return jsonResponse({ error: "Enter your username and password." }, 400, NO_STORE_HEADERS);
+  // Every attempt is counted atomically before the password is checked, so a burst of
+  // parallel guesses can't all read the same count. 5 tries per 15-minute window;
+  // a correct password clears the counter.
+  const now = Date.now();
+  const attempt = await env.DB.prepare(`INSERT INTO login_attempts (username_key, failures, locked_until) VALUES (?1, 1, ?2 + ?3)
+    ON CONFLICT(username_key) DO UPDATE SET
+      failures = CASE WHEN locked_until <= ?2 THEN 1 ELSE failures + 1 END,
+      locked_until = CASE WHEN locked_until <= ?2 THEN ?2 + ?3 ELSE locked_until END
+    RETURNING failures, locked_until`).bind(key, now, LOGIN_WINDOW_MS).first();
+  if (attempt && attempt.failures > MAX_LOGIN_TRIES) {
+    const wait = Math.max(1, Math.ceil((attempt.locked_until - now) / 60000));
+    return jsonResponse({ error: `Too many tries. Wait ${wait} minute${wait === 1 ? "" : "s"}.` }, 429, NO_STORE_HEADERS);
+  }
+  const user = await env.DB.prepare(`SELECT id, username, pass_hash, pass_salt FROM users WHERE username_key = ?`).bind(key).first();
+  // Hash even when the user doesn't exist so timing doesn't reveal usernames.
+  const hash = await hashPassword(password, user?.pass_salt || "00000000000000000000000000000000");
+  if (!user || !safeEqual(hash, user.pass_hash)) return jsonResponse({ error: "Wrong username or password." }, 401, NO_STORE_HEADERS);
+  await env.DB.prepare(`DELETE FROM login_attempts WHERE username_key = ?`).bind(key).run();
+  const token = await createSession(env, user.id);
+  return jsonResponse({ token, user: publicUser(user) }, 200, NO_STORE_HEADERS);
+}
+
+async function logout(request, env) {
+  const auth = request.headers.get("authorization") || "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+  if (/^[0-9a-f]{64}$/.test(token)) await env.DB.prepare(`DELETE FROM sessions WHERE token_hash = ?`).bind(await sha256Hex(token)).run();
+  return jsonResponse({ ok: true }, 200, NO_STORE_HEADERS);
+}
+
+async function getProfile(request, env) {
+  const user = await requireUser(request, env);
+  if (!user) return unauthorized();
+  const row = await env.DB.prepare(`SELECT data, version, updated_at FROM profiles WHERE user_id = ?`).bind(user.id).first();
+  if (!row) return jsonResponse({ data: null, version: 0 }, 200, NO_STORE_HEADERS);
+  return jsonResponse({ data: JSON.parse(row.data), version: row.version, updatedAt: row.updated_at }, 200, NO_STORE_HEADERS);
+}
+
+// Saves are versioned so an old device can't silently overwrite newer progress.
+async function putProfile(request, env) {
+  const user = await requireUser(request, env);
+  if (!user) return unauthorized();
+  const body = await readJson(request);
+  if (!body.data || typeof body.data !== "object" || Array.isArray(body.data)) return jsonResponse({ error: "Invalid save data." }, 400, NO_STORE_HEADERS);
+  const data = JSON.stringify(body.data);
+  if (data.length > MAX_PROFILE_BYTES) return jsonResponse({ error: "Save data is too big." }, 413, NO_STORE_HEADERS);
+  const baseVersion = Number(body.version) || 0;
+  const current = await env.DB.prepare(`SELECT version FROM profiles WHERE user_id = ?`).bind(user.id).first();
+  if (!current) {
+    await env.DB.prepare(`INSERT INTO profiles (user_id, data, version) VALUES (?, ?, 1)`).bind(user.id, data).run();
+    return jsonResponse({ ok: true, version: 1 }, 200, NO_STORE_HEADERS);
+  }
+  if (baseVersion !== current.version) {
+    const latest = await env.DB.prepare(`SELECT data, version FROM profiles WHERE user_id = ?`).bind(user.id).first();
+    return jsonResponse({ error: "Your account was updated on another device.", conflict: true, data: JSON.parse(latest.data), version: latest.version }, 409, NO_STORE_HEADERS);
+  }
+  const result = await env.DB.prepare(`UPDATE profiles SET data = ?, version = version + 1, updated_at = datetime('now') WHERE user_id = ? AND version = ?`).bind(data, user.id, baseVersion).run();
+  if (!result.meta?.changes) return jsonResponse({ error: "Your account was updated on another device.", conflict: true }, 409, NO_STORE_HEADERS);
+  return jsonResponse({ ok: true, version: baseVersion + 1 }, 200, NO_STORE_HEADERS);
+}

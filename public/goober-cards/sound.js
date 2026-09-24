@@ -1,5 +1,8 @@
-// Tiny synthesized sound effects (no audio files to download).
+// Synthesized sound effects (no audio files to download).
+// Everything runs through one bus: a little reverb for space, then a
+// compressor so layered hits sound punchy instead of clipping.
 let ctx = null;
+let bus = null;
 let enabled = true;
 
 export function setSoundEnabled(on) { enabled = Boolean(on); }
@@ -7,116 +10,303 @@ export function setSoundEnabled(on) { enabled = Boolean(on); }
 function audio() {
   if (!enabled) return null;
   try {
-    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
-    if (ctx.state === "suspended") ctx.resume();
+    if (!ctx) {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      buildBus(ctx);
+    }
+    if (ctx.state === "suspended") ctx.resume().catch(() => {});
     return ctx;
   } catch { return null; }
 }
 
-function tone(freq, { at = 0, dur = 0.12, type = "sine", gain = 0.12, slide = 0 } = {}) {
+function buildBus(a) {
+  const input = a.createGain();
+  const comp = a.createDynamicsCompressor();
+  comp.threshold.value = -16;
+  comp.knee.value = 12;
+  comp.ratio.value = 5;
+  comp.attack.value = 0.003;
+  comp.release.value = 0.18;
+  const master = a.createGain();
+  master.gain.value = 0.9;
+  // Short generated room reverb.
+  const reverb = a.createConvolver();
+  const len = Math.floor(a.sampleRate * 1.1);
+  const impulse = a.createBuffer(2, len, a.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = impulse.getChannelData(ch);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.2);
+  }
+  reverb.buffer = impulse;
+  const wet = a.createGain();
+  wet.gain.value = 0.22;
+  input.connect(comp);
+  input.connect(reverb).connect(wet).connect(comp);
+  comp.connect(master).connect(a.destination);
+  bus = { input, dry: input };
+}
+
+const out = () => bus.input;
+
+function env(g, t, { attack = 0.005, peak = 0.2, hold = 0, dur = 0.2 }) {
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), t + attack);
+  if (hold) g.gain.setValueAtTime(peak, t + attack + hold);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + attack + hold + dur);
+}
+
+function tone(freq, { at = 0, dur = 0.15, type = "sine", gain = 0.12, slide = 0, attack = 0.006, hold = 0, detune = 0, filter = 0 } = {}) {
   const a = audio();
   if (!a) return;
   const t = a.currentTime + at;
   const osc = a.createOscillator();
   const g = a.createGain();
   osc.type = type;
+  osc.detune.value = detune;
   osc.frequency.setValueAtTime(freq, t);
-  if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(40, freq + slide), t + dur);
-  g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(gain, t + 0.012);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  osc.connect(g).connect(a.destination);
+  if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(30, freq + slide), t + attack + hold + dur);
+  env(g, t, { attack, peak: gain, hold, dur });
+  let node = osc;
+  if (filter) {
+    const f = a.createBiquadFilter();
+    f.type = "lowpass";
+    f.frequency.value = filter;
+    node = osc.connect(f);
+  }
+  node.connect(g).connect(out());
   osc.start(t);
-  osc.stop(t + dur + 0.02);
+  osc.stop(t + attack + hold + dur + 0.05);
 }
 
-function noise({ at = 0, dur = 0.15, gain = 0.1, freq = 1200 } = {}) {
+let noiseBuffer = null;
+function noise({ at = 0, dur = 0.15, gain = 0.1, freq = 1200, q = 1, type = "bandpass", sweep = 0, attack = 0.003 } = {}) {
   const a = audio();
   if (!a) return;
   const t = a.currentTime + at;
-  const buffer = a.createBuffer(1, Math.floor(a.sampleRate * dur), a.sampleRate);
-  const data = buffer.getChannelData(0);
-  for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+  if (!noiseBuffer) {
+    noiseBuffer = a.createBuffer(1, a.sampleRate * 2, a.sampleRate);
+    const d = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
   const src = a.createBufferSource();
-  const filter = a.createBiquadFilter();
+  src.buffer = noiseBuffer;
+  const f = a.createBiquadFilter();
+  f.type = type;
+  f.Q.value = q;
+  f.frequency.setValueAtTime(freq, t);
+  if (sweep) f.frequency.exponentialRampToValueAtTime(Math.max(40, freq + sweep), t + dur);
   const g = a.createGain();
-  filter.type = "bandpass";
-  filter.frequency.value = freq;
-  g.gain.value = gain;
-  src.buffer = buffer;
-  src.connect(filter).connect(g).connect(a.destination);
-  src.start(t);
+  env(g, t, { attack, peak: gain, dur });
+  src.connect(f).connect(g).connect(out());
+  src.start(t, Math.random());
+  src.stop(t + dur + 0.05);
 }
 
-// A short "ruff": pitched square burst with a falling pitch, plus a breathy noise edge.
-function bark(at = 0, pitch = 520) {
-  tone(pitch, { at, dur: 0.1, type: "square", gain: 0.13, slide: -pitch * 0.45 });
-  tone(pitch * 1.5, { at, dur: 0.07, type: "sawtooth", gain: 0.05, slide: -pitch * 0.6 });
-  noise({ at, dur: 0.08, gain: 0.08, freq: 1400 });
-}
-
-// A wet, wobbly fart: low sawtooth with a fast "flap" on pitch and volume, through a low-pass filter.
-function fart(at = 0, dur = 0.75) {
+// Deep kick: the body of every impact.
+function kick(at = 0, { from = 160, to = 42, gain = 0.5, dur = 0.28 } = {}) {
   const a = audio();
   if (!a) return;
   const t = a.currentTime + at;
   const osc = a.createOscillator();
-  const flap = a.createOscillator();
-  const flapDepth = a.createGain();
-  const amp = a.createGain();
-  const ampFlap = a.createGain();
-  const flapStage = a.createGain();
-  const filter = a.createBiquadFilter();
-  osc.type = "sawtooth";
+  const g = a.createGain();
+  osc.frequency.setValueAtTime(from, t);
+  osc.frequency.exponentialRampToValueAtTime(to, t + dur * 0.6);
+  env(g, t, { attack: 0.002, peak: gain, dur });
+  osc.connect(g).connect(out());
+  osc.start(t);
+  osc.stop(t + dur + 0.05);
+}
+
+function chord(freqs, opts = {}) { freqs.forEach((f, i) => tone(f, { ...opts, at: (opts.at || 0) + (opts.stagger || 0) * i })); }
+
+// Meme: the "vine boom". Low sine with a pitch drop, pushed through soft distortion.
+function vineBoom(at = 0, gain = 0.55) {
+  const a = audio();
+  if (!a) return;
+  const t = a.currentTime + at;
+  const osc = a.createOscillator();
+  const osc2 = a.createOscillator();
+  const shaper = a.createWaveShaper();
+  const curve = new Float32Array(1024);
+  for (let i = 0; i < curve.length; i++) { const x = (i / 512) - 1; curve[i] = Math.tanh(x * 3); }
+  shaper.curve = curve;
+  const g = a.createGain();
   osc.frequency.setValueAtTime(95, t);
-  osc.frequency.linearRampToValueAtTime(120, t + dur * 0.25);
-  osc.frequency.exponentialRampToValueAtTime(55, t + dur);
+  osc.frequency.exponentialRampToValueAtTime(48, t + 0.5);
+  osc2.type = "triangle";
+  osc2.frequency.setValueAtTime(190, t);
+  osc2.frequency.exponentialRampToValueAtTime(96, t + 0.5);
+  env(g, t, { attack: 0.004, peak: gain, hold: 0.05, dur: 1.3 });
+  osc.connect(shaper);
+  osc2.connect(shaper);
+  shaper.connect(g).connect(out());
+  osc.start(t); osc2.start(t);
+  osc.stop(t + 1.5); osc2.stop(t + 1.5);
+  noise({ at, dur: 0.15, gain: 0.18, freq: 200, type: "lowpass" });
+}
+
+// Meme: MLG air horn, a detuned sawtooth stack in short blasts.
+function airHorn(at = 0, blasts = 3) {
+  for (let b = 0; b < blasts; b++) {
+    const start = at + b * (b === blasts - 1 ? 0.2 : 0.17);
+    const long = b === blasts - 1 ? 0.45 : 0.1;
+    [415, 523, 622].forEach((f, i) => {
+      tone(f, { at: start, type: "sawtooth", gain: 0.07, attack: 0.01, hold: long, dur: 0.12, detune: i * 7 - 7, filter: 2600 });
+      tone(f * 1.005, { at: start, type: "sawtooth", gain: 0.05, attack: 0.01, hold: long, dur: 0.12, detune: 12, filter: 2600 });
+    });
+  }
+}
+
+// Meme: sad trombone "wah wah wah waaah".
+function sadTrombone(at = 0) {
+  const a = audio();
+  if (!a) return;
+  const notes = [[311, 0.32], [293, 0.32], [277, 0.32], [262, 1.0]];
+  let t0 = at;
+  for (const [f, d] of notes) {
+    const t = a.currentTime + t0;
+    const osc = a.createOscillator();
+    const vib = a.createOscillator();
+    const vibAmt = a.createGain();
+    const filt = a.createBiquadFilter();
+    const g = a.createGain();
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(f * 1.03, t);
+    osc.frequency.exponentialRampToValueAtTime(f, t + 0.08);
+    vib.frequency.value = d > 0.5 ? 6 : 0;
+    vibAmt.gain.value = f * 0.02;
+    vib.connect(vibAmt).connect(osc.frequency);
+    filt.type = "lowpass";
+    filt.frequency.setValueAtTime(600, t);
+    filt.frequency.linearRampToValueAtTime(1400, t + 0.1);
+    filt.frequency.linearRampToValueAtTime(700, t + d);
+    env(g, t, { attack: 0.04, peak: 0.16, hold: d * 0.6, dur: d * 0.4 });
+    osc.connect(filt).connect(g).connect(out());
+    osc.start(t); vib.start(t);
+    osc.stop(t + d + 0.1); vib.stop(t + d + 0.1);
+    t0 += d;
+  }
+}
+
+// A dog "ruff": voiced sawtooth through two formant filters, pitch pops up then drops.
+function bark(at = 0, pitch = 440) {
+  const a = audio();
+  if (!a) return;
+  const t = a.currentTime + at;
+  const dur = 0.16;
+  const osc = a.createOscillator();
+  osc.type = "sawtooth";
+  osc.frequency.setValueAtTime(pitch * 0.8, t);
+  osc.frequency.linearRampToValueAtTime(pitch * 1.25, t + 0.03);
+  osc.frequency.exponentialRampToValueAtTime(pitch * 0.55, t + dur);
+  const g = a.createGain();
+  env(g, t, { attack: 0.008, peak: 0.5, dur });
+  for (const [freq, q, amt] of [[900, 5, 0.6], [2100, 7, 0.35]]) {
+    const f = a.createBiquadFilter();
+    f.type = "bandpass";
+    f.frequency.setValueAtTime(freq, t);
+    f.frequency.linearRampToValueAtTime(freq * 0.7, t + dur);
+    f.Q.value = q;
+    const fg = a.createGain();
+    fg.gain.value = amt;
+    osc.connect(f).connect(fg).connect(g);
+  }
+  g.connect(out());
+  osc.start(t);
+  osc.stop(t + dur + 0.05);
+  noise({ at, dur: 0.06, gain: 0.12, freq: 1800, q: 1.5 });
+}
+
+// A wet, flappy fart: low sawtooth + noise, both "flapped" by a wobbling square LFO.
+function fart(at = 0, dur = 0.8) {
+  const a = audio();
+  if (!a) return;
+  const t = a.currentTime + at;
+  const osc = a.createOscillator();
+  osc.type = "sawtooth";
+  osc.frequency.setValueAtTime(88, t);
+  osc.frequency.linearRampToValueAtTime(118, t + dur * 0.2);
+  osc.frequency.exponentialRampToValueAtTime(52, t + dur);
+  const flap = a.createOscillator();
   flap.type = "square";
-  flap.frequency.setValueAtTime(26, t);
-  flap.frequency.linearRampToValueAtTime(14, t + dur);
-  flapDepth.gain.value = 28;
-  flap.connect(flapDepth).connect(osc.frequency);
-  flapStage.gain.value = 0.6;
-  ampFlap.gain.value = 0.4;
-  flap.connect(ampFlap).connect(flapStage.gain);
-  filter.type = "lowpass";
-  filter.frequency.setValueAtTime(700, t);
-  filter.frequency.exponentialRampToValueAtTime(260, t + dur);
-  filter.Q.value = 6;
-  amp.gain.setValueAtTime(0.0001, t);
-  amp.gain.exponentialRampToValueAtTime(0.35, t + 0.03);
-  amp.gain.setValueAtTime(0.3, t + dur * 0.7);
-  amp.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  osc.connect(filter).connect(flapStage).connect(amp).connect(a.destination);
-  osc.start(t); flap.start(t);
-  osc.stop(t + dur + 0.05); flap.stop(t + dur + 0.05);
-  noise({ at, dur: dur * 0.6, gain: 0.05, freq: 180 });
+  flap.frequency.setValueAtTime(28, t);
+  flap.frequency.linearRampToValueAtTime(12, t + dur);
+  const pitchWobble = a.createGain();
+  pitchWobble.gain.value = 22;
+  flap.connect(pitchWobble).connect(osc.frequency);
+  const flapStage = a.createGain();
+  flapStage.gain.value = 0.55;
+  const flapDepth = a.createGain();
+  flapDepth.gain.value = 0.45;
+  flap.connect(flapDepth).connect(flapStage.gain);
+  const filt = a.createBiquadFilter();
+  filt.type = "lowpass";
+  filt.frequency.setValueAtTime(900, t);
+  filt.frequency.exponentialRampToValueAtTime(240, t + dur);
+  filt.Q.value = 7;
+  const amp = a.createGain();
+  env(amp, t, { attack: 0.02, peak: 0.55, hold: dur * 0.55, dur: dur * 0.45 });
+  osc.connect(filt).connect(flapStage).connect(amp).connect(out());
+  // Breathy "air" layer through the same flap.
+  if (!noiseBuffer) noise({ gain: 0.0001 });
+  const air = a.createBufferSource();
+  air.buffer = noiseBuffer;
+  const airFilt = a.createBiquadFilter();
+  airFilt.type = "lowpass";
+  airFilt.frequency.value = 420;
+  const airGain = a.createGain();
+  airGain.gain.value = 0.35;
+  air.connect(airFilt).connect(airGain).connect(flapStage);
+  osc.start(t); flap.start(t); air.start(t);
+  osc.stop(t + dur + 0.05); flap.stop(t + dur + 0.05); air.stop(t + dur + 0.05);
+  // Little sputter at the end.
+  tone(70, { at: at + dur + 0.04, dur: 0.08, type: "sawtooth", gain: 0.2, filter: 400, slide: -20 });
+}
+
+function sparkle(at = 0, base = 1320, count = 5, gap = 0.045, gain = 0.05) {
+  for (let i = 0; i < count; i++) tone(base * Math.pow(1.122, i * 2), { at: at + i * gap, dur: 0.18, type: "sine", gain });
+}
+
+function whoosh(at = 0, { up = true, dur = 0.25, gain = 0.14 } = {}) {
+  noise({ at, dur, gain, freq: up ? 400 : 3000, sweep: up ? 2600 : -2600, q: 0.8, attack: dur * 0.5 });
 }
 
 export const sfx = {
-  tap: () => tone(660, { dur: 0.05, type: "triangle", gain: 0.06 }),
-  play: () => { tone(220, { dur: 0.14, type: "triangle", gain: 0.16, slide: -80 }); noise({ dur: 0.08, gain: 0.08, freq: 500 }); },
-  spell: () => { tone(520, { dur: 0.2, type: "sine", slide: 400 }); tone(780, { at: 0.06, dur: 0.2, slide: 300, gain: 0.08 }); },
-  attack: () => noise({ dur: 0.18, gain: 0.14, freq: 900 }),
-  hit: () => { tone(140, { dur: 0.16, type: "square", gain: 0.08, slide: -60 }); noise({ dur: 0.1, gain: 0.12, freq: 300 }); },
-  heal: () => { tone(660, { dur: 0.16 }); tone(880, { at: 0.08, dur: 0.18 }); },
-  shield: () => tone(1200, { dur: 0.2, type: "triangle", gain: 0.08, slide: -600 }),
-  death: () => { tone(300, { dur: 0.35, type: "sawtooth", gain: 0.06, slide: -220 }); },
-  bark: () => { bark(0, 520); bark(0.13, 470); },
-  barkFart: () => { bark(0, 540); bark(0.13, 480); fart(0.3); },
-  turn: () => { tone(523, { dur: 0.12 }); tone(659, { at: 0.1, dur: 0.12 }); tone(784, { at: 0.2, dur: 0.2 }); },
-  error: () => tone(160, { dur: 0.18, type: "square", gain: 0.06 }),
-  win: () => [523, 659, 784, 1046].forEach((f, i) => tone(f, { at: i * 0.12, dur: 0.3, type: "triangle", gain: 0.12 })),
-  lose: () => [392, 330, 262].forEach((f, i) => tone(f, { at: i * 0.18, dur: 0.35, type: "triangle", gain: 0.1 })),
-  packShake: () => noise({ dur: 0.12, gain: 0.06, freq: 2400 }),
-  packOpen: () => { noise({ dur: 0.4, gain: 0.12, freq: 3000 }); tone(880, { at: 0.1, dur: 0.3, slide: 600, gain: 0.06 }); },
-  flip: rarity => {
-    tone(700, { dur: 0.08, type: "triangle", gain: 0.07 });
-    if (rarity === "rare") tone(990, { at: 0.06, dur: 0.2, gain: 0.08 });
-    if (rarity === "epic") [880, 1175].forEach((f, i) => tone(f, { at: 0.06 + i * 0.08, dur: 0.25, gain: 0.09 }));
-    if (rarity === "legendary") [523, 659, 784, 1046, 1318].forEach((f, i) => tone(f, { at: 0.05 + i * 0.09, dur: 0.4, type: "triangle", gain: 0.1 }));
+  tap: () => { tone(1500, { dur: 0.03, type: "triangle", gain: 0.05 }); tone(900, { at: 0.012, dur: 0.04, gain: 0.04 }); },
+  select: () => { whoosh(0, { dur: 0.12, gain: 0.07 }); tone(880, { dur: 0.06, type: "triangle", gain: 0.05, slide: 300 }); },
+  play: () => { whoosh(0, { up: false, dur: 0.16, gain: 0.1 }); kick(0.12, { gain: 0.45 }); noise({ at: 0.12, dur: 0.12, gain: 0.12, freq: 500 }); sparkle(0.14, 1568, 3, 0.04, 0.035); },
+  summon: () => { tone(520, { dur: 0.1, type: "triangle", gain: 0.08, slide: 400 }); noise({ dur: 0.06, gain: 0.05, freq: 3000 }); },
+  spell: () => { whoosh(0, { dur: 0.3, gain: 0.1 }); sparkle(0.05, 988, 6, 0.05, 0.06); tone(220, { at: 0.05, dur: 0.5, type: "triangle", gain: 0.08, slide: 440 }); },
+  attack: () => whoosh(0, { dur: 0.22, gain: 0.16 }),
+  hit: (big = false) => {
+    kick(0, { gain: big ? 0.6 : 0.45, from: 180 });
+    noise({ dur: 0.12, gain: 0.2, freq: 1800, q: 0.7 });
+    noise({ dur: 0.25, gain: 0.12, freq: 300, type: "lowpass" });
+    if (big) vineBoom(0.02, 0.45);
   },
-  coins: () => [1318, 1568].forEach((f, i) => tone(f, { at: i * 0.07, dur: 0.12, type: "square", gain: 0.04 }))
+  vineBoom: () => vineBoom(0),
+  heal: () => chord([784, 988, 1175, 1568], { dur: 0.5, gain: 0.05, stagger: 0.06, type: "sine" }),
+  shield: () => { tone(300, { dur: 0.09, gain: 0.12, slide: 900 }); noise({ at: 0.05, dur: 0.1, gain: 0.08, freq: 4000 }); },
+  death: () => { noise({ dur: 0.3, gain: 0.18, freq: 900, sweep: -700 }); tone(900, { at: 0.05, dur: 0.45, type: "sine", gain: 0.07, slide: -700 }); kick(0.02, { gain: 0.25, from: 120 }); },
+  bark: () => { bark(0, 460); bark(0.17, 420); },
+  barkFart: () => { bark(0, 470); bark(0.17, 430); fart(0.38); },
+  turn: () => { chord([523, 659, 784], { gain: 0.07, dur: 0.4, stagger: 0.07, type: "triangle" }); sparkle(0.22, 1568, 4, 0.05, 0.04); whoosh(0, { dur: 0.3, gain: 0.06 }); },
+  endTurn: () => { tone(392, { dur: 0.12, type: "triangle", gain: 0.08 }); tone(294, { at: 0.08, dur: 0.18, type: "triangle", gain: 0.07 }); },
+  error: () => { tone(180, { dur: 0.09, type: "square", gain: 0.06, filter: 900 }); tone(150, { at: 0.11, dur: 0.12, type: "square", gain: 0.06, filter: 900 }); },
+  win: () => { airHorn(0); chord([523, 659, 784, 1046], { at: 0.75, dur: 0.9, gain: 0.07, stagger: 0.08, type: "triangle" }); sparkle(0.9, 1568, 6, 0.06, 0.05); },
+  lose: () => sadTrombone(0.1),
+  packShake: () => { noise({ dur: 0.08, gain: 0.08, freq: 3500, q: 2 }); noise({ at: 0.1, dur: 0.08, gain: 0.08, freq: 3000, q: 2 }); noise({ at: 0.2, dur: 0.08, gain: 0.08, freq: 3800, q: 2 }); },
+  packOpen: () => { kick(0, { gain: 0.5, from: 140 }); noise({ dur: 0.6, gain: 0.2, freq: 5000, sweep: -4000, q: 0.5 }); sparkle(0.1, 1175, 7, 0.04, 0.06); },
+  flip: rarity => {
+    tone(1200, { dur: 0.05, type: "triangle", gain: 0.06 });
+    whoosh(0, { dur: 0.1, gain: 0.05 });
+    if (rarity === "rare") chord([988, 1319], { at: 0.05, dur: 0.35, gain: 0.07, stagger: 0.05 });
+    if (rarity === "epic") { chord([784, 988, 1175, 1568], { at: 0.05, dur: 0.6, gain: 0.07, stagger: 0.06, type: "triangle" }); sparkle(0.3, 1568, 5, 0.04, 0.05); }
+    if (rarity === "legendary") { airHorn(0.05, 2); chord([523, 659, 784, 1046, 1319], { at: 0.5, dur: 1, gain: 0.07, stagger: 0.07, type: "triangle" }); sparkle(0.6, 1568, 8, 0.05, 0.05); }
+  },
+  shiny: () => sparkle(0, 1760, 8, 0.035, 0.06),
+  coins: () => { tone(988, { dur: 0.07, type: "square", gain: 0.05, filter: 3000 }); tone(1319, { at: 0.07, dur: 0.25, type: "square", gain: 0.05, filter: 3000 }); },
+  emote: () => { tone(660, { dur: 0.06, type: "triangle", gain: 0.08, slide: 300 }); }
 };
 
 export function buzz(pattern) {

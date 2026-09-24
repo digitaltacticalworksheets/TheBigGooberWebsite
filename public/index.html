@@ -17,207 +17,11 @@
   <link rel="manifest" href="/site.webmanifest" />
   <meta name="apple-mobile-web-app-title" content="Big Goober" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="theme-color" content="#ffd34d" />
+  <meta name="theme-color" content="#0b0912" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Nunito:wght@600;700;800;900&display=swap" />
   <link rel="stylesheet" href="/styles.css" />
-  <style>
-    .gallery-tools {
-      display: grid;
-      gap: 14px;
-      margin: 18px 0 22px;
-      background: var(--blue);
-      border: 4px solid var(--ink);
-      border-radius: 24px;
-      box-shadow: 5px 5px 0 var(--ink);
-      padding: 16px;
-    }
-
-    .gallery-search-row {
-      display: grid;
-      grid-template-columns: minmax(220px, 1fr) auto auto auto;
-      gap: 12px;
-      align-items: center;
-    }
-
-    .gallery-search-row input {
-      width: 100%;
-      border: 3px solid var(--ink);
-      border-radius: 999px;
-      padding: 11px 15px;
-      font: inherit;
-      font-weight: 900;
-      background: white;
-      outline: none;
-      box-shadow: 3px 3px 0 var(--ink);
-    }
-
-    .gallery-search-button {
-      color: var(--ink);
-      text-decoration: none;
-      font-weight: 900;
-      border: 3px solid var(--ink);
-      border-radius: 999px;
-      background: white;
-      padding: 11px 15px;
-      box-shadow: 3px 3px 0 var(--ink);
-      cursor: pointer;
-      font-family: inherit;
-      font-size: 0.98rem;
-      white-space: nowrap;
-      transition: transform 0.14s ease, box-shadow 0.14s ease, background 0.14s ease;
-    }
-
-    .gallery-search-button.primary {
-      background: var(--orange);
-    }
-
-    .gallery-search-button:hover {
-      transform: translate(2px, 2px);
-      box-shadow: 1px 1px 0 var(--ink);
-      background: var(--yellow);
-    }
-
-    .goober-count {
-      color: #26333a;
-      font-weight: 900;
-      white-space: nowrap;
-    }
-
-    .admin-tools {
-      display: none !important;
-    }
-
-    .goober-card {
-      cursor: pointer;
-    }
-
-    .goober-card:focus-visible {
-      outline: 5px solid var(--pink);
-      outline-offset: 4px;
-    }
-
-    .goober-viewer[hidden] {
-      display: none;
-    }
-
-    .goober-viewer {
-      position: fixed;
-      inset: 0;
-      z-index: 999;
-      display: grid;
-      place-items: center;
-      padding: 22px;
-    }
-
-    .viewer-backdrop {
-      position: absolute;
-      inset: 0;
-      background: rgba(31, 31, 31, 0.68);
-    }
-
-    .viewer-card {
-      position: relative;
-      z-index: 2;
-      width: min(760px, 96vw);
-      max-height: 90vh;
-      overflow: auto;
-      background: white;
-      border: 5px solid var(--ink);
-      border-radius: 30px;
-      box-shadow: var(--shadow), 10px 10px 0 var(--ink);
-      padding: clamp(18px, 4vw, 28px);
-      display: grid;
-      grid-template-columns: minmax(0, 1.05fr) minmax(220px, 0.95fr);
-      gap: 22px;
-      align-items: center;
-      animation: viewerPop 0.18s ease-out;
-    }
-
-    @keyframes viewerPop {
-      from { transform: scale(0.94) rotate(-1deg); opacity: 0; }
-      to { transform: scale(1) rotate(0); opacity: 1; }
-    }
-
-    .viewer-image-wrap {
-      background: #fffaf0;
-      border: 4px solid var(--ink);
-      border-radius: 24px;
-      min-height: 320px;
-      display: grid;
-      place-items: center;
-      padding: 18px;
-      box-shadow: 5px 5px 0 var(--ink);
-    }
-
-    .viewer-image-wrap img {
-      max-width: 100%;
-      max-height: 58vh;
-      object-fit: contain;
-      display: block;
-    }
-
-    .viewer-info h2 {
-      font-size: clamp(2rem, 4vw, 3.4rem);
-      letter-spacing: -0.06em;
-      line-height: 0.95;
-      margin: 0 0 12px;
-    }
-
-    .viewer-info p {
-      margin: 0 0 14px;
-      color: var(--muted);
-      font-weight: 900;
-      line-height: 1.4;
-    }
-
-    .viewer-category {
-      display: inline-flex;
-      border: 3px solid var(--ink);
-      border-radius: 999px;
-      background: var(--yellow);
-      padding: 7px 12px;
-      font-weight: 900;
-      margin-bottom: 16px;
-    }
-
-    .viewer-close {
-      position: absolute;
-      top: 12px;
-      right: 12px;
-      width: 42px;
-      height: 42px;
-      display: grid;
-      place-items: center;
-      padding: 0;
-      border-radius: 999px;
-      background: #ffd1d1;
-    }
-
-    body.viewer-open {
-      overflow: hidden;
-    }
-
-    @media (max-width: 900px) {
-      .gallery-search-row {
-        grid-template-columns: 1fr 1fr;
-      }
-
-      .gallery-search-row input,
-      .goober-count {
-        grid-column: 1 / -1;
-      }
-    }
-
-    @media (max-width: 760px) {
-      .viewer-card {
-        grid-template-columns: 1fr;
-      }
-
-      .goober-count {
-        white-space: normal;
-      }
-    }
-
-  </style>
   <script src="/app.js" defer></script>
 </head>
 
@@ -240,7 +44,7 @@
 
   <section class="hero">
     <div class="hero-copy">
-      <h1>Big Goober energy.</h1>
+      <h1>Big Goober Energy.</h1>
       <p>
         Goobers are hand-drawn cartoon dogs sitting like tiny loaves, each with a simple shape and a big personality.
         Some are cool. Some are cowboys. Some are spider-adjacent. All are loaf-shaped legends.
@@ -371,7 +175,7 @@
         <h2>Add a Goober</h2>
         <p>
           Add a new loaf-sitting Goober to the collection. Give it a name, choose the type that fits best,
-          describe its personality, and upload the image with the family upload code.
+          describe its personality, and upload the image.
         </p>
         <p>
           Every upload gets checked by the auto-mod first. Keep it funny, not gross-gross: no swearing, no inappropriate stuff,
@@ -380,11 +184,6 @@
       </div>
 
       <form class="upload-form" id="gooberUploadForm">
-        <div class="form-row">
-          <label for="gooberUploadCode">Upload code</label>
-          <input id="gooberUploadCode" type="password" placeholder="Enter upload code" autocomplete="off" required />
-        </div>
-
         <div class="form-row">
           <label for="gooberName">Goober name</label>
           <input id="gooberName" type="text" placeholder="Example: Wizard Goober" required />
@@ -419,7 +218,7 @@
 
         <div class="form-row">
           <label for="gooberImage">Goober image</label>
-          <input id="gooberImage" type="file" accept="image/*" required />
+          <input id="gooberImage" type="file" accept="image/png,image/jpeg,image/webp,image/gif" required />
         </div>
 
         <div class="file-preview" id="filePreview">
