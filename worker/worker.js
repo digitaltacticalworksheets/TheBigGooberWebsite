@@ -11,7 +11,7 @@ export default {
       if (url.pathname === "/api/goobers" && request.method === "POST") return await uploadGoober(request, env);
       if (url.pathname.startsWith("/api/auth/") || url.pathname === "/api/profile" || url.pathname.startsWith("/api/econ/")) return await routeAccounts(request, env, url);
       if (url.pathname === "/api/card-battle/create" && request.method === "POST") return await createCardBattleRoom();
-      if (url.pathname === "/api/card-battle/matchmaking" && request.method === "GET") return await routeMatchmaking(request, env);
+      if ((url.pathname === "/api/card-battle/matchmaking" || url.pathname === "/api/card-battle/live") && request.method === "GET") return await routeMatchmaking(request, env);
       if (url.pathname.startsWith("/api/card-battle/") && request.method === "GET") return await routeCardBattleRoom(request, env);
       if (url.pathname === "/api/goobers/pending" && request.method === "GET") return await listPendingGoobers(request, env);
       if (/^\/api\/goobers\/[^/]+\/approve$/.test(url.pathname) && request.method === "POST") return await approveGoober(request, env);
@@ -28,6 +28,8 @@ export default {
 const TURN_SECONDS = 90;
 const MAX_TIMEOUTS = 3;
 const EMOTES = new Set(["woof", "wow", "oops", "thanks", "gg", "hello"]);
+const MAX_WATCHERS = 50;
+const LIVE_TTL_MS = 30 * 60 * 1000;
 
 // One online Goober Cards match. The room is authoritative: clients send actions,
 // the shared engine validates and applies them, and each seat gets its own view.
@@ -57,6 +59,17 @@ export class CardBattleRoom {
     const code = getRoomCodeFromPath(url.pathname);
     if (!code) return jsonResponse({ error: "Room code is required." }, 400, NO_STORE_HEADERS);
     await this.loadRoom(code);
+    // Internal call from the matchmaker (the public route never forwards POSTs to rooms):
+    // matchmade rooms show up in the live list, and some are ranked.
+    if (request.method === "POST" && url.pathname.endsWith("/setup")) {
+      const body = await request.json().catch(() => ({}));
+      if (this.room.phase === "lobby" && !this.room.game && !this.room.seats.some(Boolean)) {
+        this.room.public = true;
+        if (body.ranks && typeof body.ranks === "object") this.room.ranked = { ranks: body.ranks, users: Object.keys(body.ranks), gameId: null };
+        await this.saveRoom();
+      }
+      return jsonResponse({ ok: true }, 200, NO_STORE_HEADERS);
+    }
     if (request.headers.get("upgrade") !== "websocket") {
       return jsonResponse({ code, phase: this.room.phase, players: this.room.seats.map(s => (s ? { name: s.name, connected: s.connected } : null)) }, 200, NO_STORE_HEADERS);
     }
@@ -66,8 +79,11 @@ export class CardBattleRoom {
     const hero = cleanText(url.searchParams.get("hero"), 80);
     // Logged-in players get rewards paid by the room, and their decks are checked against their collection.
     const account = await userFromToken(this.env, url.searchParams.get("auth"));
-    let seat = this.room.seats.findIndex(s => s && token && s.token === token);
-    if (seat < 0 && token) seat = this.room.seats.findIndex(s => !s);
+    // Watchers (?watch=1, or anyone once both seats are taken) get seat -1 and a view with both hands hidden.
+    const watching = url.searchParams.get("watch") === "1";
+    let seat = watching ? -1 : this.room.seats.findIndex(s => s && token && s.token === token);
+    if (seat < 0 && token && !watching) seat = this.room.seats.findIndex(s => !s);
+    if (seat < 0 && this.watcherCount() >= MAX_WATCHERS) return jsonResponse({ error: "Too many people are watching this match." }, 429, NO_STORE_HEADERS);
     if (seat >= 0) {
       const prev = this.room.seats[seat];
       const displayName = account ? account.username : name;
@@ -92,6 +108,8 @@ export class CardBattleRoom {
         const stillHere = [...this.sessions.values()].some(s => s.seat === session.seat);
         if (!stillHere) this.room.seats[session.seat].connected = false;
         await this.saveRoom();
+        this.broadcast();
+      } else if (session) {
         this.broadcast();
       }
     };
@@ -159,6 +177,20 @@ export class CardBattleRoom {
     this.broadcast();
   }
 
+  watcherCount() { return [...this.sessions.values()].filter(s => s.seat < 0).length; }
+
+  // Tell the matchmaker's live list about matchmade games (fire and forget).
+  reportLive(status) {
+    if (!this.room.public || !this.env.MATCHMAKER) return;
+    const players = this.room.seats.map(s => {
+      const rp = s?.userId && this.room.ranked ? this.room.ranked.ranks[s.userId] : undefined;
+      return { name: s?.name || "?", ...(rp !== undefined && rp !== null ? { tier: econ.tierFor(rp).id } : {}) };
+    });
+    const body = JSON.stringify({ code: this.room.code, status, players, ranked: Boolean(this.room.ranked && this.room.ranked.gameId === this.room.gameId) });
+    const stub = this.env.MATCHMAKER.get(this.env.MATCHMAKER.idFromName("global"));
+    stub.fetch(new Request("https://matchmaker.internal/api/card-battle/matchmaking/live", { method: "POST", body })).catch(error => console.error("Live list update failed", error));
+  }
+
   maybeStart() {
     const [a, b] = this.room.seats;
     if (!a?.deck || !b?.deck || this.room.phase === "playing") return;
@@ -170,6 +202,10 @@ export class CardBattleRoom {
     this.room.lastEvents = [];
     this.room.gameId = crypto.randomUUID();
     this.room.paid = [false, false];
+    // Only the first game between the two matched accounts is ranked; rematches aren't.
+    const ranked = this.room.ranked;
+    if (ranked && !ranked.gameId && [a.userId, b.userId].every(id => ranked.users.includes(id)) && a.userId !== b.userId) ranked.gameId = this.room.gameId;
+    this.reportLive("playing");
     this.setTurnDeadline();
   }
 
@@ -203,17 +239,20 @@ export class CardBattleRoom {
         const won = game.winner === seat;
         const gameId = this.room.gameId;
         try {
+          const isRanked = this.room.ranked?.gameId === gameId;
           const out = await applyEconomy(this.env, userId, this.room.seats[seat].name, p => {
             if (p.paidGames.includes(gameId)) return { ok: true, coins: 0, already: true };
             p.paidGames = [...p.paidGames, gameId].slice(-30);
-            return econ.recordResult(p, { won, reward: won ? econ.ONLINE_REWARD.win : econ.ONLINE_REWARD.loss, day, kind: "online", cap: econ.DAILY_REWARD_CAP.online });
+            const result = econ.recordResult(p, { won, reward: won ? econ.ONLINE_REWARD.win : econ.ONLINE_REWARD.loss, day, kind: "online", cap: econ.DAILY_REWARD_CAP.online });
+            if (isRanked) result.rank = econ.recordRanked(p, { won, draw: game.winner === "draw" });
+            return result;
           });
           if (!out.ok) continue;
           this.room.paid[seat] = true;
           await this.saveRoom();
           if (!out.result.already) {
             for (const [socket, session] of this.sessions.entries()) {
-              if (session.seat === seat) this.send(socket, { type: "reward", coins: out.result.coins, firstWin: out.result.firstWin, capped: out.result.capped });
+              if (session.seat === seat) this.send(socket, { type: "reward", coins: out.result.coins, firstWin: out.result.firstWin, capped: out.result.capped, rank: out.result.rank || null });
             }
           }
         } catch (error) {
@@ -230,7 +269,7 @@ export class CardBattleRoom {
 
   afterAction(events, turnBefore) {
     const game = this.room.game;
-    if (game.over) { this.room.phase = "over"; this.room.deadline = 0; this.state.storage.deleteAlarm(); this.payRewards().catch(error => console.error("Reward payout failed", error)); }
+    if (game.over) { this.room.phase = "over"; this.room.deadline = 0; this.state.storage.deleteAlarm(); this.payRewards().catch(error => console.error("Reward payout failed", error)); this.reportLive("over"); }
     else if (game.turn !== turnBefore) this.setTurnDeadline();
     this.broadcast(events);
   }
@@ -261,7 +300,13 @@ export class CardBattleRoom {
       phase: this.room.phase,
       deadline: this.room.deadline,
       rematch: this.room.rematch,
-      seats: this.room.seats.map(s => (s ? { name: s.name, hero: s.hero || "", connected: s.connected, ready: Boolean(s.deck) } : null))
+      ranked: Boolean(this.room.ranked) && (!this.room.game || this.room.ranked.gameId === this.room.gameId),
+      watchers: this.watcherCount(),
+      seats: this.room.seats.map(s => {
+        if (!s) return null;
+        const rp = s.userId && this.room.ranked ? this.room.ranked.ranks[s.userId] : undefined;
+        return { name: s.name, hero: s.hero || "", connected: s.connected, ready: Boolean(s.deck), ...(rp !== undefined && rp !== null ? { tier: econ.tierFor(rp).id } : {}) };
+      })
     };
   }
 
@@ -285,49 +330,125 @@ export class CardBattleRoom {
   }
 }
 
-// Quick match: one global queue. Players wait on a WebSocket; as soon as two are
-// waiting, both get the same fresh room code and join it like a friend's room.
+// Quick match: one global queue. Players wait on a WebSocket; the matchmaker pairs
+// them and both join the same fresh room like a friend's room. Logged-in players are
+// paired by Rank Points, with the allowed gap widening the longer they wait. When both
+// players are logged in the room is told the match is ranked before anyone joins.
+const RANK_WINDOW = { base: 100, perSecond: 12 };
+
 export class Matchmaker {
   constructor(state, env) {
     this.state = state;
     this.env = env;
     this.waiting = [];
+    this.timer = null;
   }
 
   async fetch(request) {
+    const path = new URL(request.url).pathname;
+    if (path === "/api/card-battle/matchmaking/live" && request.method === "POST") return this.updateLive(request);
+    if (path === "/api/card-battle/live") {
+      const games = Object.values(await this.liveGames()).sort((a, b) => b.started - a.started).slice(0, 20);
+      return jsonResponse({ searching: this.waiting.length, games }, 200, NO_STORE_HEADERS);
+    }
     if (request.headers.get("upgrade") !== "websocket") {
       return jsonResponse({ searching: this.waiting.length }, 200, NO_STORE_HEADERS);
     }
     const url = new URL(request.url);
     const token = cleanText(url.searchParams.get("token"), 64) || crypto.randomUUID();
+    const account = await userFromToken(this.env, url.searchParams.get("auth"));
+    const rp = account ? await rankPointsFor(this.env, account.id) : null;
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
     server.accept();
 
     // Same player searching from a second tab: drop the old ticket so they can't match themselves.
-    for (const old of this.waiting.filter(w => w.token === token)) this.drop(old.socket, "Searching in another tab.");
-    const entry = { socket: server, token, joined: Date.now() };
+    for (const old of this.waiting.filter(w => w.token === token || (account && w.userId === account.id))) this.drop(old.socket, "Searching in another tab.");
+    const entry = { socket: server, token, userId: account?.id || null, rp, joined: Date.now() };
     this.waiting.push(entry);
 
-    const leave = () => { this.waiting = this.waiting.filter(w => w !== entry); this.announce(); };
+    const leave = () => { this.waiting = this.waiting.filter(w => w !== entry); this.announce(); this.schedule(); };
     server.addEventListener("close", leave);
     server.addEventListener("error", leave);
     server.addEventListener("message", () => this.send(server, { type: "pong" }));
 
-    this.pairUp();
+    await this.pairUp();
     this.announce();
+    this.schedule();
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  pairUp() {
-    while (this.waiting.length >= 2) {
-      const [a, b] = this.waiting.splice(0, 2);
-      const roomCode = createRoomCode();
-      for (const w of [a, b]) {
-        this.send(w.socket, { type: "matched", roomCode });
-        try { w.socket.close(1000, "Matched"); } catch { /* already closed */ }
+  // Re-check every few seconds while two or more are waiting, since rank windows widen over time.
+  schedule() {
+    if (this.waiting.length >= 2 && !this.timer) this.timer = setInterval(() => this.pairUp().then(() => this.announce()).catch(console.error), 3000);
+    if (this.waiting.length < 2 && this.timer) { clearInterval(this.timer); this.timer = null; }
+  }
+
+  compatible(a, b, now) {
+    if (a.rp === null || b.rp === null) return true;
+    const window = w => RANK_WINDOW.base + RANK_WINDOW.perSecond * ((now - w.joined) / 1000);
+    return Math.abs(a.rp - b.rp) <= Math.max(window(a), window(b));
+  }
+
+  async pairUp() {
+    if (this.pairing) return;
+    this.pairing = true;
+    try {
+      const now = Date.now();
+      // Longest waiter first; pair them with the closest-ranked compatible player.
+      for (let i = 0; i < this.waiting.length; i++) {
+        const a = this.waiting[i];
+        let best = null;
+        for (const b of this.waiting.slice(i + 1)) {
+          if (!this.compatible(a, b, now)) continue;
+          const gap = a.rp === null || b.rp === null ? 0 : Math.abs(a.rp - b.rp);
+          if (!best || gap < best.gap) best = { b, gap };
+        }
+        if (!best) continue;
+        const b = best.b;
+        this.waiting = this.waiting.filter(w => w !== a && w !== b);
+        i -= 1;
+        const roomCode = createRoomCode();
+        const ranked = Boolean(a.userId && b.userId && a.userId !== b.userId);
+        await this.setupRoom(roomCode, ranked ? { [a.userId]: a.rp, [b.userId]: b.rp } : null);
+        for (const w of [a, b]) {
+          this.send(w.socket, { type: "matched", roomCode, ranked });
+          try { w.socket.close(1000, "Matched"); } catch { /* already closed */ }
+        }
       }
+    } finally {
+      this.pairing = false;
+      this.schedule();
     }
+  }
+
+  // Internal call only: the public worker route never forwards POSTs to rooms.
+  async setupRoom(roomCode, ranks) {
+    const stub = this.env.CARD_BATTLE_ROOMS.get(this.env.CARD_BATTLE_ROOMS.idFromName(roomCode));
+    await stub.fetch(new Request(`https://rooms.internal/api/card-battle/${roomCode}/setup`, { method: "POST", body: JSON.stringify({ ranks }) }));
+  }
+
+  // Live matchmade games, kept in storage so the list survives the matchmaker going idle.
+  async liveGames() {
+    const live = (await this.state.storage.get("live")) || {};
+    const now = Date.now();
+    for (const [code, game] of Object.entries(live)) if (now - game.updated > LIVE_TTL_MS) delete live[code];
+    return live;
+  }
+
+  async updateLive(request) {
+    const body = await request.json().catch(() => ({}));
+    const code = getRoomCodeFromPath(`/api/card-battle/${cleanText(body.code, 12)}`);
+    if (!code) return jsonResponse({ ok: false }, 400, NO_STORE_HEADERS);
+    const live = await this.liveGames();
+    if (body.status === "playing") {
+      const players = Array.isArray(body.players) ? body.players.slice(0, 2).map(p => ({ name: cleanText(p?.name, 24) || "?", ...(p?.tier ? { tier: cleanText(p.tier, 20) } : {}) })) : [];
+      live[code] = { code, players, ranked: Boolean(body.ranked), started: live[code]?.started || Date.now(), updated: Date.now() };
+    } else {
+      delete live[code];
+    }
+    await this.state.storage.put("live", live);
+    return jsonResponse({ ok: true }, 200, NO_STORE_HEADERS);
   }
 
   announce() {
@@ -343,6 +464,11 @@ export class Matchmaker {
   send(socket, payload) {
     try { socket.send(JSON.stringify(payload)); } catch { /* socket gone */ }
   }
+}
+
+async function rankPointsFor(env, userId) {
+  const row = await env.DB.prepare(`SELECT data FROM profiles WHERE user_id = ?`).bind(userId).first();
+  return econ.normalizeProfile(row ? JSON.parse(row.data) : null).rank.rp;
 }
 
 function sanitizeAction(action) {
@@ -376,7 +502,7 @@ const ALLOWED_CATEGORIES = new Set(["classic", "costume", "chaos", "funny", "spo
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const NO_STORE_HEADERS = { "cache-control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0", "pragma": "no-cache", "expires": "0", "surrogate-control": "no-store", "cdn-cache-control": "no-store", "cloudflare-cdn-cache-control": "no-store" };
 function createRoomCode() { const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let code = ""; const bytes = new Uint8Array(6); crypto.getRandomValues(bytes); for (const byte of bytes) code += alphabet[byte % alphabet.length]; return code; }
-function getRoomCodeFromPath(pathname) { const match = pathname.match(/^\/api\/card-battle\/([A-Z0-9]{4,12})(?:\/socket)?$/i); return match ? match[1].toUpperCase() : ""; }
+function getRoomCodeFromPath(pathname) { const match = pathname.match(/^\/api\/card-battle\/([A-Z0-9]{4,12})(?:\/socket|\/setup)?$/i); return match ? match[1].toUpperCase() : ""; }
 async function listGoobers(env) { const result = await env.DB.prepare(`SELECT id, name, category, description, image_key, image_type, created_at FROM goobers WHERE approved = 1 ORDER BY created_at DESC`).all(); return jsonResponse((result.results || []).map(row => ({ id: row.id, name: row.name, category: row.category, description: row.description, imageUrl: `/api/goober-image/${row.image_key}`, createdAt: row.created_at })), 200, NO_STORE_HEADERS); }
 async function uploadGoober(request, env) {
   const formData = await request.formData();

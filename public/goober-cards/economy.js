@@ -48,6 +48,7 @@ export function freshProfile() {
     openMatch: null,
     editsRev: 0,
     paidGames: [],
+    rank: freshRank(),
     settings: { sound: true, haptics: true },
     tutorialSeen: false,
     created: Date.now()
@@ -67,7 +68,52 @@ export function normalizeProfile(data) {
   p.pity = Math.max(0, Math.floor(Number(p.pity) || 0));
   p.editsRev = Math.max(0, Math.floor(Number(p.editsRev) || 0));
   p.paidGames = Array.isArray(p.paidGames) ? p.paidGames.slice(-30) : [];
+  p.rank = { ...freshRank(), ...(p.rank && typeof p.rank === "object" ? p.rank : {}) };
+  p.rank.rp = Math.max(0, Math.floor(Number(p.rank.rp) || 0));
   return p;
+}
+
+// --- Ranked (Find a Match only, logged-in players on both sides) -----------
+// Rank Points climb through bread tiers. You can't drop out of a tier once you reach it.
+export const RANK_TIERS = [
+  { id: "crumb", name: "Crumb", icon: "🌾", min: 0 },
+  { id: "toast", name: "Toast", icon: "🍞", min: 100 },
+  { id: "bagel", name: "Bagel", icon: "🥯", min: 200 },
+  { id: "croissant", name: "Croissant", icon: "🥐", min: 325 },
+  { id: "baguette", name: "Baguette", icon: "🥖", min: 475 },
+  { id: "golden", name: "Golden Loaf", icon: "👑", min: 650 }
+];
+export const RANK_POINTS = { win: 25, loss: 15, streakBonus: 5, maxStreakBonus: 15 };
+
+function freshRank() { return { rp: 0, best: 0, wins: 0, losses: 0, streak: 0 }; }
+
+export function tierFor(rp) {
+  let tier = RANK_TIERS[0];
+  for (const t of RANK_TIERS) if ((rp || 0) >= t.min) tier = t;
+  return tier;
+}
+
+export function nextTier(rp) { return RANK_TIERS.find(t => t.min > (rp || 0)) || null; }
+
+// Apply one ranked result. Draws change nothing.
+export function recordRanked(p, { won, draw = false }) {
+  const r = p.rank;
+  const before = r.rp;
+  if (!draw) {
+    if (won) {
+      r.streak += 1;
+      r.wins += 1;
+      const bonus = Math.min(RANK_POINTS.maxStreakBonus, Math.max(0, r.streak - 2) * RANK_POINTS.streakBonus);
+      r.rp += RANK_POINTS.win + bonus;
+    } else {
+      r.streak = 0;
+      r.losses += 1;
+      r.rp = Math.max(tierFor(before).min, r.rp - RANK_POINTS.loss);
+    }
+  }
+  r.best = Math.max(r.best, r.rp);
+  const from = tierFor(before), to = tierFor(r.rp);
+  return { before, after: r.rp, delta: r.rp - before, tier: to.id, promoted: to.min > from.min, streak: r.streak };
 }
 
 export const ownedCount = (p, id) => p.cards[id]?.n || 0;

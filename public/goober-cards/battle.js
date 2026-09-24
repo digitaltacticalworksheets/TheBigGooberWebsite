@@ -1,7 +1,7 @@
 // Battle screen: renders a game state, handles touch input, and animates engine events.
 import { playInfo, attackTargets, canAttack, powerTargets, legalActions, applyAction, BOARD_LIMIT, MAX_MANA } from "./engine.js";
 import { chooseAiAction } from "./ai.js";
-import { HERO_POWER, KEYWORDS, CATEGORY_STYLE } from "./cards.js";
+import { HERO_POWER, KEYWORDS, STATUS, CATEGORY_STYLE } from "./cards.js";
 import { $, esc, sleep, cardHTML, cardBackHTML, artHTML, modal, confirmDialog, keywordGlossary, onLongPress, toast } from "./ui.js";
 import { sfx, buzz } from "./sound.js";
 
@@ -10,7 +10,8 @@ export const EMOTES = { hello: "Sup 👋", wow: "W 🔥", oops: "L 😭", thanks
 const TRIGGER_ICON = { battlecry: "", lastBark: "☠️", endTurn: "⏳" };
 
 export class Battle {
-  // opts: { catalog, me, heroArt: [mine, theirs], onAction(action) -> Promise<{ok, error}>, onEmote(key), onExit(), onConcede(), menuExtra }
+  // opts: { catalog, me, heroArt: [mine, theirs], onAction(action) -> Promise<{ok, error}>, onEmote(key), onExit(), onConcede(), menuExtra,
+  //         spectator (read-only: `me` is just which player sits at the bottom) }
   constructor(opts) {
     this.opts = opts;
     this.catalog = opts.catalog;
@@ -23,17 +24,19 @@ export class Battle {
     this.pending = false;
     this.deadline = 0;
     this.destroyed = false;
+    this.spectator = Boolean(opts.spectator);
+    this.watchers = 0;
     this.mount();
   }
 
   get opp() { return this.me === 0 ? 1 : 0; }
-  get myTurn() { return Boolean(this.state && !this.state.over && this.state.active === this.me); }
+  get myTurn() { return Boolean(!this.spectator && this.state && !this.state.over && this.state.active === this.me); }
   get canInput() { return this.myTurn && !this.animating && !this.pending; }
 
   mount() {
     document.body.classList.add("in-battle");
     const root = document.createElement("div");
-    root.className = "battle";
+    root.className = `battle${this.spectator ? " spectating" : ""}`;
     root.innerHTML = `
       <div class="table"></div>
       <div class="hero-bar opp opp-bar">
@@ -45,12 +48,13 @@ export class Battle {
         <button class="menu-btn" data-menu aria-label="Menu">☰</button>
       </div>
       <div class="board opp-board"></div>
-      <div class="midline"><span class="turn-label"></span><div class="history" aria-label="Recently played cards"></div><button class="end-turn" data-end>End Turn</button><div class="timer" hidden><i></i></div></div>
+      <div class="midline"><span class="turn-label"></span><span class="watchers" hidden></span><div class="history" aria-label="Recently played cards"></div><button class="end-turn" data-end>End Turn</button><div class="timer" hidden><i></i></div></div>
       <div class="board my-board"></div>
       <div class="hero-bar my-bar">
         <div class="hero me" data-uid="h${this.me}" style="background-image:url('${esc(this.opts.heroArt?.[0] || "/assets/original-goober.jpg")}')"><div class="hp"></div><div class="armor" hidden></div></div>
         <div class="hero-info"><div class="nm"></div><div class="mana"></div></div>
         <div class="spacer"></div>
+        ${this.spectator ? `<div class="opp-hand my-hand-backs"></div>` : ""}
         <button class="power" data-power aria-label="Hero power: ${esc(HERO_POWER.name)}"><span class="pc">${HERO_POWER.cost}</span>💨</button>
         <div class="deck-count" title="Cards left in deck"></div>
       </div>
@@ -63,7 +67,8 @@ export class Battle {
       oppBoard: $(".opp-board", root), myBoard: $(".my-board", root),
       hand: $(".hand", root), oppHand: $(".opp-hand", root),
       end: $("[data-end]", root), power: $("[data-power]", root),
-      turnLabel: $(".turn-label", root), timer: $(".timer", root), history: $(".history", root)
+      turnLabel: $(".turn-label", root), timer: $(".timer", root), history: $(".history", root),
+      watchers: $(".watchers", root), myHandBacks: $(".my-hand-backs", root)
     };
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.classList.add("arrow-layer");
@@ -115,6 +120,7 @@ export class Battle {
     this.queue = this.queue.then(async () => {
       if (this.destroyed) return;
       if (extra.deadline !== undefined) this.deadline = extra.deadline;
+      if (extra.watchers !== undefined) this.watchers = extra.watchers;
       const first = !this.state;
       this.animating = true;
       try {
@@ -172,7 +178,14 @@ export class Battle {
       this.el.end.textContent = "End Turn";
       const moves = legalActions(s, this.catalog, this.me).filter(a => a.type !== "end" && !(a.type === "power"));
       this.el.end.classList.toggle("done", !moves.length);
-    } else { this.el.end.disabled = true; this.el.end.textContent = "Their Turn…"; this.el.end.classList.remove("done"); }
+    } else {
+      this.el.end.disabled = true;
+      this.el.end.textContent = this.spectator ? `${s.players[s.active].name}'s turn` : "Their Turn…";
+      this.el.end.classList.remove("done");
+    }
+    this.el.watchers.hidden = !this.watchers;
+    this.el.watchers.textContent = `👀 ${this.watchers}`;
+    this.el.watchers.title = `${this.watchers} watching`;
     this.el.turnLabel.textContent = s.over ? "" : `Turn ${Math.ceil(s.turn / 2)}`;
     this.el.myBoard.classList.toggle("drop-ok", Boolean(this.sel?.kind === "hand" && this.sel.isMinion && !this.sel.placed));
     this.renderTip();
@@ -201,7 +214,7 @@ export class Battle {
         el.style.setProperty("--cat", (CATEGORY_STYLE[def.category] || CATEGORY_STYLE.random).color);
       }
       const kws = m.keywords || [];
-      const cls = ["minion", def.rarity, m.shiny ? "shiny" : "", ...kws.filter(k => ["guard", "fluffy", "sneaky"].includes(k)), m.frozen ? "frozen" : ""];
+      const cls = ["minion", def.rarity, m.shiny ? "shiny" : "", ...kws.filter(k => ["guard", "fluffy", "sneaky"].includes(k)), m.frozen ? "frozen" : "", m.silenced ? "silenced" : ""];
       if (mine && canAttack(this.state, this.me, m.uid) && this.canInput) cls.push("can-attack");
       if (mine && m.sick && !m.frozen && this.myTurn) cls.push("sick");
       if (this.sel?.uid === m.uid) cls.push("selected");
@@ -214,8 +227,9 @@ export class Battle {
       hp.textContent = m.health;
       hp.classList.toggle("hurt", m.health < m.maxHealth);
       hp.classList.toggle("buffed", m.health >= m.maxHealth && m.maxHealth > (def.health ?? m.maxHealth));
-      const icons = kws.filter(k => ["bitey", "lifesnack", "doubleWag"].includes(k)).map(k => KEYWORDS[k].icon);
-      if (def.ability && TRIGGER_ICON[def.ability.trigger]) icons.push(TRIGGER_ICON[def.ability.trigger]);
+      const icons = kws.filter(k => ["bitey", "lifesnack", "doubleWag", "leftOnRead"].includes(k)).map(k => KEYWORDS[k].icon);
+      if (def.ability && !m.silenced && TRIGGER_ICON[def.ability.trigger]) icons.push(TRIGGER_ICON[def.ability.trigger]);
+      if (m.silenced) icons.push(STATUS.shadowbanned.icon);
       $(".icons", el).textContent = icons.join("");
       return el;
     });
@@ -239,6 +253,13 @@ export class Battle {
 
   renderHand(drawn = new Set()) {
     const s = this.state, me = s.players[this.me];
+    if (this.spectator) {
+      // Watchers never see either hand: show the bottom player's card backs like the top one's.
+      const n = me.handCount ?? me.hand.length;
+      this.el.myHandBacks.innerHTML = Array.from({ length: Math.min(n, 10) }, () => cardBackHTML()).join("");
+      this.el.myHandBacks.title = `${n} cards in hand`;
+      return;
+    }
     const existing = new Map([...this.el.hand.children].map(el => [el.dataset.uid, el]));
     const nodes = me.hand.map(inst => {
       let el = existing.get(inst.uid);
@@ -337,7 +358,7 @@ export class Battle {
   // Swap cards out of your opening hand, once, before your first move.
   maybeMulligan() {
     const s = this.state, me = s?.players[this.me];
-    if (!me || s.over || s.active !== this.me || me.mulliganDone || this.mulliganEl) return;
+    if (this.spectator || !me || s.over || s.active !== this.me || me.mulliganDone || this.mulliganEl) return;
     const picks = new Set();
     const el = document.createElement("div");
     el.className = "mulligan";
@@ -624,6 +645,7 @@ export class Battle {
           def = this.def(m.id); shiny = m.shiny;
           stats = { attack: m.attack, health: m.health };
           if (m.frozen) notes.push("🔇 Muted: can't attack this turn.");
+          if (m.silenced) notes.push(`${STATUS.shadowbanned.icon} ${STATUS.shadowbanned.label}: lost all its keywords and abilities.`);
           if (m.sick && idx === this.me) notes.push("Just got here: can attack next turn.");
           if (idx === this.me && !m.sick && !m.frozen && m.attacksLeft <= 0 && m.attack > 0) notes.push("Already attacked this turn.");
           if (m.attack <= 0) notes.push("0 Attack: it can't attack. Just here for the vibes.");
@@ -631,6 +653,7 @@ export class Battle {
           const extraKw = (m.keywords || []).filter(k => !(def?.keywords || []).includes(k));
           if (extraKw.length) notes.push(`Gained: ${extraKw.map(k => KEYWORDS[k]?.label).join(", ")}.`);
           def = def && { ...def, keywords: m.keywords };
+          if (def && m.silenced) def = { ...def, ability: null, text: `${STATUS.shadowbanned.icon} ${STATUS.shadowbanned.label}.` };
         }
       }
     }
@@ -648,7 +671,7 @@ export class Battle {
       </div>
       <h3>Battle log</h3><div class="log-list">${log || "<div>Nothing yet.</div>"}</div>
       <div class="actions">
-        ${this.state?.over ? `<button class="btn" data-leave>Leave</button>` : `<button class="btn danger" data-concede>Give up</button>`}
+        ${this.spectator ? `<button class="btn" data-leave>Stop watching</button>` : this.state?.over ? `<button class="btn" data-leave>Leave</button>` : `<button class="btn danger" data-concede>Give up</button>`}
         <button class="btn primary" data-close>Back to game</button>
       </div>`);
     m.el.querySelector("[data-rules]").onclick = () => { m.close(); this.opts.showRules?.(); };
@@ -821,7 +844,7 @@ export class Battle {
     for (const e of events) {
       switch (e.t) {
         case "play":
-          if (e.player !== this.me) await this.reveal(e.id, e.shiny);
+          if (e.player !== this.me || this.spectator) await this.reveal(e.id, e.shiny);
           if (this.def(e.id)?.type === "spell") sfx.spell(); else sfx.play();
           if (this.def(e.id)?.rarity === "legendary") { this.banner(`${this.def(e.id).name}!`, "legend"); sfx.shiny(); }
           break;
@@ -847,6 +870,7 @@ export class Battle {
         case "buff": if (e.attack || e.health) this.floatAt(e.uid, `+${e.attack}/+${e.health}`, "buff"); break;
         case "shield": { sfx.shield(); this.floatAt(e.uid, "Plot armor!", "info"); const el = this.elFor(e.uid); if (el) el.classList.add("pop-shield"); break; }
         case "freeze": this.floatAt(e.uid, "🔇 Muted", "info"); break;
+        case "silence": { this.floatAt(e.uid, "🤐 Shadowbanned", "info"); sfx.error(); const el = this.elFor(e.uid); if (el) { el.classList.remove("shake"); void el.offsetWidth; el.classList.add("shake"); } break; }
         case "armor": this.floatAt(`h${e.player}`, `+${e.amount} Drip`, "info"); break;
         case "death": { hits = true; const el = this.elFor(e.uid); if (el) el.classList.add("dying"); this.burst(e.uid, 18, "poof"); sfx.death(); break; }
         case "fatigue": toast(`${e.player === this.me ? "You're" : "They're"} out of cards! ${e.amount} burnout damage.`, "bad"); break;
@@ -861,11 +885,12 @@ export class Battle {
   async postEvents(events, first) {
     for (const e of events) {
       if (e.t === "turn" && !this.state.over) {
-        if (e.player === this.me) { this.banner("Your Turn. Lock in."); sfx.turn(); buzz(20); }
+        if (this.spectator) this.banner(`${this.state.players[e.player].name}'s turn`);
+        else if (e.player === this.me) { this.banner("Your Turn. Lock in."); sfx.turn(); buzz(20); }
         await sleep(e.player === this.me ? 600 : 250);
       }
     }
-    if (first && this.state.active === this.me && !this.state.over) { this.banner("Your Turn. Lock in."); sfx.turn(); }
+    if (first && !this.spectator && this.state.active === this.me && !this.state.over) { this.banner("Your Turn. Lock in."); sfx.turn(); }
   }
 }
 

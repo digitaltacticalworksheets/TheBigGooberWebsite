@@ -1,10 +1,11 @@
 // Goober Cards app shell: menus, collection, packs, decks, and starting matches.
-import { buildCatalog, collectibleIds, MAX_COPIES, DECK_SIZE, RARITIES, RARITY_LABEL, CATEGORIES, CATEGORY_STYLE, KEYWORDS, HERO_POWER, autoDeck, validateDeck } from "./cards.js";
+import { buildCatalog, collectibleIds, MAX_COPIES, DECK_SIZE, RARITIES, RARITY_LABEL, CATEGORIES, CATEGORY_STYLE, KEYWORDS, STATUS, HERO_POWER, autoDeck, validateDeck } from "./cards.js";
 import { createGame, STARTING_HP, BOARD_LIMIT } from "./engine.js";
 import { AI_LEVELS } from "./ai.js";
 import { SoloMatch } from "./battle.js";
-import { OnlineMatch, createRoom, findMatch } from "./online.js";
+import { OnlineMatch, createRoom, findMatch, liveGames, roomStatus, hasSeatIn } from "./online.js";
 import * as store from "./collection.js";
+import { RANK_TIERS, RANK_POINTS, tierFor, nextTier } from "./economy.js";
 import * as account from "./account.js";
 import { $, $$, esc, sleep, cardHTML, cardBackHTML, toast, modal, confirmDialog, keywordGlossary, onLongPress } from "./ui.js";
 import { sfx, setSoundEnabled, buzz } from "./sound.js";
@@ -62,6 +63,8 @@ function route() {
   switch (name) {
     case "solo": return renderSolo();
     case "online": return renderOnline(arg);
+    case "watch": return renderOnline("", arg);
+    case "challenge": return renderChallenge(arg);
     case "packs": return renderPacks();
     case "collection": return renderCollection();
     case "decks": return renderDecks();
@@ -99,8 +102,8 @@ function renderHome() {
     <section class="home-hero">
       <div>
         <h2>Lock in, ${esc(p.name || "Goober Fan")}.</h2>
-        <p>${p.stats.wins} wins · ${p.stats.losses} losses${p.stats.streak > 1 ? ` · 🔥 ${p.stats.streak} win streak. You're cooking.` : ""}</p>
-        <div class="row"><a class="btn big primary" href="#solo">▶ Play</a><a class="btn blue" href="#online">🌐 Online</a></div>
+        <p>${p.stats.wins} wins · ${p.stats.losses} losses${account.currentUser() && p.rank?.wins + p.rank?.losses > 0 ? ` · ${rankLabel(p.rank.rp)}` : ""}${p.stats.streak > 1 ? ` · 🔥 ${p.stats.streak} win streak. You're cooking.` : ""}</p>
+        <div class="row"><a class="btn big primary" href="#solo">▶ Play</a><a class="btn blue" href="#online">🌐 Online</a><button class="btn pink" data-challenge>⚔️ Challenge</button></div>
       </div>
       <div class="fan">${showcase.map(c => cardHTML(c)).join("")}</div>
     </section>
@@ -120,6 +123,7 @@ function renderHome() {
   $("[data-rules]", app).onclick = showRules;
   $("[data-settings]", app).onclick = showSettings;
   $("[data-account]", app).onclick = () => showAccount();
+  $("[data-challenge]", app).onclick = e => challengeFriend(e.currentTarget);
   const nudge = $("[data-save-nudge]", app);
   if (nudge) nudge.onclick = () => showAccount("signup");
   $("[data-hero]", app).onclick = pickPortrait;
@@ -144,7 +148,7 @@ function askName(then) {
     if (!profile().tutorialSeen) showRules();
   };
   $("[data-signup]", m.el).onclick = () => { m.close(); showAccount("signup", { onDone: done, onCancel: () => askName(then) }); };
-  $("[data-login]", m.el).onclick = () => { m.close(); showAccount("login", { onDone: () => { if (!profile().name) profile().name = account.currentUser()?.username || "Goober Fan"; renderHome(); }, onCancel: () => askName(then) }); };
+  $("[data-login]", m.el).onclick = () => { m.close(); showAccount("login", { onDone: () => { if (!profile().name) profile().name = account.currentUser()?.username || "Goober Fan"; if (then) then(); else renderHome(); }, onCancel: () => askName(then) }); };
   $("[data-guest]", m.el).onclick = () => { m.close(); askGuestName(done); };
 }
 
@@ -300,7 +304,9 @@ export function showRules() {
     <ul><li>Once per turn, spend ${HERO_POWER.cost} Aura. Your hero barks, then farts. Deals 1 damage to an enemy. Devastating.</li></ul>
     <h3>✨ Keywords</h3>
     <ul>${Object.values(KEYWORDS).map(k => `<li>${k.icon} <b>${k.label}:</b> ${k.text}</li>`).join("")}
-    <li>📣 <b>Entrance:</b> Happens when you play it.</li><li>☠️ <b>Last Words:</b> Happens when it gets knocked out.</li><li>🔇 <b>Muted:</b> Can't attack next turn.</li></ul>
+    <li>📣 <b>Entrance:</b> Happens when you play it.</li><li>☠️ <b>Last Words:</b> Happens when it gets knocked out.</li>${Object.values(STATUS).map(s => `<li>${s.icon} <b>${s.label}:</b> ${s.text}</li>`).join("")}</ul>
+    <h3>🏆 Ranked</h3>
+    <ul><li>Find a Match is ranked when both players are logged in. Friend rooms and rematches aren't.</li><li>Win: +${RANK_POINTS.win} Rank Points, plus a streak bonus from your 3rd win in a row. Loss: -${RANK_POINTS.loss}.</li><li>Climb ${RANK_TIERS.map(t => `${t.icon} ${t.name}`).join(" → ")}. Once you reach a tier you can't drop out of it.</li></ul>
     <h3>🎁 Collecting</h3>
     <ul><li>Win games to earn coins. Rip packs. Pull rare and ✨shiny✨ Goobers.</li><li>Every Goober uploaded to the site becomes a card with its own stats and rarity.</li><li>Decks have exactly ${DECK_SIZE} cards: max 2 copies of a card (1 for Legendaries).</li><li>Press and hold any card to read it up close.</li></ul>
     <div class="actions"><button class="btn primary" data-close>Bet</button></div></div>`);
@@ -390,7 +396,7 @@ function exitMatch(goHome = true) {
 window.addEventListener("popstate", async () => {
   if (!match && !online?.battle) return;
   const state = match?.state || null;
-  if (state && state.over) { exitMatch(); return; }
+  if ((state && state.over) || online?.spectating) { exitMatch(); return; }
   history.pushState(null, "", "#battle");
   if (await confirmDialog("Leave the battle?", "Leaving now counts as giving up.", { yes: "Leave", danger: true })) {
     if (match) await match.act({ type: "concede" });
@@ -414,13 +420,16 @@ function confetti(count = 90) {
   }
 }
 
-function showResult({ won, draw, coins, firstWin, capped, again, onlineRoom }) {
+function showResult({ won, draw, coins, firstWin, capped, again, onlineRoom, rank }) {
   if (won) { sfx.win(); buzz([60, 40, 60]); confetti(); } else sfx.lose();
   const title = draw ? "Draw??" : won ? "W" : "L";
   const m = modal(`<div class="result ${won ? "win" : "lose"}">
       <h2>${title}</h2>
       <div class="portrait" style="background-image:url('${esc(heroArt(profile().hero))}')"></div>
       ${coins ? `<div class="reward">🪙 +${coins}</div>` : ""}
+      ${rank ? `<div class="reward rank-reward">${rankLabel(rank.after)} · ${rank.delta >= 0 ? "+" : ""}${rank.delta} RP</div>` : ""}
+      ${rank?.promoted ? `<p><b>Promoted to ${esc(tierFor(rank.after).name)}! ${tierFor(rank.after).icon}</b></p>` : ""}
+      ${rank && !won && !draw && rank.delta === 0 ? `<p class="muted">Tier protected. You can't drop out of ${esc(tierFor(rank.after).name)}.</p>` : ""}
       ${firstWin ? `<p><b>First win of the day bonus included!</b></p>` : ""}
       ${capped ? `<p class="muted">You hit today's coin limit for this mode. More tomorrow!</p>` : ""}
       <p>${won ? pick(["+1000 aura.", "Absolutely cooked them.", "Built different.", "They're gonna need a minute."]) : draw ? "Nobody wins. Awkward." : pick(["Skill issue.", "-500 aura.", "You got cooked.", "It's giving… defeat."])}</p>
@@ -437,7 +446,7 @@ function showResult({ won, draw, coins, firstWin, capped, again, onlineRoom }) {
 }
 
 // ------------------------------------------------------------------ online
-function renderOnline(code) {
+function renderOnline(code, watchCode = "") {
   const p = profile();
   app.innerHTML = `<div class="screen">
     ${topbar("Online Battle")}
@@ -445,31 +454,82 @@ function renderOnline(code) {
     <span class="field-label">Your deck</span>
     ${deckPickerHTML(p.activeDeck)}
     <div class="online-card" data-quick>
+      ${rankCardHTML()}
       <button class="btn big primary" data-find>🔎 Find a Match</button>
-      <div class="muted" style="text-align:center;font-weight:800">Plays a random opponent who's searching right now.</div>
+      <div class="muted" style="text-align:center;font-weight:800">${account.currentUser() ? "Ranked when your opponent is logged in too. Rematches don't count." : "Plays a random opponent who's searching right now. Log in to play ranked."}</div>
     </div>
     <div class="online-card">
-      <button class="btn big pink" data-create>✨ Create Room</button>
-      <div class="muted" style="text-align:center;font-weight:800">or join a friend</div>
-      <div class="row"><input data-code maxlength="8" placeholder="CODE" value="${esc(code || "")}" autocomplete="off" autocapitalize="characters" style="flex:1;min-width:140px"><button class="btn blue" data-join>Join</button></div>
+      <button class="btn big pink" data-create>⚔️ Challenge a Friend</button>
+      <div class="muted" style="text-align:center;font-weight:800">Makes a private room and sends them a link. Or type a code to join or watch:</div>
+      <div class="row"><input data-code maxlength="8" placeholder="CODE" value="${esc(code || "")}" autocomplete="off" autocapitalize="characters" style="flex:1;min-width:140px"><button class="btn blue" data-join>Join</button><button class="btn" data-watch-code>👀 Watch</button></div>
     </div>
     <div data-lobby></div>
+    <div class="online-card live-card">
+      <div class="live-head"><b>👀 Watch live</b><span class="muted" data-live-note></span></div>
+      <div class="live-list" data-live><div class="muted">Loading…</div></div>
+    </div>
   </div>`;
+  watchLiveList();
   bindDeckPicker(app.firstElementChild, () => { stopSearching(); renderOnline($("[data-code]", app).value); });
   $("[data-find]", app).onclick = () => startSearching();
-  $("[data-create]", app).onclick = async e => {
-    stopSearching();
-    e.target.disabled = true;
-    try { const { roomCode } = await createRoom(); joinOnline(roomCode); }
-    catch (error) { toast(error.message, "bad"); e.target.disabled = false; }
-  };
+  $("[data-create]", app).onclick = e => challengeFriend(e.currentTarget);
+  const typedCode = () => $("[data-code]", app).value.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
   $("[data-join]", app).onclick = () => {
     stopSearching();
-    const c = $("[data-code]", app).value.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const c = typedCode();
     if (c.length < 4) { toast("Enter the room code from your friend.", "bad"); return; }
     joinOnline(c);
   };
-  if (code && code.length >= 4) joinOnline(code.toUpperCase());
+  $("[data-watch-code]", app).onclick = () => {
+    stopSearching();
+    const c = typedCode();
+    if (c.length < 4) { toast("Enter the room code of the match you want to watch.", "bad"); return; }
+    joinOnline(c, { watch: true });
+  };
+  $("[data-live]", app).addEventListener("click", e => {
+    const c = e.target.closest("[data-watch]")?.dataset.watch;
+    if (c) { stopSearching(); joinOnline(c, { watch: true }); }
+  });
+  if (watchCode && watchCode.length >= 4) joinOnline(watchCode.toUpperCase(), { watch: true });
+  else if (code && code.length >= 4) joinOnline(code.toUpperCase());
+}
+
+// Refresh the Watch Live list every 10 seconds while the Online screen is up.
+let liveTimer = null;
+function watchLiveList() {
+  clearInterval(liveTimer);
+  const load = async () => {
+    const list = $("[data-live]", app);
+    if (!list) { clearInterval(liveTimer); return; }
+    try {
+      const { games, searching } = await liveGames();
+      if (!list.isConnected) return;
+      const note = $("[data-live-note]", app);
+      if (note) note.textContent = searching ? `${searching} searching now` : "";
+      const tierIcon = t => (t ? `${RANK_TIERS.find(x => x.id === t)?.icon || ""} ` : "");
+      list.innerHTML = games.length
+        ? games.map(g => `<div class="live-row"><div><b>${tierIcon(g.players[0]?.tier)}${esc(g.players[0]?.name || "?")} <span class="muted">vs</span> ${tierIcon(g.players[1]?.tier)}${esc(g.players[1]?.name || "?")}</b><small>${g.ranked ? "🏆 Ranked · " : ""}${Math.max(1, Math.round((Date.now() - g.started) / 60000))} min in</small></div><button class="btn small blue" data-watch="${esc(g.code)}">Watch</button></div>`).join("")
+        : `<div class="muted">No Find a Match games right now. Friend rooms aren't listed, but you can watch one with its code.</div>`;
+    } catch {
+      if (list.isConnected) list.innerHTML = `<div class="muted">Couldn't load live matches.</div>`;
+    }
+  };
+  load();
+  liveTimer = setInterval(load, 10000);
+}
+
+const rankLabel = rp => { const t = tierFor(rp); return `${t.icon} ${t.name}`; };
+
+function rankCardHTML() {
+  if (!account.currentUser()) return "";
+  const r = profile().rank || { rp: 0, wins: 0, losses: 0 };
+  const tier = tierFor(r.rp), next = nextTier(r.rp);
+  const pct = next ? Math.round(((r.rp - tier.min) / (next.min - tier.min)) * 100) : 100;
+  return `<div class="rank-card">
+    <span class="rank-icon">${tier.icon}</span>
+    <div><b>${esc(tier.name)}</b><small>${r.rp} RP${next ? ` · ${next.min - r.rp} to ${esc(next.name)}` : " · Top tier"} · ${r.wins}W ${r.losses}L</small>
+    <div class="rank-bar"><i style="width:${pct}%"></i></div></div>
+  </div>`;
 }
 
 function startSearching() {
@@ -492,17 +552,17 @@ function startSearching() {
   const timer = setInterval(tick, 1000);
   const ticket = findMatch({
     onQueue: n => { count = n; tick(); },
-    onMatched: roomCode => {
+    onMatched: (roomCode, ranked) => {
       stopSearching();
       sfx.turn();
       buzz([40, 30, 40]);
-      toast("Opponent found!", "good");
+      toast(ranked ? "Opponent found! Ranked match." : "Opponent found!", "good");
       renderOnline();
       $("[data-quick]", app).innerHTML = `<div class="row" style="justify-content:center"><div class="spinner"></div><b>Opponent found! Joining room ${esc(roomCode)}…</b></div>`;
       joinOnline(roomCode);
     },
     onError: message => { stopSearching(); toast(message, "bad"); if (box.isConnected) renderOnline(); }
-  });
+  }, account.sessionToken());
   searching = { cancel: () => { clearInterval(timer); ticket.cancel(); } };
   $("[data-cancel]", box).onclick = () => { stopSearching(); renderOnline(); };
 }
@@ -512,17 +572,96 @@ function stopSearching() {
   searching = null;
 }
 
-function joinOnline(code) {
+// ------------------------------------------------------------------ challenges
+const challengeLink = code => `${location.origin}/goober-cards/#challenge/${code}`;
+
+async function shareChallenge(code) {
+  const link = challengeLink(code);
+  const text = `⚔️ ${profile().name || "A Goober fan"} challenged you to Goober Cards. Scared?`;
+  if (navigator.share) {
+    try { await navigator.share({ title: "Goober Cards challenge", text, url: link }); return; }
+    catch (error) { if (error?.name === "AbortError") return; }
+  }
+  await copyText(link, "Challenge link copied! Send it to your friend.");
+}
+
+// Make a private room, sit in it, and send the link (share sheet on phones, clipboard elsewhere).
+async function challengeFriend(button) {
+  stopSearching();
+  if (button) button.disabled = true;
+  let roomCode;
+  try { ({ roomCode } = await createRoom()); }
+  catch (error) { toast(error.message, "bad"); if (button) button.disabled = false; return; }
+  if (location.hash.split("/")[0] !== "#online") { history.replaceState(null, "", "#online"); renderOnline(); }
+  joinOnline(roomCode, { challenge: true });
+  shareChallenge(roomCode);
+}
+
+// A friend opened a challenge link: show who's calling them out before joining.
+async function renderChallenge(code) {
+  code = String(code || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (code.length < 4) { history.replaceState(null, "", "#online"); renderOnline(); return; }
+  // Your own challenge (you already have a seat): straight back to the room.
+  if (hasSeatIn(code)) { history.replaceState(null, "", "#online"); renderOnline(); joinOnline(code, { challenge: true }); return; }
+  if (!profile().name) { askName(() => renderChallenge(code)); return; }
+  app.innerHTML = `<div class="screen">${topbar("Challenge")}<div class="online-card challenge-card"><div class="spinner" style="margin:auto"></div></div></div>`;
+  let status;
+  try { status = await roomStatus(code); }
+  catch { status = null; }
+  if (location.hash !== `#challenge/${code}`) return;
+  const [host, guest] = status?.players || [];
+  const card = $(".challenge-card", app);
+  if (!host) {
+    card.innerHTML = `<h2>Challenge expired</h2><p class="muted">This challenge link doesn't lead anywhere anymore. Send your friend one back!</p>
+      <div class="row" style="justify-content:center"><button class="btn pink" data-back-challenge>⚔️ Challenge them</button><a class="btn" href="#online">Online</a></div>`;
+    $("[data-back-challenge]", card).onclick = e => challengeFriend(e.currentTarget);
+    return;
+  }
+  if (guest || status.phase !== "lobby") {
+    card.innerHTML = `<h2>Already taken</h2><p class="muted">Someone already accepted ${esc(host.name)}'s challenge.</p>
+      <div class="row" style="justify-content:center"><button class="btn blue" data-watch-challenge>👀 Watch it</button><button class="btn pink" data-own-challenge>⚔️ Make your own</button></div>`;
+    $("[data-watch-challenge]", card).onclick = () => { history.replaceState(null, "", `#watch/${code}`); renderOnline("", code); };
+    $("[data-own-challenge]", card).onclick = e => challengeFriend(e.currentTarget);
+    return;
+  }
+  card.innerHTML = `<div class="challenge-head"><span>⚔️</span><div><small>You've been challenged by</small><h2>${esc(host.name)}</h2><small>${host.connected ? "🟢 Waiting in the room right now" : "⚪ Not in the room right now, but you can join and wait"}</small></div></div>
+    <span class="field-label">Your deck</span>
+    ${deckPickerHTML(profile().activeDeck)}
+    <div class="row" style="justify-content:center"><a class="btn" href="#home">Nah</a><button class="btn big primary" data-accept>Accept</button></div>`;
+  bindDeckPicker(card, () => renderChallenge(code));
+  $("[data-accept]", card).onclick = () => { sfx.turn(); history.replaceState(null, "", "#online"); renderOnline(); joinOnline(code); };
+}
+
+function joinOnline(code, { watch = false, challenge = false } = {}) {
   if (online) online.close();
   const { entries } = store.playableDeck(catalog);
-  history.replaceState(null, "", `#online/${code}`);
+  history.replaceState(null, "", `#${watch ? "watch" : "online"}/${code}`);
   const lobby = $("[data-lobby]", app);
-  const link = `${location.origin}/goober-cards/#online/${code}`;
+  const link = challengeLink(code);
+  const watchLink = `${location.origin}/goober-cards/#watch/${code}`;
   online = new OnlineMatch({
     code, name: profile().name || "Goober Fan", auth: account.sessionToken(), heroId: profile().hero || "original-goober", deck: entries, catalog,
-    heroArtFor: heroArt, showRules, toggleSound, soundOn: () => profile().settings.sound,
+    heroArtFor: heroArt, showRules, toggleSound, soundOn: () => profile().settings.sound, watch,
     onExit: () => exitMatch(),
+    onWatchEnd: (room, game) => {
+      const winner = game.winner === "draw" ? null : room.seats[game.winner]?.name || game.players[game.winner]?.name;
+      sfx.win();
+      const m = modal(`<div class="result win"><h2>${winner ? "GG" : "Draw"}</h2><p><b>${winner ? `${esc(winner)} wins.` : "Nobody wins. Awkward."}</b></p><p class="muted">Stick around in case they run it back.</p>
+        <div class="actions" style="justify-content:center"><button class="btn" data-leave>Stop watching</button><button class="btn primary" data-close>Keep watching</button></div></div>`, { className: "result win" });
+      $("[data-leave]", m.el).onclick = () => { m.close(); exitMatch(); };
+    },
     onLobby: (room, seat, status) => {
+      if (status === "watching") {
+        if (!lobby.isConnected) return;
+        lobby.innerHTML = `<div class="online-card" style="border-style:solid;text-align:center">
+          <div style="font-weight:800">👀 Watching${room.ranked ? " a ranked match" : ""} · Room ${esc(room.code)}</div>
+          <div class="seat-list">${[0, 1].map(i => { const s = room.seats[i]; return `<div class="seat"><span class="dot ${s?.connected ? "on" : ""}"></span>${s?.tier ? `${RANK_TIERS.find(t => t.id === s.tier)?.icon || ""} ` : ""}${s ? esc(s.name) : "Empty seat"}${s?.ready ? " ✅" : ""}</div>`; }).join("")}</div>
+          <div class="row" style="justify-content:center"><div class="spinner"></div><span class="muted">${room.phase === "over" ? "Match over. Waiting to see if they rematch." : "The match starts when both players are ready."}</span></div>
+          <button class="btn" data-leave-watch>Stop watching</button>
+        </div>`;
+        $("[data-leave-watch]", lobby).onclick = () => { online?.close(); online = null; history.replaceState(null, "", "#online"); renderOnline(); };
+        return;
+      }
       if (status === "over") { if (room.rematch?.[seat === 0 ? 1 : 0] && !room.rematch?.[seat]) toast(`${room.seats[seat === 0 ? 1 : 0]?.name || "Your opponent"} wants a rematch!`, "good"); return; }
       if (online?.battle && status !== "rematch") return;
       if (status === "full" || status === "disconnected") { online?.close(); online = null; if (lobby.isConnected) lobby.innerHTML = `<p class="muted">${status === "full" ? "That room already has two players." : "Couldn't reach the room."}</p>`; return; }
@@ -534,17 +673,16 @@ function joinOnline(code) {
       }
       if (!lobby.isConnected) return;
       lobby.innerHTML = `<div class="online-card" style="border-style:solid">
-        <div style="text-align:center;font-weight:800">Room code</div>
+        ${challenge && !room.seats[seat === 0 ? 1 : 0] ? `<div class="challenge-sent"><b>⚔️ Challenge sent!</b><span>Waiting for your friend to open the link and accept.</span></div>` : ""}
+        <div style="text-align:center;font-weight:800">${room.ranked ? "🏆 Ranked match · " : ""}Room code</div>
         <div class="code-box">${esc(room.code)}</div>
-        <div class="row" style="justify-content:center"><button class="btn small" data-share>📤 Share invite</button><button class="btn small" data-copy>📋 Copy link</button></div>
-        <div class="seat-list">${[0, 1].map(i => { const s = room.seats[i]; return `<div class="seat"><span class="dot ${s?.connected ? "on" : ""}"></span>${s ? esc(s.name) : "Waiting for someone brave…"}${i === seat ? " (you)" : ""}${s?.ready ? " ✅" : ""}</div>`; }).join("")}</div>
+        <div class="row" style="justify-content:center"><button class="btn small" data-share>📤 ${challenge ? "Send again" : "Share invite"}</button><button class="btn small" data-copy>📋 Copy link</button><button class="btn small" data-copy-watch>👀 Watch link</button></div>
+        <div class="seat-list">${[0, 1].map(i => { const s = room.seats[i]; return `<div class="seat"><span class="dot ${s?.connected ? "on" : ""}"></span>${s?.tier ? `${RANK_TIERS.find(t => t.id === s.tier)?.icon || ""} ` : ""}${s ? esc(s.name) : "Waiting for someone brave…"}${i === seat ? " (you)" : ""}${s?.ready ? " ✅" : ""}</div>`; }).join("")}</div>
         <div class="row" style="justify-content:center"><div class="spinner"></div><span class="muted">Starts when both players join.</span></div>
       </div>`;
-      $("[data-share]", lobby).onclick = async () => {
-        if (navigator.share) { try { await navigator.share({ title: "Goober Cards", text: `1v1 me in Goober Cards. Room ${room.code}. Scared?`, url: link }); } catch { /* cancelled */ } }
-        else { await copyText(link); }
-      };
-      $("[data-copy]", lobby).onclick = () => copyText(link);
+      $("[data-share]", lobby).onclick = () => shareChallenge(room.code);
+      $("[data-copy]", lobby).onclick = () => copyText(link, "Challenge link copied!");
+      $("[data-copy-watch]", lobby).onclick = () => copyText(watchLink);
     },
     onEnd: async ({ won, draw }) => {
       // Logged in: the game server pays out. Guests: record it on this device.
@@ -557,7 +695,7 @@ function joinOnline(code) {
         result = store.recordResult({ won, reward: won ? 100 : 30 });
       }
       showResult({
-        won, draw, coins: result.coins, firstWin: result.firstWin, capped: result.capped, onlineRoom: true,
+        won, draw, coins: result.coins, firstWin: result.firstWin, capped: result.capped, onlineRoom: true, rank: result.rank,
         again: () => { const { entries: fresh } = store.playableDeck(catalog); online?.rematch(fresh); renderRematchWait(code); }
       });
     }
@@ -576,8 +714,8 @@ function renderRematchWait(code) {
   $("[data-leave]", app).onclick = () => exitMatch();
 }
 
-async function copyText(text) {
-  try { await navigator.clipboard.writeText(text); toast("Link copied!", "good"); }
+async function copyText(text, message = "Link copied!") {
+  try { await navigator.clipboard.writeText(text); toast(message, "good"); }
   catch { prompt("Copy this link:", text); }
 }
 
@@ -925,7 +1063,7 @@ function renderBuilder(id) {
 function boot() {
   const params = new URLSearchParams(location.search);
   const room = params.get("room");
-  if (room) { history.replaceState(null, "", `${location.pathname}#online/${room.toUpperCase()}`); }
+  if (room) { history.replaceState(null, "", `${location.pathname}#challenge/${room.toUpperCase()}`); }
   if (location.hash === "#battle") history.replaceState(null, "", "#home");
   account.onAccountEvents({
     status: state => { const el = document.querySelector("[data-sync]"); if (el) el.textContent = { saving: "⏳", saved: "☁️", offline: "⚠️" }[state] || "☁️"; },
