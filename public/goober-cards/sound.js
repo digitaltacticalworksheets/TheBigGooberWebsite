@@ -1,4 +1,4 @@
-// Synthesized sound effects (no audio files to download).
+// Synthesized sound effects, plus a few recorded samples.
 // Everything runs through one bus: a little reverb for space, then a
 // compressor so layered hits sound punchy instead of clipping.
 let ctx = null;
@@ -13,6 +13,7 @@ function audio() {
     if (!ctx) {
       ctx = new (window.AudioContext || window.webkitAudioContext)();
       buildBus(ctx);
+      decodeSamples(ctx);
     }
     if (ctx.state === "suspended") ctx.resume().catch(() => {});
     return ctx;
@@ -47,6 +48,36 @@ function buildBus(a) {
 }
 
 const out = () => bus.input;
+
+// Recorded samples: fetched up front, decoded once the AudioContext exists.
+// Until a sample is ready (or if it fails to load) the synth fallback plays.
+const SAMPLE_URLS = { barkFart: new URL("./sounds/bark-fart.mp3", import.meta.url).href };
+const sampleBytes = {};
+const samples = {};
+for (const [name, url] of Object.entries(SAMPLE_URLS)) {
+  sampleBytes[name] = fetch(url).then(r => (r.ok ? r.arrayBuffer() : null)).catch(() => null);
+}
+
+function decodeSamples(a) {
+  for (const [name, bytes] of Object.entries(sampleBytes)) {
+    bytes.then(buf => (buf ? a.decodeAudioData(buf) : null))
+      .then(decoded => { if (decoded) samples[name] = decoded; })
+      .catch(() => {});
+  }
+}
+
+function playSample(name, fallback, gain = 0.9) {
+  const a = audio();
+  if (!a) return;
+  const buffer = samples[name];
+  if (!buffer) { fallback(); return; }
+  const src = a.createBufferSource();
+  src.buffer = buffer;
+  const g = a.createGain();
+  g.gain.value = gain;
+  src.connect(g).connect(out());
+  src.start();
+}
 
 function env(g, t, { attack = 0.005, peak = 0.2, hold = 0, dur = 0.2 }) {
   g.gain.setValueAtTime(0.0001, t);
@@ -289,7 +320,7 @@ export const sfx = {
   shield: () => { tone(300, { dur: 0.09, gain: 0.12, slide: 900 }); noise({ at: 0.05, dur: 0.1, gain: 0.08, freq: 4000 }); },
   death: () => { noise({ dur: 0.3, gain: 0.18, freq: 900, sweep: -700 }); tone(900, { at: 0.05, dur: 0.45, type: "sine", gain: 0.07, slide: -700 }); kick(0.02, { gain: 0.25, from: 120 }); },
   bark: () => { bark(0, 460); bark(0.17, 420); },
-  barkFart: () => { bark(0, 470); bark(0.17, 430); fart(0.38); },
+  barkFart: () => playSample("barkFart", () => { bark(0, 470); bark(0.17, 430); fart(0.38); }),
   turn: () => { chord([523, 659, 784], { gain: 0.07, dur: 0.4, stagger: 0.07, type: "triangle" }); sparkle(0.22, 1568, 4, 0.05, 0.04); whoosh(0, { dur: 0.3, gain: 0.06 }); },
   endTurn: () => { tone(392, { dur: 0.12, type: "triangle", gain: 0.08 }); tone(294, { at: 0.08, dur: 0.18, type: "triangle", gain: 0.07 }); },
   error: () => { tone(180, { dur: 0.09, type: "square", gain: 0.06, filter: 900 }); tone(150, { at: 0.11, dur: 0.12, type: "square", gain: 0.06, filter: 900 }); },
