@@ -65,7 +65,7 @@ export function createGame({ decks, names = ["Player 1", "Player 2"], seed = Dat
   for (let i = 0; i < 3; i++) drawCard(state, state.active, true);
   for (let i = 0; i < 4; i++) drawCard(state, second, true);
   addToHand(state, second, { uid: `c${++state.uid}`, id: "token-crumb", shiny: false });
-  log(state, `${state.players[state.active].name} goes first. ${state.players[second].name} gets The Crumb.`);
+  log(state, `${state.players[state.active].name} goes first. ${state.players[second].name} gets Bonus Aura.`);
   startTurn(state);
   state.events = [];
   return state;
@@ -96,7 +96,7 @@ function addToHand(state, idx, cardInst) {
   const p = state.players[idx];
   if (p.hand.length >= HAND_LIMIT) {
     emit(state, { t: "burn", player: idx, id: cardInst.id });
-    log(state, `${p.name}'s hand is full. A card fell off the table.`, idx);
+    log(state, `${p.name}'s hand is full. A card got yeeted into the void.`, idx);
     return false;
   }
   p.hand.push(cardInst);
@@ -109,7 +109,7 @@ function drawCard(state, idx, silent = false) {
   if (!card) {
     p.fatigue += 1;
     emit(state, { t: "fatigue", player: idx, amount: p.fatigue });
-    log(state, `${p.name} is out of cards and takes ${p.fatigue} tired damage.`, idx);
+    log(state, `${p.name} is out of cards and takes ${p.fatigue} burnout damage.`, idx);
     damageCharacter(state, p.hero.uid, p.fatigue, null);
     return;
   }
@@ -219,8 +219,8 @@ export function playInfo(state, catalog, idx, handUid) {
   if (!def) return { playable: false, reason: "Unknown card." };
   if (state.over) return { playable: false, reason: "Game over." };
   if (state.active !== idx) return { playable: false, reason: "Not your turn." };
-  if (def.cost > p.mana) return { playable: false, reason: "Not enough Bones." };
-  if (def.type === "minion" && p.board.length >= BOARD_LIMIT) return { playable: false, reason: "Your side of the table is full." };
+  if (def.cost > p.mana) return { playable: false, reason: "Not enough Aura." };
+  if (def.type === "minion" && p.board.length >= BOARD_LIMIT) return { playable: false, reason: "Your side is full. No more room." };
   const effect = effectOf(def);
   if (effect && CHOSEN.has(effect.target)) {
     const targets = validTargetsFor(state, idx, effect.target);
@@ -354,7 +354,7 @@ function cleanup(state, catalog) {
       emit(state, { t: "death", uid: minion.uid, player: idx });
       const def = catalog[minion.id];
       if (def?.ability?.trigger === "lastBark") {
-        log(state, `${def.name}'s Last Bark!`, idx);
+        log(state, `${def.name}'s Last Words!`, idx);
         resolveEffect(state, catalog, idx, def.ability, { source: { kind: "minion", owner: idx, entity: minion } });
       }
     }
@@ -370,7 +370,7 @@ function checkWinner(state) {
   state.over = true;
   state.winner = dead0 && dead1 ? "draw" : dead0 ? 1 : 0;
   emit(state, { t: "gameOver", winner: state.winner });
-  log(state, state.winner === "draw" ? "It's a draw!" : `${state.players[state.winner].name} wins!`);
+  log(state, state.winner === "draw" ? "It's a draw. Nobody wins. Awkward." : `${state.players[state.winner].name} wins. W.`);
 }
 
 // --- Turn flow ----------------------------------------------------------------
@@ -415,7 +415,7 @@ export function applyAction(state, catalog, idx, action) {
   if (action.type === "concede") {
     if (state.over) return { ok: false, error: "Game over." };
     state.players[idx].conceded = true;
-    log(state, `${state.players[idx].name} gave up.`, idx);
+    log(state, `${state.players[idx].name} rage quit.`, idx);
     checkWinner(state);
     return { ok: true, events: state.events };
   }
@@ -459,7 +459,7 @@ export function applyAction(state, catalog, idx, action) {
   if (action.type === "attack") {
     const targets = attackTargets(state, idx, action.uid);
     if (!targets.length) return { ok: false, error: "That Goober can't attack right now." };
-    if (!targets.includes(action.target)) return { ok: false, error: "Pick a valid target. Guards must be attacked first." };
+    if (!targets.includes(action.target)) return { ok: false, error: "Pick a valid target. Tanks have to go first." };
     const attacker = me.board.find(m => m.uid === action.uid);
     const defender = findCharacter(state, action.target);
     attacker.attacksLeft -= 1;
@@ -477,12 +477,12 @@ export function applyAction(state, catalog, idx, action) {
 
   if (action.type === "power") {
     const targets = powerTargets(state, idx);
-    if (!targets.length) return { ok: false, error: me.powerUsed ? "Big Bark is used once per turn." : "Not enough Bones." };
-    if (!targets.includes(action.target)) return { ok: false, error: "Choose an enemy to bark at." };
+    if (!targets.length) return { ok: false, error: me.powerUsed ? "BARK FART is once per turn. Pace yourself." : "Not enough Aura." };
+    if (!targets.includes(action.target)) return { ok: false, error: "Choose an enemy to BARK FART at." };
     me.mana -= HERO_POWER.cost;
     me.powerUsed = true;
     emit(state, { t: "power", player: idx, to: action.target });
-    log(state, `${me.name} used Big Bark.`, idx);
+    log(state, `${me.name} used BARK FART. 💨`, idx);
     damageCharacter(state, action.target, HERO_POWER.damage, null);
     cleanup(state, catalog);
     return { ok: true, events: state.events };

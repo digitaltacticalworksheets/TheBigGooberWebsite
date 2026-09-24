@@ -10,6 +10,8 @@ export default {
       if (url.pathname === "/api/goobers" && request.method === "POST") return await uploadGoober(request, env);
       if (url.pathname === "/api/card-battle/create" && request.method === "POST") return await createCardBattleRoom();
       if (url.pathname.startsWith("/api/card-battle/") && request.method === "GET") return await routeCardBattleRoom(request, env);
+      if (url.pathname === "/api/goobers/pending" && request.method === "GET") return await listPendingGoobers(request, env);
+      if (/^\/api\/goobers\/[^/]+\/approve$/.test(url.pathname) && request.method === "POST") return await approveGoober(request, env);
       if (url.pathname.startsWith("/api/goobers/") && request.method === "DELETE") return await deleteGoober(request, env);
       if (url.pathname.startsWith("/api/goober-image/") && request.method === "GET") return await getGooberImage(request, env);
       return jsonResponse({ error: "Not found" }, 404);
@@ -257,7 +259,116 @@ const NO_STORE_HEADERS = { "cache-control": "no-store, no-cache, must-revalidate
 function createRoomCode() { const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let code = ""; const bytes = new Uint8Array(6); crypto.getRandomValues(bytes); for (const byte of bytes) code += alphabet[byte % alphabet.length]; return code; }
 function getRoomCodeFromPath(pathname) { const match = pathname.match(/^\/api\/card-battle\/([A-Z0-9]{4,12})(?:\/socket)?$/i); return match ? match[1].toUpperCase() : ""; }
 async function listGoobers(env) { const result = await env.DB.prepare(`SELECT id, name, category, description, image_key, image_type, created_at FROM goobers WHERE approved = 1 ORDER BY created_at DESC`).all(); return jsonResponse((result.results || []).map(row => ({ id: row.id, name: row.name, category: row.category, description: row.description, imageUrl: `/api/goober-image/${row.image_key}`, createdAt: row.created_at })), 200, NO_STORE_HEADERS); }
-async function uploadGoober(request, env) { const formData = await request.formData(); const uploadCode = cleanText(formData.get("uploadCode"), 120), name = cleanText(formData.get("name"), 80), category = cleanText(formData.get("category"), 30), description = cleanText(formData.get("description"), 280), image = formData.get("image"); if (!hasValidUploadCode(uploadCode, env)) return jsonResponse({ error: "Invalid upload code." }, 403, NO_STORE_HEADERS); if (!name) return jsonResponse({ error: "Goober name is required." }, 400, NO_STORE_HEADERS); if (!description) return jsonResponse({ error: "Goober description is required." }, 400, NO_STORE_HEADERS); if (!ALLOWED_CATEGORIES.has(category)) return jsonResponse({ error: "Invalid category." }, 400, NO_STORE_HEADERS); if (!(image instanceof File)) return jsonResponse({ error: "Image file is required." }, 400, NO_STORE_HEADERS); if (!image.type.startsWith("image/")) return jsonResponse({ error: "File must be an image." }, 400, NO_STORE_HEADERS); if (image.size > MAX_IMAGE_BYTES) return jsonResponse({ error: "Image is too large. Max size is 5 MB." }, 400, NO_STORE_HEADERS); const id = crypto.randomUUID(), extension = getExtension(image.name, image.type), imageKey = `goobers/${id}.${extension}`; await env.GOOBER_IMAGES.put(imageKey, image.stream(), { httpMetadata: { contentType: image.type }, customMetadata: { originalName: image.name || "goober-upload", gooberName: name } }); await env.DB.prepare(`INSERT INTO goobers (id, name, category, description, image_key, image_type, approved, created_at) VALUES (?, ?, ?, ?, ?, ?, 1, datetime('now'))`).bind(id, name, category, description, imageKey, image.type).run(); return jsonResponse({ id, name, category, description, imageUrl: `/api/goober-image/${imageKey}` }, 201, NO_STORE_HEADERS); }
+async function uploadGoober(request, env) {
+  const formData = await request.formData();
+  const uploadCode = cleanText(formData.get("uploadCode"), 120), name = cleanText(formData.get("name"), 80), category = cleanText(formData.get("category"), 30), description = cleanText(formData.get("description"), 280), image = formData.get("image");
+  if (!hasValidUploadCode(uploadCode, env)) return jsonResponse({ error: "Invalid upload code." }, 403, NO_STORE_HEADERS);
+  if (!name) return jsonResponse({ error: "Goober name is required." }, 400, NO_STORE_HEADERS);
+  if (!description) return jsonResponse({ error: "Goober description is required." }, 400, NO_STORE_HEADERS);
+  if (!ALLOWED_CATEGORIES.has(category)) return jsonResponse({ error: "Invalid category." }, 400, NO_STORE_HEADERS);
+  if (!(image instanceof File)) return jsonResponse({ error: "Image file is required." }, 400, NO_STORE_HEADERS);
+  if (!image.type.startsWith("image/")) return jsonResponse({ error: "File must be an image." }, 400, NO_STORE_HEADERS);
+  if (image.size > MAX_IMAGE_BYTES) return jsonResponse({ error: "Image is too large. Max size is 5 MB." }, 400, NO_STORE_HEADERS);
+
+  const bytes = new Uint8Array(await image.arrayBuffer());
+  const moderation = await moderateUpload(env, { name, description, category, bytes, type: image.type });
+  if (moderation.verdict === "block") {
+    console.log("Upload blocked by auto-mod", { name, reason: moderation.reason });
+    return jsonResponse({ error: `Auto-mod blocked this Goober: ${moderation.reason}`, moderation: "blocked", reason: moderation.reason }, 422, NO_STORE_HEADERS);
+  }
+
+  const approved = moderation.verdict === "allow" ? 1 : PENDING_REVIEW;
+  const id = crypto.randomUUID(), extension = getExtension(image.name, image.type), imageKey = `goobers/${id}.${extension}`;
+  await env.GOOBER_IMAGES.put(imageKey, bytes, { httpMetadata: { contentType: image.type }, customMetadata: { originalName: image.name || "goober-upload", gooberName: name, moderation: moderation.verdict, moderationReason: moderation.reason.slice(0, 200) } });
+  await env.DB.prepare(`INSERT INTO goobers (id, name, category, description, image_key, image_type, approved, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`).bind(id, name, category, description, imageKey, image.type, approved).run();
+  const body = { id, name, category, description, imageUrl: `/api/goober-image/${imageKey}`, moderation: approved === 1 ? "approved" : "pending", reason: moderation.reason };
+  return jsonResponse(body, approved === 1 ? 201 : 202, NO_STORE_HEADERS);
+}
+
+// --- Auto-moderation ---------------------------------------------------------
+// approved: 1 = live, 0 = deleted, 2 = waiting for a human to review.
+const PENDING_REVIEW = 2;
+const MODERATION_IMAGE_LIMIT = 3.5 * 1024 * 1024;
+const VISION_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct";
+const TEXT_GUARD_MODEL = "@cf/meta/llama-guard-3-8b";
+const GUARD_CATEGORIES = { S1: "violent crime", S2: "crime", S3: "sexual crime", S4: "child safety", S5: "defamation", S6: "dangerous advice", S7: "private info", S8: "IP", S9: "weapons", S10: "hate", S11: "self-harm", S12: "sexual content", S13: "elections", S14: "code abuse" };
+const MODERATION_PROMPT = `You moderate uploads for a website where middle schoolers (ages 11-14) share hand-drawn cartoon dogs called "Goobers". Each upload becomes a trading card in a funny meme card game.
+
+ALLOW: silly or chaotic drawings, meme references, cartoon slapstick, cartoon weapons like swords or water guns, mild gross-out humor (farts, burps, boogers), spooky or monster themes, playful trash talk, mild words like "dumb", "butt", "sus".
+BLOCK anything with: nudity or sexual content or innuendo; slurs, hate speech, or hate symbols; graphic gore or realistic violence; drugs, alcohol, vaping, or smoking; self-harm or suicide; swear words (including censored or misspelled ones); real people's photos or faces; personal info such as full names, addresses, phone numbers, school names, or social handles; bullying aimed at a real person.
+REVIEW if you truly cannot tell, or if the image is not a drawing at all (for example a screenshot or a photo).
+
+Judge the image AND the name and description together. Reply with JSON only: {"verdict":"allow"|"review"|"block","reason":"short kid-friendly reason"}`;
+
+async function moderateUpload(env, { name, description, category, bytes, type }) {
+  if (!env.AI) return { verdict: "review", reason: "Auto-mod isn't set up, so a human mod will check this one." };
+  try {
+    const text = `Name: ${name}\nCategory: ${category}\nDescription: ${description}`;
+    const guard = await env.AI.run(TEXT_GUARD_MODEL, { messages: [{ role: "user", content: text }] });
+    const guardResult = parseGuard(guard?.response);
+    if (!guardResult.safe) return { verdict: "block", reason: `The name or description isn't allowed (${guardResult.categories.map(c => GUARD_CATEGORIES[c] || c).join(", ") || "unsafe"}).` };
+
+    if (bytes.length > MODERATION_IMAGE_LIMIT) return { verdict: "review", reason: "Image is too big for auto-mod, so a human mod will check it." };
+    const dataUrl = `data:${type || "image/jpeg"};base64,${toBase64(bytes)}`;
+    const result = await env.AI.run(VISION_MODEL, {
+      messages: [
+        { role: "system", content: MODERATION_PROMPT },
+        { role: "user", content: [{ type: "text", text }, { type: "image_url", image_url: { url: dataUrl } }] }
+      ],
+      response_format: { type: "json_object" },
+      max_tokens: 120,
+      temperature: 0
+    });
+    const parsed = parseVerdict(result?.response);
+    if (!parsed) return { verdict: "review", reason: "Auto-mod wasn't sure, so a human mod will check it." };
+    return parsed;
+  } catch (error) {
+    console.error("Auto-mod failed", error);
+    return { verdict: "review", reason: "Auto-mod had a hiccup, so a human mod will check it." };
+  }
+}
+
+function parseGuard(response) {
+  if (response && typeof response === "object") return { safe: response.safe !== false, categories: response.categories || [] };
+  const textValue = String(response || "").trim().toLowerCase();
+  if (!textValue || textValue.startsWith("safe")) return { safe: true, categories: [] };
+  return { safe: false, categories: (String(response).match(/S\d+/g) || []) };
+}
+
+function parseVerdict(response) {
+  let data = response;
+  if (typeof data === "string") {
+    const match = data.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    try { data = JSON.parse(match[0]); } catch { return null; }
+  }
+  if (!data || typeof data !== "object") return null;
+  const verdict = String(data.verdict || "").toLowerCase();
+  if (!["allow", "review", "block"].includes(verdict)) return null;
+  return { verdict, reason: cleanText(String(data.reason || ""), 160) || (verdict === "allow" ? "Looks good." : "Not allowed on this site.") };
+}
+
+function toBase64(bytes) {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(binary);
+}
+
+async function listPendingGoobers(request, env) {
+  if (!hasValidAdminCode(cleanText(request.headers.get("x-goober-admin-code"), 120), env)) return jsonResponse({ error: "Invalid admin code." }, 403, NO_STORE_HEADERS);
+  const result = await env.DB.prepare(`SELECT id, name, category, description, image_key, created_at FROM goobers WHERE approved = ? ORDER BY created_at ASC`).bind(PENDING_REVIEW).all();
+  return jsonResponse((result.results || []).map(row => ({ id: row.id, name: row.name, category: row.category, description: row.description, imageUrl: `/api/goober-image/${row.image_key}`, createdAt: row.created_at })), 200, NO_STORE_HEADERS);
+}
+
+async function approveGoober(request, env) {
+  const id = decodeURIComponent(new URL(request.url).pathname.replace("/api/goobers/", "").replace(/\/approve$/, "")).trim();
+  if (!id || id.includes("/") || id.includes("..")) return jsonResponse({ error: "Invalid goober id." }, 400, NO_STORE_HEADERS);
+  if (!hasValidAdminCode(await readAdminCode(request), env)) return jsonResponse({ error: "Invalid admin code." }, 403, NO_STORE_HEADERS);
+  const row = await env.DB.prepare(`SELECT id FROM goobers WHERE id = ? AND approved = ?`).bind(id, PENDING_REVIEW).first();
+  if (!row) return jsonResponse({ error: "No pending Goober with that id." }, 404, NO_STORE_HEADERS);
+  await env.DB.prepare(`UPDATE goobers SET approved = 1 WHERE id = ?`).bind(id).run();
+  return jsonResponse({ ok: true, id, approved: true }, 200, NO_STORE_HEADERS);
+}
 async function deleteGoober(request, env) { const url = new URL(request.url), id = decodeURIComponent(url.pathname.replace("/api/goobers/", "")).trim(); if (!id || id.includes("/") || id.includes("..")) return jsonResponse({ error: "Invalid goober id." }, 400, NO_STORE_HEADERS); const adminCode = await readAdminCode(request); if (!hasValidAdminCode(adminCode, env)) return jsonResponse({ error: "Invalid admin delete code." }, 403, NO_STORE_HEADERS); const row = await env.DB.prepare(`SELECT id, image_key FROM goobers WHERE id = ?`).bind(id).first(); if (!row) return jsonResponse({ error: "Goober not found." }, 404, NO_STORE_HEADERS); await env.DB.prepare(`UPDATE goobers SET approved = 0 WHERE id = ?`).bind(id).run(); try { if (row.image_key) await env.GOOBER_IMAGES.delete(row.image_key); } catch (error) { console.error("R2 image delete failed after DB soft delete", error); } return jsonResponse({ ok: true, id, deleted: true }, 200, NO_STORE_HEADERS); }
 async function readAdminCode(request) { const headerCode = cleanText(request.headers.get("x-goober-admin-code"), 120); if (headerCode) return headerCode; const contentType = request.headers.get("content-type") || ""; if (contentType.includes("application/json")) { const body = await request.json().catch(() => ({})); return cleanText(body.adminCode, 120); } if (contentType.includes("multipart/form-data") || contentType.includes("application/x-www-form-urlencoded")) { const formData = await request.formData().catch(() => null); return cleanText(formData?.get("adminCode"), 120); } return ""; }
 function hasValidUploadCode(code, env) { const expected = cleanText(env.GOOBER_UPLOAD_CODE, 120); return Boolean(expected && code && safeEqual(code, expected)); }

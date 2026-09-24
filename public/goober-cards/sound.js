@@ -48,6 +48,51 @@ function noise({ at = 0, dur = 0.15, gain = 0.1, freq = 1200 } = {}) {
   src.start(t);
 }
 
+// A short "ruff": pitched square burst with a falling pitch, plus a breathy noise edge.
+function bark(at = 0, pitch = 520) {
+  tone(pitch, { at, dur: 0.1, type: "square", gain: 0.13, slide: -pitch * 0.45 });
+  tone(pitch * 1.5, { at, dur: 0.07, type: "sawtooth", gain: 0.05, slide: -pitch * 0.6 });
+  noise({ at, dur: 0.08, gain: 0.08, freq: 1400 });
+}
+
+// A wet, wobbly fart: low sawtooth with a fast "flap" on pitch and volume, through a low-pass filter.
+function fart(at = 0, dur = 0.75) {
+  const a = audio();
+  if (!a) return;
+  const t = a.currentTime + at;
+  const osc = a.createOscillator();
+  const flap = a.createOscillator();
+  const flapDepth = a.createGain();
+  const amp = a.createGain();
+  const ampFlap = a.createGain();
+  const flapStage = a.createGain();
+  const filter = a.createBiquadFilter();
+  osc.type = "sawtooth";
+  osc.frequency.setValueAtTime(95, t);
+  osc.frequency.linearRampToValueAtTime(120, t + dur * 0.25);
+  osc.frequency.exponentialRampToValueAtTime(55, t + dur);
+  flap.type = "square";
+  flap.frequency.setValueAtTime(26, t);
+  flap.frequency.linearRampToValueAtTime(14, t + dur);
+  flapDepth.gain.value = 28;
+  flap.connect(flapDepth).connect(osc.frequency);
+  flapStage.gain.value = 0.6;
+  ampFlap.gain.value = 0.4;
+  flap.connect(ampFlap).connect(flapStage.gain);
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(700, t);
+  filter.frequency.exponentialRampToValueAtTime(260, t + dur);
+  filter.Q.value = 6;
+  amp.gain.setValueAtTime(0.0001, t);
+  amp.gain.exponentialRampToValueAtTime(0.35, t + 0.03);
+  amp.gain.setValueAtTime(0.3, t + dur * 0.7);
+  amp.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  osc.connect(filter).connect(flapStage).connect(amp).connect(a.destination);
+  osc.start(t); flap.start(t);
+  osc.stop(t + dur + 0.05); flap.stop(t + dur + 0.05);
+  noise({ at, dur: dur * 0.6, gain: 0.05, freq: 180 });
+}
+
 export const sfx = {
   tap: () => tone(660, { dur: 0.05, type: "triangle", gain: 0.06 }),
   play: () => { tone(220, { dur: 0.14, type: "triangle", gain: 0.16, slide: -80 }); noise({ dur: 0.08, gain: 0.08, freq: 500 }); },
@@ -57,7 +102,8 @@ export const sfx = {
   heal: () => { tone(660, { dur: 0.16 }); tone(880, { at: 0.08, dur: 0.18 }); },
   shield: () => tone(1200, { dur: 0.2, type: "triangle", gain: 0.08, slide: -600 }),
   death: () => { tone(300, { dur: 0.35, type: "sawtooth", gain: 0.06, slide: -220 }); },
-  bark: () => { tone(420, { dur: 0.09, type: "square", gain: 0.1, slide: -160 }); tone(360, { at: 0.11, dur: 0.1, type: "square", gain: 0.1, slide: -160 }); },
+  bark: () => { bark(0, 520); bark(0.13, 470); },
+  barkFart: () => { bark(0, 540); bark(0.13, 480); fart(0.3); },
   turn: () => { tone(523, { dur: 0.12 }); tone(659, { at: 0.1, dur: 0.12 }); tone(784, { at: 0.2, dur: 0.2 }); },
   error: () => tone(160, { dur: 0.18, type: "square", gain: 0.06 }),
   win: () => [523, 659, 784, 1046].forEach((f, i) => tone(f, { at: i * 0.12, dur: 0.3, type: "triangle", gain: 0.12 })),

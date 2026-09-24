@@ -18,6 +18,8 @@ const view = { collection: { rarity: "all", owned: "all", category: "all", searc
 const profile = () => store.loadProfile();
 setSoundEnabled(profile().settings.sound);
 
+const pick = list => list[Math.floor(Math.random() * list.length)];
+
 // ------------------------------------------------------------------ catalog
 function readCachedGoobers() {
   try { return JSON.parse(localStorage.getItem(GOOBER_CACHE_KEY) || "[]"); } catch { return []; }
@@ -87,12 +89,12 @@ function renderHome() {
     </div>
     <div class="logo">
       <img src="/assets/original-goober.jpg" alt="">
-      <h1>Goober Cards<small>Collect Goobers. Build decks. Bonk friends.</small></h1>
+      <h1>Goober Cards<small>Collect Goobers. Farm aura. Bonk your friends.</small></h1>
     </div>
     <section class="home-hero">
       <div>
-        <h2>Ready to battle, ${esc(p.name || "Goober Fan")}?</h2>
-        <p>${p.stats.wins} wins · ${p.stats.losses} losses${p.stats.streak > 1 ? ` · 🔥 ${p.stats.streak} win streak` : ""}</p>
+        <h2>Lock in, ${esc(p.name || "Goober Fan")}.</h2>
+        <p>${p.stats.wins} wins · ${p.stats.losses} losses${p.stats.streak > 1 ? ` · 🔥 ${p.stats.streak} win streak. You're cooking.` : ""}</p>
         <div class="row"><a class="btn big primary" href="#solo">▶ Play</a><a class="btn blue" href="#online">🌐 Online</a></div>
       </div>
       <div class="fan">${showcase.map(c => cardHTML(c)).join("")}</div>
@@ -101,9 +103,9 @@ function renderHome() {
       <a class="tile pink" href="#packs"><span class="ico">🎁</span><b>Open Packs</b><span>${packCount ? `${packCount} waiting!` : "Buy with coins"}</span>${packCount ? `<em class="badge">${packCount}</em>` : ""}</a>
       <a class="tile yellow" href="#collection"><span class="ico">📚</span><b>Collection</b><span>${discovered}/${ids.length} found</span>${newCount ? `<em class="badge">${newCount}</em>` : ""}</a>
       <a class="tile green" href="#decks"><span class="ico">🃏</span><b>My Decks</b><span>${p.decks.length} deck${p.decks.length === 1 ? "" : "s"}</span></a>
-      <button class="tile blue" data-rules><span class="ico">📖</span><b>How to Play</b><span>Rules in 1 minute</span></button>
-      <a class="tile orange" href="/#upload"><span class="ico">✏️</span><b>Draw a Goober</b><span>Uploads become new cards</span></a>
-      <button class="tile white" data-hero><span class="ico">🖼️</span><b>My Portrait</b><span>Pick your hero art</span></button>
+      <button class="tile blue" data-rules><span class="ico">📖</span><b>How to Play</b><span>Read this or get cooked</span></button>
+      <a class="tile orange" href="/#upload"><span class="ico">✏️</span><b>Draw a Goober</b><span>Your drawing becomes a card</span></a>
+      <button class="tile white" data-hero><span class="ico">🖼️</span><b>My Portrait</b><span>Pick your main</span></button>
     </div>
     <div class="home-foot">
       <span class="muted">Collection is saved on this device.</span>
@@ -118,7 +120,7 @@ function renderHome() {
 }
 
 function askName(then) {
-  const m = modal(`<h2>Welcome to Goober Cards! 🐶</h2><p>Every Goober drawn on this site is a collectible card. Open packs, build a deck, and battle.</p><p>What should we call you?</p><input type="text" maxlength="20" placeholder="Your name" data-name><div class="actions"><button class="btn primary" data-save>Let's go!</button></div>`, { dismissable: false });
+  const m = modal(`<h2>Goober Cards 💨</h2><p>Every Goober drawn on this site is a card. Rip packs, build a deck, and humble your friends.</p><p>What's your gamertag?</p><input type="text" maxlength="20" placeholder="Gamertag" data-name><div class="actions"><button class="btn primary" data-save>Let's cook</button></div>`, { dismissable: false });
   const input = $("[data-name]", m.el);
   setTimeout(() => input.focus(), 50);
   const save = () => {
@@ -128,7 +130,7 @@ function askName(then) {
     if (then) then();
     else {
       store.claimDaily();
-      toast("You got 4 free Goober Packs to start! 🎁", "good");
+      toast("4 free packs just dropped. 🎁", "good");
       renderHome();
       if (!profile().tutorialSeen) showRules();
     }
@@ -141,7 +143,7 @@ function maybeDaily() {
   const gift = store.claimDaily();
   if (!gift) return;
   sfx.coins();
-  modal(`<div style="text-align:center"><div style="font-size:4rem">🎁</div><h2>Daily Gift!</h2><p>Here's a free Goober Pack for today. Come back tomorrow for another.</p><div class="actions" style="justify-content:center"><button class="btn" data-close>Later</button><a class="btn primary" href="#packs" data-close>Open it!</a></div></div>`, { onClose: () => renderHome() });
+  modal(`<div style="text-align:center"><div style="font-size:4rem">🎁</div><h2>Daily Drop</h2><p>Free Goober Pack. Come back tomorrow for another one. Don't break the streak.</p><div class="actions" style="justify-content:center"><button class="btn" data-close>Later</button><a class="btn primary" href="#packs" data-close>Rip it</a></div></div>`, { onClose: () => renderHome() });
 }
 
 function showSettings() {
@@ -195,27 +197,27 @@ export function showRules() {
   store.saveProfile();
   modal(`<div class="rules">
     <h2>How to Play</h2>
-    <p>Knock your opponent's hero from <b>${STARTING_HP}</b> Health to 0. Take turns playing cards and bonking with your Goobers.</p>
-    <h3>🦴 Bones</h3>
-    <ul><li>Each card costs Bones (top-left number).</li><li>You get 1 Bone on turn one, +1 each turn, up to 10. They refill every turn.</li><li>The player who goes second gets <b>The Crumb</b>: a free extra Bone once.</li></ul>
+    <p>Take your opponent's hero from <b>${STARTING_HP}</b> Health to 0. Take turns playing cards and bonking with your Goobers. That's it. That's the game.</p>
+    <h3>✨ Aura</h3>
+    <ul><li>Cards cost Aura (the number in the top-left).</li><li>You get 1 Aura on turn one, +1 each turn, up to 10. It refills every turn.</li><li>Whoever goes second gets <b>Bonus Aura</b>: one free extra Aura, once.</li></ul>
     <h3>🐶 Goobers (minions)</h3>
-    <ul><li>Tap a card, then tap the table to play it (or drag it up).</li><li>Goobers need a turn to wake up before attacking.</li><li>Tap one of your glowing Goobers, then tap an enemy to attack. Or drag an arrow!</li><li>When Goobers fight, both deal their Attack (yellow) to each other's Health (red).</li><li>Up to ${BOARD_LIMIT} Goobers fit on your side of the table.</li></ul>
-    <h3>🦴 Treats (spells)</h3>
+    <ul><li>Tap a card, then tap the table to play it (or drag it up).</li><li>New Goobers need a turn before they can attack (unless they have Speedrun).</li><li>Tap one of your glowing Goobers, then tap an enemy to attack. Or drag an arrow!</li><li>When Goobers fight, both deal their Attack (yellow) to each other's Health (red).</li><li>Up to ${BOARD_LIMIT} Goobers fit on your side of the table.</li></ul>
+    <h3>⚡ Spells</h3>
     <ul><li>One-time effects. Some need you to pick a target.</li></ul>
-    <h3>📢 ${HERO_POWER.name}</h3>
-    <ul><li>Once per turn, spend ${HERO_POWER.cost} Bones to deal 1 damage to an enemy.</li></ul>
+    <h3>💨 ${HERO_POWER.name}</h3>
+    <ul><li>Once per turn, spend ${HERO_POWER.cost} Aura. Your hero barks, then farts. Deals 1 damage to an enemy. Devastating.</li></ul>
     <h3>✨ Keywords</h3>
     <ul>${Object.values(KEYWORDS).map(k => `<li>${k.icon} <b>${k.label}:</b> ${k.text}</li>`).join("")}
-    <li>📣 <b>Arrival:</b> Happens when you play it.</li><li>☠️ <b>Last Bark:</b> Happens when it's defeated.</li></ul>
+    <li>📣 <b>Entrance:</b> Happens when you play it.</li><li>☠️ <b>Last Words:</b> Happens when it gets knocked out.</li><li>🔇 <b>Muted:</b> Can't attack next turn.</li></ul>
     <h3>🎁 Collecting</h3>
-    <ul><li>Win games to earn coins. Buy packs, find rare and ✨shiny✨ Goobers.</li><li>Every Goober uploaded to the site becomes a card with its own stats and rarity.</li><li>Decks have exactly ${DECK_SIZE} cards: max 2 copies of a card (1 for Legendaries).</li><li>Press and hold any card to read it up close.</li></ul>
-    <div class="actions"><button class="btn primary" data-close>Got it!</button></div></div>`);
+    <ul><li>Win games to earn coins. Rip packs. Pull rare and ✨shiny✨ Goobers.</li><li>Every Goober uploaded to the site becomes a card with its own stats and rarity.</li><li>Decks have exactly ${DECK_SIZE} cards: max 2 copies of a card (1 for Legendaries).</li><li>Press and hold any card to read it up close.</li></ul>
+    <div class="actions"><button class="btn primary" data-close>Bet</button></div></div>`);
 }
 
 // ------------------------------------------------------------------ deck picker
 function deckPickerHTML(selectedId) {
   const decks = store.getDecks();
-  if (!decks.length) return `<p class="muted">You'll use an automatic Starter Deck. Build your own in <a href="#decks" style="color:var(--yellow)">My Decks</a>.</p>`;
+  if (!decks.length) return `<p class="muted">You'll use an auto-built Starter Deck. Build your own in <a href="#decks" style="color:var(--yellow)">My Decks</a>.</p>`;
   return `<div class="deck-pick">${decks.map(d => {
     const bad = store.deckProblems(d, catalog).length > 0;
     return `<button class="deck-chip ${d.id === selectedId ? "selected" : ""}" data-deck="${esc(d.id)}"><b>${esc(d.name)}</b><small>${bad ? "⚠️ Needs fixing" : `${d.cards.length} cards`}</small></button>`;
@@ -241,13 +243,13 @@ function renderSolo() {
   const level = view.solo.level;
   app.innerHTML = `<div class="screen">
     ${topbar("Solo Battle")}
-    <span class="field-label">Choose your opponent</span>
+    <span class="field-label">Pick your opponent</span>
     <div class="choice-list three">${Object.entries(AI_LEVELS).map(([key, l]) => `
       <button class="choice ${key === level ? "selected" : ""}" data-level="${key}"><img src="${AI_ART[key]}" alt=""><div><b>${l.name}</b><small>${l.blurb}</small><br><small>🪙 Win: +${l.reward}</small></div></button>`).join("")}
     </div>
     <span class="field-label">Your deck</span>
     ${deckPickerHTML(profile().activeDeck)}
-    <div class="sticky-go"><button class="btn big primary" data-start>⚔️ Battle!</button></div>
+    <div class="sticky-go"><button class="btn big primary" data-start>⚔️ Run it</button></div>
   </div>`;
   $$("[data-level]", app).forEach(b => b.onclick = () => { view.solo.level = b.dataset.level; renderSolo(); });
   bindDeckPicker(app.firstElementChild, () => renderSolo());
@@ -305,17 +307,17 @@ window.addEventListener("popstate", async () => {
 
 function showResult({ won, draw, coins, firstWin, again, onlineRoom }) {
   if (won) { sfx.win(); buzz([60, 40, 60]); } else sfx.lose();
-  const title = draw ? "Draw!" : won ? "Victory!" : "Defeat";
+  const title = draw ? "Draw??" : won ? "W" : "L";
   const m = modal(`<div class="result ${won ? "win" : "lose"}">
       <h2>${title}</h2>
       <div class="portrait" style="background-image:url('${esc(heroArt(profile().hero))}')"></div>
       ${coins ? `<div class="reward">🪙 +${coins}</div>` : ""}
       ${firstWin ? `<p><b>First win of the day bonus included!</b></p>` : ""}
-      <p>${won ? "Your Goobers were magnificent." : "Even the best loaves crumble sometimes."}</p>
+      <p>${won ? pick(["+1000 aura.", "Absolutely cooked them.", "Built different.", "They're gonna need a minute."]) : draw ? "Nobody wins. Awkward." : pick(["Skill issue.", "-500 aura.", "You got cooked.", "It's giving… defeat."])}</p>
       <div class="actions" style="justify-content:center">
         <button class="btn" data-home>Home</button>
         ${profile().coins >= 100 || Object.values(profile().packs).some(n => n > 0) ? `<button class="btn pink" data-packs>🎁 Packs</button>` : ""}
-        <button class="btn primary" data-again>${onlineRoom ? "Rematch" : "Play again"}</button>
+        <button class="btn primary" data-again>${onlineRoom ? "Rematch" : "Run it back"}</button>
       </div></div>`, { className: `result ${won ? "win" : "lose"}`, dismissable: false });
   $("[data-home]", m.el).onclick = () => { m.close(); exitMatch(); };
   const packs = $("[data-packs]", m.el);
@@ -329,7 +331,7 @@ function renderOnline(code) {
   const p = profile();
   app.innerHTML = `<div class="screen">
     ${topbar("Online Battle")}
-    <p class="muted">Play a friend on another phone or tablet. Create a room and share the code.</p>
+    <p class="muted">Humble a friend on another phone or tablet. Make a room and send them the code.</p>
     <span class="field-label">Your deck</span>
     ${deckPickerHTML(p.activeDeck)}
     <div class="online-card">
@@ -378,11 +380,11 @@ function joinOnline(code) {
         <div style="text-align:center;font-weight:800">Room code</div>
         <div class="code-box">${esc(room.code)}</div>
         <div class="row" style="justify-content:center"><button class="btn small" data-share>📤 Share invite</button><button class="btn small" data-copy>📋 Copy link</button></div>
-        <div class="seat-list">${[0, 1].map(i => { const s = room.seats[i]; return `<div class="seat"><span class="dot ${s?.connected ? "on" : ""}"></span>${s ? esc(s.name) : "Waiting for a friend…"}${i === seat ? " (you)" : ""}${s?.ready ? " ✅" : ""}</div>`; }).join("")}</div>
-        <div class="row" style="justify-content:center"><div class="spinner"></div><span class="muted">The battle starts when both players join.</span></div>
+        <div class="seat-list">${[0, 1].map(i => { const s = room.seats[i]; return `<div class="seat"><span class="dot ${s?.connected ? "on" : ""}"></span>${s ? esc(s.name) : "Waiting for someone brave…"}${i === seat ? " (you)" : ""}${s?.ready ? " ✅" : ""}</div>`; }).join("")}</div>
+        <div class="row" style="justify-content:center"><div class="spinner"></div><span class="muted">Starts when both players join.</span></div>
       </div>`;
       $("[data-share]", lobby).onclick = async () => {
-        if (navigator.share) { try { await navigator.share({ title: "Goober Cards", text: `Battle me in Goober Cards! Room ${room.code}`, url: link }); } catch { /* cancelled */ } }
+        if (navigator.share) { try { await navigator.share({ title: "Goober Cards", text: `1v1 me in Goober Cards. Room ${room.code}. Scared?`, url: link }); } catch { /* cancelled */ } }
         else { await copyText(link); }
       };
       $("[data-copy]", lobby).onclick = () => copyText(link);
@@ -449,7 +451,7 @@ function openPackFlow(type) {
   const pack = store.PACKS[type];
   const el = document.createElement("div");
   el.className = "opening";
-  el.innerHTML = `<div class="title">${esc(pack.name)}</div><div class="stage"><div class="rays"></div><div class="pack-art" style="--pc:${pack.color}"><img src="/assets/original-goober.jpg" alt=""><div class="label">Tap to open!</div></div></div><div class="actions"></div>`;
+  el.innerHTML = `<div class="title">${esc(pack.name)}</div><div class="stage"><div class="rays"></div><div class="pack-art" style="--pc:${pack.color}"><img src="/assets/original-goober.jpg" alt=""><div class="label">Tap to rip</div></div></div><div class="actions"></div>`;
   document.body.appendChild(el);
   document.body.style.overflow = "hidden";
   const art = $(".pack-art", el);
@@ -479,7 +481,7 @@ function showPulls(el, pulls, type, close) {
       <div class="inner"><div class="face back">${cardBackHTML()}</div><div class="face front">${cardHTML(catalog[pull.id], { shiny: pull.shiny })}</div></div>
       ${pull.isNew ? `<span class="tag-new">NEW!</span>` : ""}
     </div>`).join("")}</div>`;
-  $(".title", el).textContent = "Tap each card to flip it!";
+  $(".title", el).textContent = "Tap to flip. No peeking.";
   const actions = $(".actions", el);
   let flipped = 0;
   const reveal = flip => {
@@ -500,7 +502,7 @@ function showPulls(el, pulls, type, close) {
   const done = () => {
     const left = profile().packs[type] || 0;
     const best = order[order.length - 1];
-    $(".title", el).textContent = best.rarity === "legendary" ? "LEGENDARY! 🌟" : best.rarity === "epic" ? "Epic pull! 💜" : "Nice pack!";
+    $(".title", el).textContent = best.rarity === "legendary" ? "INSANE PULL 😱" : best.rarity === "epic" ? "W pull 🔥" : order.some(p => p.shiny) ? "Shiny?? W ✨" : "Mid pack. It happens.";
     actions.innerHTML = `<button class="btn" data-done>Done</button>${left ? `<button class="btn primary" data-more>Open another (${left})</button>` : ""}`;
     $("[data-done]", actions).onclick = close;
     const more = $("[data-more]", actions);
@@ -533,7 +535,7 @@ function filterBarHTML(f, { showOwned = true } = {}) {
     <input type="search" placeholder="Search cards…" value="${esc(f.search)}" data-search>
     <div class="chips">${["all", ...RARITIES].map(r => `<button class="chip ${r} ${f.rarity === r ? "on" : ""}" data-rarity="${r}">${r === "all" ? "All" : RARITY_LABEL[r]}</button>`).join("")}
     ${showOwned ? ["all", "owned", "missing"].map(o => `<button class="chip ${f.owned === o ? "on" : ""}" data-owned="${o}">${{ all: "Everything", owned: "Owned", missing: "Missing" }[o]}</button>`).join("") : ""}</div>
-    <div class="chips">${cats.map(c => `<button class="chip ${f.category === c ? "on" : ""}" data-cat="${c}">${c === "all" ? "All types" : c === "treat" ? "🦴 Treats" : `${CATEGORY_STYLE[c].icon} ${c}`}</button>`).join("")}</div>
+    <div class="chips">${cats.map(c => `<button class="chip ${f.category === c ? "on" : ""}" data-cat="${c}">${c === "all" ? "All types" : c === "treat" ? "⚡ Spells" : `${CATEGORY_STYLE[c].icon} ${c}`}</button>`).join("")}</div>
   </div>`;
 }
 
@@ -597,7 +599,7 @@ function showCardDetail(id, refresh) {
   const cost = store.CRAFT_COST[card.rarity];
   const m = modal(`<div class="inspect">${cardHTML(card, { shiny: s > 0 })}
     <div class="details">
-      <p><b>${RARITY_LABEL[card.rarity]}</b> · ${card.type === "spell" ? "Treat" : `${CATEGORY_STYLE[card.category]?.icon || ""} ${esc(card.category)} Goober`} · You own <b>${n}</b>${s ? ` (✨${s} shiny)` : ""}</p>
+      <p><b>${RARITY_LABEL[card.rarity]}</b> · ${card.type === "spell" ? "Spell" : `${CATEGORY_STYLE[card.category]?.icon || ""} ${esc(card.category)} Goober`} · You own <b>${n}</b>${s ? ` (✨${s} shiny)` : ""}</p>
       ${card.flavor ? `<p><i>${esc(card.flavor)}</i></p>` : ""}
       ${keywordGlossary(card.keywords, card)}
       <div class="row" style="margin-top:10px">
@@ -666,12 +668,12 @@ function renderBuilder(id) {
     <div class="topbar"><a class="icon-btn" href="#decks" aria-label="Back">←</a><input class="name-input" value="${esc(deck.name)}" maxlength="24" data-name aria-label="Deck name"><span class="pill ${deck.cards.length === DECK_SIZE ? "" : "coins-pill"}">${deck.cards.length}/${DECK_SIZE}</span></div>
     <div class="builder split">
       <div class="builder-head">
-        <div class="curve" title="Bone curve">${curve.map((n, i) => `<div><span>${n || ""}</span><i style="height:${(n / maxCurve) * 70}%"></i><span>${i === 7 ? "7+" : i}</span></div>`).join("")}</div>
+        <div class="curve" title="Aura curve">${curve.map((n, i) => `<div><span>${n || ""}</span><i style="height:${(n / maxCurve) * 70}%"></i><span>${i === 7 ? "7+" : i}</span></div>`).join("")}</div>
         <div class="row">
           <button class="btn small" data-auto>✨ Auto-fill</button>
           <button class="btn small" data-clear>🧹 Clear</button>
           <button class="btn small danger" data-delete>🗑️ Delete</button>
-          ${problems.length ? `<span class="muted">⚠️ ${esc(problems[0])}</span>` : `<span class="muted">✅ Ready to battle!</span>`}
+          ${problems.length ? `<span class="muted">⚠️ ${esc(problems[0])}</span>` : `<span class="muted">✅ Ready. Go cook.</span>`}
         </div>
         <div class="tabs"><button class="${tab === "deck" ? "on" : ""}" data-tab="deck">In deck (${deck.cards.length})</button><button class="${tab === "add" ? "on" : ""}" data-tab="add">Add cards</button></div>
       </div>

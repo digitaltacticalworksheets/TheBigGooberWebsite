@@ -4,9 +4,9 @@
 import { applyAction, legalActions } from "./engine.js";
 
 export const AI_LEVELS = {
-  pup: { name: "Pup", blurb: "Still learning the rules. Gentle.", noise: 6, blunder: 0.25, reward: 40 },
-  goodboy: { name: "Good Boy", blurb: "Plays smart trades and pushes face.", noise: 1.2, blunder: 0.04, reward: 60 },
-  biggoober: { name: "Big Goober", blurb: "Ruthless. Brings a spicy deck.", noise: 0, blunder: 0, reward: 90 }
+  pup: { name: "NPC", blurb: "Just vibing. Barely knows the rules.", noise: 6, blunder: 0.25, reward: 40 },
+  goodboy: { name: "Tryhard", blurb: "Actually reads the cards. Kind of sweaty.", noise: 1.2, blunder: 0.04, reward: 60 },
+  biggoober: { name: "Final Boss", blurb: "No mercy. Stacked deck. Good luck.", noise: 0, blunder: 0, reward: 90 }
 };
 
 const KW_VALUE = { guard: 1.2, fluffy: 1.6, lifesnack: 1, doubleWag: 0, bitey: 2.2, sneaky: 0.8, zoomies: 0 };

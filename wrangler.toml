@@ -22,3 +22,7 @@ class_name = "CardBattleRoom"
 [[migrations]]
 tag = "v1-card-battle-rooms"
 new_sqlite_classes = ["CardBattleRoom"]
+
+# Workers AI powers the upload auto-moderator.
+[ai]
+binding = "AI"

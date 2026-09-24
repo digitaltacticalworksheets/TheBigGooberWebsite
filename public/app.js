@@ -429,6 +429,28 @@ if (gooberImageInput) {
   });
 }
 
+// Downscale big photos before upload so they stay under the auto-mod's size limit.
+async function shrinkImage(file, maxSide = 1600) {
+  try {
+    if (file.type === "image/gif" || typeof createImageBitmap !== "function") return file;
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+    if (scale === 1 && file.size < 1.5 * 1024 * 1024) return file;
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", 0.88));
+    if (!blob) return file;
+    return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
+  } catch {
+    return file;
+  }
+}
+
 if (uploadForm) {
   uploadForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -465,9 +487,10 @@ if (uploadForm) {
     formData.append("name", name);
     formData.append("category", category);
     formData.append("description", description);
-    formData.append("image", file);
+    uploadStatus.textContent = "Getting your Goober ready...";
+    formData.append("image", await shrinkImage(file));
 
-    uploadStatus.textContent = "Uploading Goober...";
+    uploadStatus.textContent = "Uploading Goober... the auto-mod is taking a look.";
 
     try {
       const response = await fetch(`${API_BASE}/api/goobers`, {
@@ -479,6 +502,10 @@ if (uploadForm) {
       const result = await response.json().catch(() => ({}));
 
       if (!response.ok) {
+        if (result.moderation === "blocked") {
+          uploadStatus.textContent = `🚫 Auto-mod said no: ${result.reason || "that Goober isn't allowed here"}. Try a different drawing or description.`;
+          return;
+        }
         throw new Error(result.error || "Upload failed.");
       }
 
@@ -486,7 +513,11 @@ if (uploadForm) {
       uploadForm.reset();
       if (gooberUploadCodeInput) gooberUploadCodeInput.value = savedCode;
       filePreview.textContent = "Image preview will appear here.";
-      uploadStatus.textContent = `${result.name || name} uploaded successfully.`;
+      if (result.moderation === "pending") {
+        uploadStatus.textContent = `⏳ ${result.name || name} is waiting for a mod to approve it. It'll show up once it's checked.`;
+        return;
+      }
+      uploadStatus.textContent = `✅ ${result.name || name} passed the auto-mod and is live (and it's a card now).`;
 
       await loadCloudGoobers({ bustCache: true });
 

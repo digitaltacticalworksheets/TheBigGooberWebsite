@@ -5,7 +5,7 @@ import { HERO_POWER, KEYWORDS, CATEGORY_STYLE } from "./cards.js";
 import { $, esc, sleep, cardHTML, cardBackHTML, artHTML, modal, confirmDialog, keywordGlossary, onLongPress, toast } from "./ui.js";
 import { sfx, buzz } from "./sound.js";
 
-export const EMOTES = { hello: "Hello! 👋", woof: "Woof woof!", wow: "Wow! 😮", thanks: "Thanks!", oops: "Oops! 😅", gg: "Good game! 🐾" };
+export const EMOTES = { hello: "Sup 👋", wow: "W 🔥", oops: "L 😭", thanks: "💀💀💀", woof: "Skill issue 🤡", gg: "GG 🤝" };
 
 const TRIGGER_ICON = { battlecry: "", lastBark: "☠️", endTurn: "⏳" };
 
@@ -51,7 +51,7 @@ export class Battle {
         <div class="hero me" data-uid="h${this.me}" style="background-image:url('${esc(this.opts.heroArt?.[0] || "/assets/original-goober.jpg")}')"><div class="hp"></div><div class="armor" hidden></div></div>
         <div class="hero-info"><div class="nm"></div><div class="mana"></div></div>
         <div class="spacer"></div>
-        <button class="power" data-power aria-label="Hero power: ${esc(HERO_POWER.name)}"><span class="pc">${HERO_POWER.cost}</span>📢</button>
+        <button class="power" data-power aria-label="Hero power: ${esc(HERO_POWER.name)}"><span class="pc">${HERO_POWER.cost}</span>💨</button>
         <div class="deck-count" title="Cards left in deck"></div>
       </div>
       <div class="hand"></div>`;
@@ -135,8 +135,8 @@ export class Battle {
     this.renderHero(this.el.myHero, me.hero);
     $(".nm", this.el.oppBar).textContent = opp.name;
     $(".nm", this.el.myBar).textContent = me.name;
-    $(".mana", this.el.oppBar).innerHTML = `🦴 ${opp.mana}/${opp.maxMana}`;
-    $(".mana", this.el.myBar).innerHTML = `🦴 ${me.mana}/${me.maxMana} <span class="pips">${Array.from({ length: Math.max(me.maxMana, 1) }, (_, i) => `<i class="${i < me.mana ? "full" : ""}"></i>`).join("")}</span>`;
+    $(".mana", this.el.oppBar).innerHTML = `✨ ${opp.mana}/${opp.maxMana} Aura`;
+    $(".mana", this.el.myBar).innerHTML = `✨ ${me.mana}/${me.maxMana} <span class="pips">${Array.from({ length: Math.max(me.maxMana, 1) }, (_, i) => `<i class="${i < me.mana ? "full" : ""}"></i>`).join("")}</span>`;
     $(".deck-count", this.el.oppBar).textContent = `🂠${opp.deckCount ?? opp.deck.length}`;
     $(".deck-count", this.el.myBar).textContent = `🂠${me.deckCount ?? me.deck.length}`;
     const oppHandCount = opp.handCount ?? opp.hand.length;
@@ -164,7 +164,7 @@ export class Battle {
       this.el.end.textContent = "End Turn";
       const moves = legalActions(s, this.catalog, this.me).filter(a => a.type !== "end" && !(a.type === "power"));
       this.el.end.classList.toggle("done", !moves.length);
-    } else { this.el.end.disabled = true; this.el.end.textContent = "Their Turn"; this.el.end.classList.remove("done"); }
+    } else { this.el.end.disabled = true; this.el.end.textContent = "Their Turn…"; this.el.end.classList.remove("done"); }
     this.el.turnLabel.textContent = s.over ? "" : `Turn ${Math.ceil(s.turn / 2)}`;
     this.el.myBoard.classList.toggle("drop-ok", Boolean(this.sel?.kind === "hand" && this.sel.isMinion && !this.sel.placed));
     this.renderTip();
@@ -214,7 +214,7 @@ export class Battle {
     if (!nodes.length) {
       const hint = document.createElement("div");
       hint.className = "hint";
-      hint.textContent = mine ? (this.myTurn ? "Play Goobers here" : "") : "";
+      hint.textContent = mine ? (this.myTurn ? "Drop Goobers here" : "") : "";
       container.replaceChildren(hint);
       return;
     }
@@ -280,7 +280,7 @@ export class Battle {
       else if (this.sel.targets) text = `Pick a glowing target for ${def?.name}`;
       else text = `Tap again or drag up to use ${def?.name}`;
     } else if (this.sel?.kind === "attack") text = "Tap a glowing enemy to attack";
-    else if (this.sel?.kind === "power") text = `${HERO_POWER.name}: tap an enemy`;
+    else if (this.sel?.kind === "power") text = `${HERO_POWER.name} 💨: tap an enemy`;
     this.tip.hidden = !text;
     this.tip.textContent = text;
   }
@@ -326,7 +326,7 @@ export class Battle {
     if (!this.canInput) return;
     if (this.sel?.kind === "power") { this.clearSel(); return; }
     const targets = powerTargets(this.state, this.me);
-    if (!targets.length) { toast(this.state.players[this.me].powerUsed ? "Big Bark is once per turn." : "Not enough Bones.", "bad"); return; }
+    if (!targets.length) { toast(this.state.players[this.me].powerUsed ? "BARK FART is once per turn. Pace yourself." : "Not enough Aura.", "bad"); return; }
     sfx.tap();
     this.sel = { kind: "power", targets };
     this.render();
@@ -480,10 +480,10 @@ export class Battle {
     }
     if (myMinion && !sel) {
       const m = this.state.players[this.me].board.find(x => x.uid === myMinion.dataset.uid);
-      if (m?.frozen) toast("That Goober is asleep this turn.");
-      else if (m?.sick) toast("Just arrived! It can attack next turn.");
-      else if (m && m.attack <= 0) toast("0 Attack Goobers can't attack.");
-      else if (m && !m.attacksLeft) toast("Already attacked this turn.");
+      if (m?.frozen) toast("That Goober is muted this turn.");
+      else if (m?.sick) toast("It just got here. It can attack next turn.");
+      else if (m && m.attack <= 0) toast("0 Attack. It's just here for the vibes.");
+      else if (m && !m.attacksLeft) toast("Already attacked this turn. Chill.");
     }
     this.clearSel();
   }
@@ -517,7 +517,7 @@ export class Battle {
     if (el.classList.contains("hero")) {
       const idx = uid === `h${this.me}` ? this.me : this.opp;
       const p = s.players[idx];
-      modal(`<h2>${esc(p.name)}</h2><p><b>Health:</b> ${p.hero.hp}/${p.hero.maxHp}${p.hero.armor ? ` · <b>Fluff:</b> ${p.hero.armor}` : ""}</p><p><b>Cards in hand:</b> ${p.handCount ?? p.hand.length} · <b>Deck:</b> ${p.deckCount ?? p.deck.length}</p><p><b>${HERO_POWER.name}</b> (${HERO_POWER.cost} Bones): ${HERO_POWER.text}</p><div class="actions"><button class="btn primary" data-close>OK</button></div>`);
+      modal(`<h2>${esc(p.name)}</h2><p><b>Health:</b> ${p.hero.hp}/${p.hero.maxHp}${p.hero.armor ? ` · <b>Drip:</b> ${p.hero.armor}` : ""}</p><p><b>Cards in hand:</b> ${p.handCount ?? p.hand.length} · <b>Deck:</b> ${p.deckCount ?? p.deck.length}</p><p><b>${HERO_POWER.name}</b> (${HERO_POWER.cost} Bones): ${HERO_POWER.text}</p><div class="actions"><button class="btn primary" data-close>OK</button></div>`);
       return;
     }
     if (el.classList.contains("hcard")) {
@@ -606,6 +606,37 @@ export class Battle {
     setTimeout(() => b.remove(), 2300);
   }
 
+  // The hero power: a bark, then immediately a fart.
+  async barkFart(hero) {
+    sfx.barkFart();
+    const r = hero.getBoundingClientRect();
+    const cx = Math.max(90, Math.min(window.innerWidth - 90, r.left + r.width / 2));
+    const bark = document.createElement("div");
+    bark.className = "float-num info bark-word";
+    bark.textContent = "BARK!";
+    bark.style.left = `${cx}px`;
+    bark.style.top = `${r.top}px`;
+    document.body.appendChild(bark);
+    hero.animate([{ transform: "scale(1)" }, { transform: "scale(1.25) rotate(-6deg)" }, { transform: "scale(1)" }], { duration: 260 });
+    await sleep(300);
+    const gas = document.createElement("div");
+    gas.className = "fart-cloud";
+    gas.textContent = "💨";
+    gas.style.left = `${r.left + r.width * 0.2}px`;
+    gas.style.top = `${r.top + r.height * 0.6}px`;
+    document.body.appendChild(gas);
+    const fart = document.createElement("div");
+    fart.className = "float-num fart-word";
+    fart.textContent = "FART";
+    fart.style.left = `${cx + 20}px`;
+    fart.style.top = `${Math.min(window.innerHeight - 60, r.top + r.height)}px`;
+    document.body.appendChild(fart);
+    hero.animate([{ transform: "translate(0,0)" }, { transform: "translate(-3px,2px)" }, { transform: "translate(3px,-2px)" }, { transform: "translate(0,0)" }], { duration: 300, iterations: 2 });
+    buzz([20, 40, 80]);
+    setTimeout(() => { bark.remove(); fart.remove(); gas.remove(); }, 1300);
+    await sleep(450);
+  }
+
   banner(text) {
     const el = document.createElement("div");
     el.className = "banner";
@@ -671,13 +702,7 @@ export class Battle {
           if (this.def(e.id)?.type === "spell") sfx.spell(); else sfx.play();
           break;
         case "attack": await this.lunge(e.from, e.to); break;
-        case "power": {
-          sfx.bark();
-          const hero = e.player === this.me ? this.el.myHero : this.el.oppHero;
-          hero.animate([{ transform: "scale(1)" }, { transform: "scale(1.2)" }, { transform: "scale(1)" }], { duration: 300 });
-          await sleep(250);
-          break;
-        }
+        case "power": await this.barkFart(e.player === this.me ? this.el.myHero : this.el.oppHero); break;
         case "damage": {
           hits = true;
           this.floatAt(e.uid, `-${e.amount}`, "dmg");
@@ -688,13 +713,13 @@ export class Battle {
         }
         case "heal": this.floatAt(e.uid, `+${e.amount}`, "heal"); sfx.heal(); break;
         case "buff": if (e.attack || e.health) this.floatAt(e.uid, `+${e.attack}/+${e.health}`, "buff"); break;
-        case "shield": { sfx.shield(); this.floatAt(e.uid, "Poof!", "info"); const el = this.elFor(e.uid); if (el) el.classList.add("pop-shield"); break; }
-        case "freeze": this.floatAt(e.uid, "Zzz", "info"); break;
-        case "armor": this.floatAt(`h${e.player}`, `+${e.amount} Fluff`, "info"); break;
+        case "shield": { sfx.shield(); this.floatAt(e.uid, "Plot armor!", "info"); const el = this.elFor(e.uid); if (el) el.classList.add("pop-shield"); break; }
+        case "freeze": this.floatAt(e.uid, "🔇 Muted", "info"); break;
+        case "armor": this.floatAt(`h${e.player}`, `+${e.amount} Drip`, "info"); break;
         case "death": { hits = true; const el = this.elFor(e.uid); if (el) el.classList.add("dying"); sfx.death(); break; }
-        case "fatigue": toast(`${e.player === this.me ? "You're" : "They're"} out of cards! ${e.amount} tired damage.`, "bad"); break;
-        case "burn": toast(`${e.player === this.me ? "Your" : "Their"} hand was full. ${this.def(e.id)?.name || "A card"} fell off the table!`); break;
-        case "timeout": toast(`${e.player === this.me ? "You ran" : "They ran"} out of time.`); break;
+        case "fatigue": toast(`${e.player === this.me ? "You're" : "They're"} out of cards! ${e.amount} burnout damage.`, "bad"); break;
+        case "burn": toast(`${e.player === this.me ? "Your" : "Their"} hand was full. ${this.def(e.id)?.name || "A card"} got yeeted into the void.`); break;
+        case "timeout": toast(`${e.player === this.me ? "You went AFK" : "They went AFK"}. Turn skipped.`); break;
         default: break;
       }
     }
@@ -704,11 +729,11 @@ export class Battle {
   async postEvents(events, first) {
     for (const e of events) {
       if (e.t === "turn" && !this.state.over) {
-        if (e.player === this.me) { this.banner("Your Turn!"); sfx.turn(); buzz(20); }
+        if (e.player === this.me) { this.banner("Your Turn. Lock in."); sfx.turn(); buzz(20); }
         await sleep(e.player === this.me ? 600 : 250);
       }
     }
-    if (first && this.state.active === this.me && !this.state.over) { this.banner("Your Turn!"); sfx.turn(); }
+    if (first && this.state.active === this.me && !this.state.over) { this.banner("Your Turn. Lock in."); sfx.turn(); }
   }
 }
 

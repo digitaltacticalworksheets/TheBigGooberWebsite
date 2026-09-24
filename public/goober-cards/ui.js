@@ -1,5 +1,5 @@
 // Shared UI helpers: card rendering, toasts, modals.
-import { KEYWORDS, CATEGORY_STYLE, RARITY_LABEL } from "./cards.js";
+import { KEYWORDS, CATEGORY_STYLE, RARITY_LABEL, TRIGGER_LABEL } from "./cards.js";
 
 export const $ = (sel, root = document) => root.querySelector(sel);
 export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -20,7 +20,8 @@ export function catColor(card) { return (CATEGORY_STYLE[card?.category] || CATEG
 function richText(text) {
   let out = esc(text);
   for (const kw of Object.values(KEYWORDS)) out = out.replace(new RegExp(`\\b${kw.label}\\b`, "g"), `<b>${kw.label}</b>`);
-  return out.replace(/(Arrival:|Last Bark:|End of turn:)/g, "<b>$1</b>");
+  for (const label of Object.values(TRIGGER_LABEL)) out = out.split(label).join(`<b>${label}</b>`);
+  return out;
 }
 
 // A full card face. opts: { shiny, stats: {attack, health, cost}, extraClass }
@@ -29,7 +30,7 @@ export function cardHTML(card, opts = {}) {
   const cls = ["card", card.rarity, card.type === "spell" ? "is-spell" : "is-minion", opts.shiny ? "shiny" : "", opts.extraClass || ""].filter(Boolean).join(" ");
   const cat = CATEGORY_STYLE[card.category] || CATEGORY_STYLE.random;
   const cost = opts.stats?.cost ?? card.cost;
-  const tribe = card.type === "spell" ? "🦴 Treat" : card.token ? "🐶 Token" : `${cat.icon} ${card.category}`;
+  const tribe = card.type === "spell" ? "⚡ Spell" : card.token ? "🐶 Token" : `${cat.icon} ${card.category}`;
   const stats = card.type === "minion"
     ? `<div class="atk">${opts.stats?.attack ?? card.attack}</div><div class="hp">${opts.stats?.health ?? card.health}</div>`
     : "";
@@ -91,8 +92,8 @@ export function confirmDialog(title, body, { yes = "Yes", no = "Cancel", danger 
 export function keywordGlossary(keywords = [], card = null) {
   const lines = keywords.filter(k => KEYWORDS[k]).map(k => `<p class="kw-line"><b>${KEYWORDS[k].icon} ${KEYWORDS[k].label}</b><span>${KEYWORDS[k].text}</span></p>`);
   const trig = card?.ability?.trigger;
-  if (trig === "battlecry") lines.push(`<p class="kw-line"><b>📣 Arrival</b><span>Happens when you play this card from your hand.</span></p>`);
-  if (trig === "lastBark") lines.push(`<p class="kw-line"><b>☠️ Last Bark</b><span>Happens when this minion is defeated.</span></p>`);
+  if (trig === "battlecry") lines.push(`<p class="kw-line"><b>📣 Entrance</b><span>Happens when you play this card from your hand.</span></p>`);
+  if (trig === "lastBark") lines.push(`<p class="kw-line"><b>☠️ Last Words</b><span>Happens when this Goober gets knocked out.</span></p>`);
   if (trig === "endTurn") lines.push(`<p class="kw-line"><b>⏳ End of turn</b><span>Happens at the end of each of your turns.</span></p>`);
   return lines.join("");
 }

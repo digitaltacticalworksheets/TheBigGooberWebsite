@@ -8,14 +8,16 @@ export const MAX_COPIES = { common: 2, rare: 2, epic: 2, legendary: 1 };
 export const DECK_SIZE = 20;
 
 export const KEYWORDS = {
-  guard: { label: "Guard", icon: "🛡️", text: "Enemies must attack this first." },
-  zoomies: { label: "Zoomies", icon: "💨", text: "Can attack the turn it is played." },
-  fluffy: { label: "Fluffy", icon: "☁️", text: "Ignores the first damage it takes." },
-  lifesnack: { label: "Lifesnack", icon: "🍖", text: "Damage it deals heals your hero." },
-  doubleWag: { label: "Double Wag", icon: "🐾", text: "Can attack twice each turn." },
-  bitey: { label: "Bitey", icon: "🦷", text: "Destroys any minion it damages." },
-  sneaky: { label: "Sneaky", icon: "🥷", text: "Can't be targeted until it attacks." }
+  guard: { label: "Tank", icon: "🛡️", text: "Enemies have to attack this first." },
+  zoomies: { label: "Speedrun", icon: "💨", text: "Can attack the turn it's played." },
+  fluffy: { label: "Plot Armor", icon: "🎬", text: "Ignores the first damage it takes." },
+  lifesnack: { label: "Leech", icon: "🧛", text: "Damage it deals heals your hero." },
+  doubleWag: { label: "Double Tap", icon: "✌️", text: "Can attack twice each turn." },
+  bitey: { label: "One-Shot", icon: "💀", text: "Destroys any minion it damages." },
+  sneaky: { label: "Ghosting", icon: "👻", text: "Can't be targeted until it attacks." }
 };
+
+export const TRIGGER_LABEL = { battlecry: "Entrance:", lastBark: "Last Words:", endTurn: "End of turn:" };
 
 export const CATEGORIES = ["classic", "costume", "chaos", "funny", "spooky", "animal", "food", "sports", "holiday", "fancy", "superhero", "random"];
 
@@ -36,31 +38,31 @@ export const CATEGORY_STYLE = {
   token: { color: "#e8e1d4", icon: "🐶" }
 };
 
-export const HERO_POWER = { name: "Big Bark", cost: 2, damage: 1, text: "Deal 1 damage to an enemy." };
+export const HERO_POWER = { name: "BARK FART", cost: 2, damage: 1, text: "Bark, then fart. Deal 1 damage to an enemy." };
 
 // Token minions summoned by abilities (not collectible).
 export const TOKENS = {
-  "token-pup": { id: "token-pup", type: "minion", name: "Goober Pup", cost: 1, attack: 1, health: 1, rarity: "common", category: "token", keywords: [], art: { emoji: "🐶" }, text: "", token: true },
-  "token-loaf": { id: "token-loaf", type: "minion", name: "Bread Loaf", cost: 1, attack: 0, health: 3, rarity: "common", category: "token", keywords: ["guard"], art: { emoji: "🍞" }, text: "", token: true },
-  "token-ghost": { id: "token-ghost", type: "minion", name: "Ghost Pup", cost: 1, attack: 2, health: 1, rarity: "common", category: "token", keywords: ["sneaky"], art: { emoji: "👻" }, text: "", token: true },
-  "token-crumb": { id: "token-crumb", type: "spell", name: "The Crumb", cost: 0, rarity: "common", category: "token", keywords: [], art: { emoji: "🥐" }, effect: { type: "mana", amount: 1 }, text: "Gain 1 Bone this turn only.", token: true }
+  "token-pup": { id: "token-pup", type: "minion", name: "Lil Goober", cost: 1, attack: 1, health: 1, rarity: "common", category: "token", keywords: [], art: { emoji: "🐶" }, text: "", token: true },
+  "token-loaf": { id: "token-loaf", type: "minion", name: "Loaf", cost: 1, attack: 0, health: 3, rarity: "common", category: "token", keywords: ["guard"], art: { emoji: "🍞" }, text: "", token: true },
+  "token-ghost": { id: "token-ghost", type: "minion", name: "Ghost Goober", cost: 1, attack: 2, health: 1, rarity: "common", category: "token", keywords: ["sneaky"], art: { emoji: "👻" }, text: "", token: true },
+  "token-crumb": { id: "token-crumb", type: "spell", name: "Bonus Aura", cost: 0, rarity: "common", category: "token", keywords: [], art: { emoji: "🪙" }, effect: { type: "mana", amount: 1 }, text: "Gain 1 Aura this turn only.", token: true }
 };
 
 // Built-in "Treat" spells. These are always part of the card pool so decks work
 // even when only a handful of Goobers have been uploaded.
 export const TREATS = [
-  { id: "treat-bonk", name: "Bonk", cost: 1, rarity: "common", art: { emoji: "🔨" }, effect: { type: "damage", amount: 2, target: "any" }, flavor: "A gentle but firm bonk." },
-  { id: "treat-belly-rub", name: "Belly Rub", cost: 1, rarity: "common", art: { emoji: "🤲" }, effect: { type: "heal", amount: 4, target: "friendly", draw: 1 }, flavor: "Who's a good loaf?" },
-  { id: "treat-snack-time", name: "Snack Time", cost: 2, rarity: "common", art: { emoji: "🦴" }, effect: { type: "draw", amount: 2 }, flavor: "Crunch crunch crunch." },
-  { id: "treat-zoomies", name: "Zoomies!", cost: 1, rarity: "common", art: { emoji: "💨" }, effect: { type: "buff", attack: 2, health: 0, target: "friendlyMinion", keyword: "zoomies" }, flavor: "3am energy, anytime." },
-  { id: "treat-cozy-blanket", name: "Cozy Blanket", cost: 2, rarity: "common", art: { emoji: "🧣" }, effect: { type: "buff", attack: 1, health: 2, target: "friendlyMinion", keyword: "guard" }, flavor: "Loaf mode: engaged." },
-  { id: "treat-squeaky-toy", name: "Squeaky Toy", cost: 2, rarity: "common", art: { emoji: "🧸" }, effect: { type: "summon", token: "token-pup", count: 2 }, flavor: "SQUEAK. More pups arrive." },
-  { id: "treat-nap-time", name: "Nap Time", cost: 2, rarity: "rare", art: { emoji: "😴" }, effect: { type: "freeze", target: "enemyMinion", damage: 1 }, flavor: "Zzz... (can't attack next turn)." },
-  { id: "treat-fetch", name: "Fetch!", cost: 3, rarity: "rare", art: { emoji: "🎾" }, effect: { type: "damage", amount: 4, target: "enemyMinion", draw: 1 }, flavor: "Go get it! Right into that guy." },
-  { id: "treat-bath-time", name: "Bath Time", cost: 3, rarity: "rare", art: { emoji: "🛁" }, effect: { type: "damage", amount: 1, target: "allEnemyMinions", freeze: true }, flavor: "Nobody likes bath time." },
-  { id: "treat-pizza-party", name: "Pizza Party", cost: 4, rarity: "epic", art: { emoji: "🍕" }, effect: { type: "buff", attack: 1, health: 1, target: "allFriendlyMinions", heal: 4 }, flavor: "Everybody gets a slice." },
-  { id: "treat-thunder", name: "Thunderstorm", cost: 5, rarity: "epic", art: { emoji: "⛈️" }, effect: { type: "damage", amount: 3, target: "allEnemyMinions" }, flavor: "Every goober under the bed. Now." },
-  { id: "treat-big-goober-energy", name: "Big Goober Energy", cost: 6, rarity: "legendary", art: { emoji: "🌟" }, effect: { type: "buff", attack: 2, health: 2, target: "allFriendlyMinions", summon: "token-pup", summonCount: 2 }, flavor: "The loaf becomes the legend." }
+  { id: "treat-bonk", name: "Bonk", cost: 1, rarity: "common", art: { emoji: "🔨" }, effect: { type: "damage", amount: 2, target: "any" }, flavor: "*vine boom sound effect*" },
+  { id: "treat-belly-rub", name: "Touch Grass", cost: 1, rarity: "common", art: { emoji: "🌱" }, effect: { type: "heal", amount: 4, target: "friendly", draw: 1 }, flavor: "Log off. Heal up. Come back different." },
+  { id: "treat-snack-time", name: "Doomscroll", cost: 2, rarity: "common", art: { emoji: "📱" }, effect: { type: "draw", amount: 2 }, flavor: "Just one more. Then bed. (Lie.)" },
+  { id: "treat-zoomies", name: "Sigma Grindset", cost: 1, rarity: "common", art: { emoji: "🗿" }, effect: { type: "buff", attack: 2, health: 0, target: "friendlyMinion", keyword: "zoomies" }, flavor: "Wakes up at 4am. Attacks immediately." },
+  { id: "treat-cozy-blanket", name: "Built Different", cost: 2, rarity: "common", art: { emoji: "💪" }, effect: { type: "buff", attack: 1, health: 2, target: "friendlyMinion", keyword: "guard" }, flavor: "Not like the other Goobers." },
+  { id: "treat-squeaky-toy", name: "Call the Squad", cost: 2, rarity: "common", art: { emoji: "📞" }, effect: { type: "summon", token: "token-pup", count: 2 }, flavor: "Pull up. All of you." },
+  { id: "treat-nap-time", name: "Get Muted", cost: 2, rarity: "rare", art: { emoji: "🔇" }, effect: { type: "freeze", target: "enemyMinion", damage: 1 }, flavor: "Nobody asked." },
+  { id: "treat-fetch", name: "Yeet", cost: 3, rarity: "rare", art: { emoji: "🚀" }, effect: { type: "damage", amount: 4, target: "enemyMinion", draw: 1 }, flavor: "Reduced to atoms." },
+  { id: "treat-bath-time", name: "Spam the Chat", cost: 3, rarity: "rare", art: { emoji: "💬" }, effect: { type: "damage", amount: 1, target: "allEnemyMinions", freeze: true }, flavor: "@everyone" },
+  { id: "treat-pizza-party", name: "Aura Farming", cost: 4, rarity: "epic", art: { emoji: "😎" }, effect: { type: "buff", attack: 1, health: 1, target: "allFriendlyMinions", heal: 4 }, flavor: "+1000 aura for the whole squad." },
+  { id: "treat-thunder", name: "Emotional Damage", cost: 5, rarity: "epic", art: { emoji: "😭" }, effect: { type: "damage", amount: 3, target: "allEnemyMinions" }, flavor: "Not physical. Worse." },
+  { id: "treat-big-goober-energy", name: "Big Goober Energy", cost: 6, rarity: "legendary", art: { emoji: "👑" }, effect: { type: "buff", attack: 2, health: 2, target: "allFriendlyMinions", summon: "token-pup", summonCount: 2 }, flavor: "The loaf becomes the legend. Unironically." }
 ].map(card => ({ ...card, type: "spell", category: "treat", keywords: [], text: describeEffect(card.effect, "spell") }));
 
 // The original Goobers from the site, hand-tuned.
@@ -69,7 +71,7 @@ const ORIGINALS = [
   { id: "cowboy-goober", name: "Cowboy Goober", category: "costume", rarity: "epic", cost: 3, attack: 3, health: 2, keywords: [], ability: { trigger: "battlecry", type: "damage", amount: 2, target: "any" }, image: "/assets/cowboy-goober.jpg", flavor: "Rootin', tootin', and sitting like a western loaf." },
   { id: "cool-goober", name: "Cool Goober", category: "costume", rarity: "rare", cost: 2, attack: 2, health: 2, keywords: ["sneaky"], ability: null, image: "/assets/cool-goober.jpg", flavor: "Too cool to explain anything. Still sitting like a loaf." },
   { id: "spider-goober", name: "Spider Goober", category: "chaos", rarity: "epic", cost: 4, attack: 3, health: 3, keywords: ["bitey"], ability: { trigger: "lastBark", type: "summon", token: "token-pup", count: 2 }, image: "/assets/spider-goober.jpg", flavor: "A mysterious multi-legged Goober loaf. Probably friendly. Probably." },
-  { id: "party-goober", name: "Party Goober", category: "holiday", rarity: "rare", cost: 3, attack: 2, health: 3, keywords: [], ability: { trigger: "battlecry", type: "summon", token: "token-pup", count: 1 }, image: "/assets/Party Goober.jpg", flavor: "Brought a cake. Ate the cake." }
+  { id: "party-goober", name: "Party Goober", category: "holiday", rarity: "rare", cost: 3, attack: 2, health: 3, keywords: [], ability: { trigger: "battlecry", type: "summon", token: "token-pup", count: 1 }, image: "/assets/Party Goober.jpg", flavor: "Brought a cake. Ate the cake. Zero regrets." }
 ].map(card => ({ ...card, type: "minion", art: { image: card.image }, text: describeMinion(card) }));
 
 // --- Generation for user-uploaded Goobers ---------------------------------
@@ -209,7 +211,7 @@ export function describeEffect(effect, source = "minion") {
   if (!effect) return "";
   const parts = [];
   switch (effect.type) {
-    case "damage": parts.push(`Deal ${effect.amount} damage to ${targetWords(effect.target)}${effect.freeze ? " and put them to sleep" : ""}.`); break;
+    case "damage": parts.push(`Deal ${effect.amount} damage to ${targetWords(effect.target)}${effect.freeze ? " and mute them" : ""}.`); break;
     case "heal": parts.push(`Restore ${effect.amount} Health to ${targetWords(effect.target)}.`); break;
     case "draw": parts.push(`Draw ${effect.amount === 1 ? "a card" : `${effect.amount} cards`}.`); break;
     case "buff": {
@@ -224,9 +226,9 @@ export function describeEffect(effect, source = "minion") {
       parts.push(`Summon ${effect.count === 1 ? "a" : effect.count} ${token.attack}/${token.health} ${token.name}${effect.count === 1 ? "" : "s"}.`);
       break;
     }
-    case "mana": parts.push(`Gain ${effect.amount} Bone this turn only.`); break;
-    case "armor": parts.push(`Gain ${effect.amount} Fluff (armor).`); break;
-    case "freeze": parts.push(`Deal ${effect.damage || 0} damage to ${targetWords(effect.target)}. It falls asleep and can't attack next turn.`); break;
+    case "mana": parts.push(`Gain ${effect.amount} Aura this turn only.`); break;
+    case "armor": parts.push(`Gain ${effect.amount} Drip (armor).`); break;
+    case "freeze": parts.push(`Deal ${effect.damage || 0} damage to ${targetWords(effect.target)}. It gets muted and can't attack next turn.`); break;
     default: break;
   }
   if (effect.heal) parts.push(`Restore ${effect.heal} Health to your hero.`);
@@ -239,7 +241,7 @@ export function describeMinion(card) {
   const bits = [];
   if (card.keywords?.length) bits.push(card.keywords.map(k => KEYWORDS[k]?.label).filter(Boolean).join(", ") + ".");
   if (card.ability) {
-    const label = { battlecry: "Arrival:", lastBark: "Last Bark:", endTurn: "End of turn:" }[card.ability.trigger] || "";
+    const label = TRIGGER_LABEL[card.ability.trigger] || "";
     bits.push(`${label} ${describeEffect(card.ability)}`.trim());
   }
   return bits.join(" ");
