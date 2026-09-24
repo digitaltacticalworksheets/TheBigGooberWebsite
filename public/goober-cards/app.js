@@ -3,7 +3,7 @@ import { buildCatalog, collectibleIds, MAX_COPIES, DECK_SIZE, RARITIES, RARITY_L
 import { createGame, STARTING_HP, BOARD_LIMIT } from "./engine.js";
 import { AI_LEVELS } from "./ai.js";
 import { SoloMatch } from "./battle.js";
-import { OnlineMatch, createRoom, findMatch, liveGames } from "./online.js";
+import { OnlineMatch, createRoom, findMatch, liveGames, roomStatus, hasSeatIn } from "./online.js";
 import * as store from "./collection.js";
 import { RANK_TIERS, RANK_POINTS, tierFor, nextTier } from "./economy.js";
 import * as account from "./account.js";
@@ -64,6 +64,7 @@ function route() {
     case "solo": return renderSolo();
     case "online": return renderOnline(arg);
     case "watch": return renderOnline("", arg);
+    case "challenge": return renderChallenge(arg);
     case "packs": return renderPacks();
     case "collection": return renderCollection();
     case "decks": return renderDecks();
@@ -102,7 +103,7 @@ function renderHome() {
       <div>
         <h2>Lock in, ${esc(p.name || "Goober Fan")}.</h2>
         <p>${p.stats.wins} wins · ${p.stats.losses} losses${account.currentUser() && p.rank?.wins + p.rank?.losses > 0 ? ` · ${rankLabel(p.rank.rp)}` : ""}${p.stats.streak > 1 ? ` · 🔥 ${p.stats.streak} win streak. You're cooking.` : ""}</p>
-        <div class="row"><a class="btn big primary" href="#solo">▶ Play</a><a class="btn blue" href="#online">🌐 Online</a></div>
+        <div class="row"><a class="btn big primary" href="#solo">▶ Play</a><a class="btn blue" href="#online">🌐 Online</a><button class="btn pink" data-challenge>⚔️ Challenge</button></div>
       </div>
       <div class="fan">${showcase.map(c => cardHTML(c)).join("")}</div>
     </section>
@@ -122,6 +123,7 @@ function renderHome() {
   $("[data-rules]", app).onclick = showRules;
   $("[data-settings]", app).onclick = showSettings;
   $("[data-account]", app).onclick = () => showAccount();
+  $("[data-challenge]", app).onclick = e => challengeFriend(e.currentTarget);
   const nudge = $("[data-save-nudge]", app);
   if (nudge) nudge.onclick = () => showAccount("signup");
   $("[data-hero]", app).onclick = pickPortrait;
@@ -146,7 +148,7 @@ function askName(then) {
     if (!profile().tutorialSeen) showRules();
   };
   $("[data-signup]", m.el).onclick = () => { m.close(); showAccount("signup", { onDone: done, onCancel: () => askName(then) }); };
-  $("[data-login]", m.el).onclick = () => { m.close(); showAccount("login", { onDone: () => { if (!profile().name) profile().name = account.currentUser()?.username || "Goober Fan"; renderHome(); }, onCancel: () => askName(then) }); };
+  $("[data-login]", m.el).onclick = () => { m.close(); showAccount("login", { onDone: () => { if (!profile().name) profile().name = account.currentUser()?.username || "Goober Fan"; if (then) then(); else renderHome(); }, onCancel: () => askName(then) }); };
   $("[data-guest]", m.el).onclick = () => { m.close(); askGuestName(done); };
 }
 
@@ -457,8 +459,8 @@ function renderOnline(code, watchCode = "") {
       <div class="muted" style="text-align:center;font-weight:800">${account.currentUser() ? "Ranked when your opponent is logged in too. Rematches don't count." : "Plays a random opponent who's searching right now. Log in to play ranked."}</div>
     </div>
     <div class="online-card">
-      <button class="btn big pink" data-create>✨ Create Room</button>
-      <div class="muted" style="text-align:center;font-weight:800">or join a friend</div>
+      <button class="btn big pink" data-create>⚔️ Challenge a Friend</button>
+      <div class="muted" style="text-align:center;font-weight:800">Makes a private room and sends them a link. Or type a code to join or watch:</div>
       <div class="row"><input data-code maxlength="8" placeholder="CODE" value="${esc(code || "")}" autocomplete="off" autocapitalize="characters" style="flex:1;min-width:140px"><button class="btn blue" data-join>Join</button><button class="btn" data-watch-code>👀 Watch</button></div>
     </div>
     <div data-lobby></div>
@@ -470,12 +472,7 @@ function renderOnline(code, watchCode = "") {
   watchLiveList();
   bindDeckPicker(app.firstElementChild, () => { stopSearching(); renderOnline($("[data-code]", app).value); });
   $("[data-find]", app).onclick = () => startSearching();
-  $("[data-create]", app).onclick = async e => {
-    stopSearching();
-    e.target.disabled = true;
-    try { const { roomCode } = await createRoom(); joinOnline(roomCode); }
-    catch (error) { toast(error.message, "bad"); e.target.disabled = false; }
-  };
+  $("[data-create]", app).onclick = e => challengeFriend(e.currentTarget);
   const typedCode = () => $("[data-code]", app).value.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
   $("[data-join]", app).onclick = () => {
     stopSearching();
@@ -575,12 +572,72 @@ function stopSearching() {
   searching = null;
 }
 
-function joinOnline(code, { watch = false } = {}) {
+// ------------------------------------------------------------------ challenges
+const challengeLink = code => `${location.origin}/goober-cards/#challenge/${code}`;
+
+async function shareChallenge(code) {
+  const link = challengeLink(code);
+  const text = `⚔️ ${profile().name || "A Goober fan"} challenged you to Goober Cards. Scared?`;
+  if (navigator.share) {
+    try { await navigator.share({ title: "Goober Cards challenge", text, url: link }); return; }
+    catch (error) { if (error?.name === "AbortError") return; }
+  }
+  await copyText(link, "Challenge link copied! Send it to your friend.");
+}
+
+// Make a private room, sit in it, and send the link (share sheet on phones, clipboard elsewhere).
+async function challengeFriend(button) {
+  stopSearching();
+  if (button) button.disabled = true;
+  let roomCode;
+  try { ({ roomCode } = await createRoom()); }
+  catch (error) { toast(error.message, "bad"); if (button) button.disabled = false; return; }
+  if (location.hash.split("/")[0] !== "#online") { history.replaceState(null, "", "#online"); renderOnline(); }
+  joinOnline(roomCode, { challenge: true });
+  shareChallenge(roomCode);
+}
+
+// A friend opened a challenge link: show who's calling them out before joining.
+async function renderChallenge(code) {
+  code = String(code || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (code.length < 4) { history.replaceState(null, "", "#online"); renderOnline(); return; }
+  // Your own challenge (you already have a seat): straight back to the room.
+  if (hasSeatIn(code)) { history.replaceState(null, "", "#online"); renderOnline(); joinOnline(code, { challenge: true }); return; }
+  if (!profile().name) { askName(() => renderChallenge(code)); return; }
+  app.innerHTML = `<div class="screen">${topbar("Challenge")}<div class="online-card challenge-card"><div class="spinner" style="margin:auto"></div></div></div>`;
+  let status;
+  try { status = await roomStatus(code); }
+  catch { status = null; }
+  if (location.hash !== `#challenge/${code}`) return;
+  const [host, guest] = status?.players || [];
+  const card = $(".challenge-card", app);
+  if (!host) {
+    card.innerHTML = `<h2>Challenge expired</h2><p class="muted">This challenge link doesn't lead anywhere anymore. Send your friend one back!</p>
+      <div class="row" style="justify-content:center"><button class="btn pink" data-back-challenge>⚔️ Challenge them</button><a class="btn" href="#online">Online</a></div>`;
+    $("[data-back-challenge]", card).onclick = e => challengeFriend(e.currentTarget);
+    return;
+  }
+  if (guest || status.phase !== "lobby") {
+    card.innerHTML = `<h2>Already taken</h2><p class="muted">Someone already accepted ${esc(host.name)}'s challenge.</p>
+      <div class="row" style="justify-content:center"><button class="btn blue" data-watch-challenge>👀 Watch it</button><button class="btn pink" data-own-challenge>⚔️ Make your own</button></div>`;
+    $("[data-watch-challenge]", card).onclick = () => { history.replaceState(null, "", `#watch/${code}`); renderOnline("", code); };
+    $("[data-own-challenge]", card).onclick = e => challengeFriend(e.currentTarget);
+    return;
+  }
+  card.innerHTML = `<div class="challenge-head"><span>⚔️</span><div><small>You've been challenged by</small><h2>${esc(host.name)}</h2><small>${host.connected ? "🟢 Waiting in the room right now" : "⚪ Not in the room right now, but you can join and wait"}</small></div></div>
+    <span class="field-label">Your deck</span>
+    ${deckPickerHTML(profile().activeDeck)}
+    <div class="row" style="justify-content:center"><a class="btn" href="#home">Nah</a><button class="btn big primary" data-accept>Accept</button></div>`;
+  bindDeckPicker(card, () => renderChallenge(code));
+  $("[data-accept]", card).onclick = () => { sfx.turn(); history.replaceState(null, "", "#online"); renderOnline(); joinOnline(code); };
+}
+
+function joinOnline(code, { watch = false, challenge = false } = {}) {
   if (online) online.close();
   const { entries } = store.playableDeck(catalog);
   history.replaceState(null, "", `#${watch ? "watch" : "online"}/${code}`);
   const lobby = $("[data-lobby]", app);
-  const link = `${location.origin}/goober-cards/#online/${code}`;
+  const link = challengeLink(code);
   const watchLink = `${location.origin}/goober-cards/#watch/${code}`;
   online = new OnlineMatch({
     code, name: profile().name || "Goober Fan", auth: account.sessionToken(), heroId: profile().hero || "original-goober", deck: entries, catalog,
@@ -616,17 +673,15 @@ function joinOnline(code, { watch = false } = {}) {
       }
       if (!lobby.isConnected) return;
       lobby.innerHTML = `<div class="online-card" style="border-style:solid">
+        ${challenge && !room.seats[seat === 0 ? 1 : 0] ? `<div class="challenge-sent"><b>⚔️ Challenge sent!</b><span>Waiting for your friend to open the link and accept.</span></div>` : ""}
         <div style="text-align:center;font-weight:800">${room.ranked ? "🏆 Ranked match · " : ""}Room code</div>
         <div class="code-box">${esc(room.code)}</div>
-        <div class="row" style="justify-content:center"><button class="btn small" data-share>📤 Share invite</button><button class="btn small" data-copy>📋 Copy link</button><button class="btn small" data-copy-watch>👀 Watch link</button></div>
+        <div class="row" style="justify-content:center"><button class="btn small" data-share>📤 ${challenge ? "Send again" : "Share invite"}</button><button class="btn small" data-copy>📋 Copy link</button><button class="btn small" data-copy-watch>👀 Watch link</button></div>
         <div class="seat-list">${[0, 1].map(i => { const s = room.seats[i]; return `<div class="seat"><span class="dot ${s?.connected ? "on" : ""}"></span>${s?.tier ? `${RANK_TIERS.find(t => t.id === s.tier)?.icon || ""} ` : ""}${s ? esc(s.name) : "Waiting for someone brave…"}${i === seat ? " (you)" : ""}${s?.ready ? " ✅" : ""}</div>`; }).join("")}</div>
         <div class="row" style="justify-content:center"><div class="spinner"></div><span class="muted">Starts when both players join.</span></div>
       </div>`;
-      $("[data-share]", lobby).onclick = async () => {
-        if (navigator.share) { try { await navigator.share({ title: "Goober Cards", text: `1v1 me in Goober Cards. Room ${room.code}. Scared?`, url: link }); } catch { /* cancelled */ } }
-        else { await copyText(link); }
-      };
-      $("[data-copy]", lobby).onclick = () => copyText(link);
+      $("[data-share]", lobby).onclick = () => shareChallenge(room.code);
+      $("[data-copy]", lobby).onclick = () => copyText(link, "Challenge link copied!");
       $("[data-copy-watch]", lobby).onclick = () => copyText(watchLink);
     },
     onEnd: async ({ won, draw }) => {
@@ -659,8 +714,8 @@ function renderRematchWait(code) {
   $("[data-leave]", app).onclick = () => exitMatch();
 }
 
-async function copyText(text) {
-  try { await navigator.clipboard.writeText(text); toast("Link copied!", "good"); }
+async function copyText(text, message = "Link copied!") {
+  try { await navigator.clipboard.writeText(text); toast(message, "good"); }
   catch { prompt("Copy this link:", text); }
 }
 
@@ -1008,7 +1063,7 @@ function renderBuilder(id) {
 function boot() {
   const params = new URLSearchParams(location.search);
   const room = params.get("room");
-  if (room) { history.replaceState(null, "", `${location.pathname}#online/${room.toUpperCase()}`); }
+  if (room) { history.replaceState(null, "", `${location.pathname}#challenge/${room.toUpperCase()}`); }
   if (location.hash === "#battle") history.replaceState(null, "", "#home");
   account.onAccountEvents({
     status: state => { const el = document.querySelector("[data-sync]"); if (el) el.textContent = { saving: "⏳", saved: "☁️", offline: "⚠️" }[state] || "☁️"; },

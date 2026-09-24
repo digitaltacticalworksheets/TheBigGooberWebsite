@@ -302,6 +302,13 @@ h1, h2, h3 { font-family: var(--display); font-weight: 400; letter-spacing: 0.01
 .online-card { display: grid; gap: 12px; padding: 16px; border-radius: 22px; border: 3px dashed rgba(255, 255, 255, 0.35); margin-top: 14px; }
 .online-card input { width: 100%; padding: 12px 14px; border: 3px solid var(--ink); border-radius: 14px; font-family: var(--display); font-size: 1.4rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink); background: #fff; }
 .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.challenge-card { text-align: left; }
+.challenge-head { display: flex; gap: 14px; align-items: center; }
+.challenge-head > span { font-size: 3rem; line-height: 1; filter: drop-shadow(0 0 12px rgba(255, 95, 200, 0.7)); }
+.challenge-head h2 { font-size: 2.4rem; text-transform: uppercase; color: var(--yellow); overflow-wrap: anywhere; }
+.challenge-head small { display: block; font-weight: 800; color: var(--muted); }
+.challenge-sent { display: grid; gap: 2px; text-align: center; padding: 10px; border-radius: 14px; background: rgba(255, 95, 200, 0.14); border: 1px solid rgba(255, 95, 200, 0.45); }
+.challenge-sent b { font-family: var(--display); font-weight: 400; font-size: 1.3rem; text-transform: uppercase; }
 .live-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .live-head b { font-family: var(--display); font-weight: 400; font-size: 1.3rem; text-transform: uppercase; }
 .live-list { display: grid; gap: 8px; }

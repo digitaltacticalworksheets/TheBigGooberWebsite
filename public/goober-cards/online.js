@@ -16,6 +16,18 @@ function tokenFor(code) {
   }
 }
 
+// Whether this device already holds a seat in a room (the challenger opening their own link).
+export function hasSeatIn(code) {
+  try { return Boolean(localStorage.getItem(`gooberCardsSeat.${code}`)); } catch { return false; }
+}
+
+// Who's in a room, without joining it: { code, phase, players: [{ name, connected } | null] }.
+export async function roomStatus(code) {
+  const res = await fetch(`/api/card-battle/${encodeURIComponent(code)}`, { cache: "no-store" });
+  if (!res.ok) throw new Error("Couldn't reach that room.");
+  return res.json();
+}
+
 export async function createRoom() {
   const res = await fetch("/api/card-battle/create", { method: "POST", cache: "no-store" });
   if (!res.ok) throw new Error("Couldn't create a room. Try again in a moment.");
