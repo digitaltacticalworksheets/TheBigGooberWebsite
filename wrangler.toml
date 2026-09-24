@@ -20,9 +20,17 @@ bucket_name = "thebiggooberwebsite-images"
 name = "CARD_BATTLE_ROOMS"
 class_name = "CardBattleRoom"
 
+[[durable_objects.bindings]]
+name = "MATCHMAKER"
+class_name = "Matchmaker"
+
 [[migrations]]
 tag = "v1-card-battle-rooms"
 new_sqlite_classes = ["CardBattleRoom"]
+
+[[migrations]]
+tag = "v2-matchmaker"
+new_sqlite_classes = ["Matchmaker"]
 
 # Workers AI powers the upload auto-moderator.
 [ai]
