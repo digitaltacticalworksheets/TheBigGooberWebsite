@@ -766,7 +766,7 @@ body::after {
     linear-gradient(135deg, #2b1d52, #16112a 60%, #251044);
   border: 0; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); isolation: isolate;
 }
-.home-hero::before, .online-card::before, .pack-tile::before, .tile::before, .battle .table::before, .modal .sheet::before {
+.home-hero::before, .online-card::before, .pack-tile::before, .tile::before, .battle .table::before {
   content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; padding: 3px; pointer-events: none;
   background: conic-gradient(from var(--angle, 0deg), #ffd34d, #ff5fc8, #9b6bff, #45c8ff, #5cf08a, #ffd34d);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
@@ -809,10 +809,13 @@ body::after {
 .choice.selected, .deck-chip.selected, .deck-tile.active { box-shadow: 0 0 0 3px var(--yellow), 0 0 26px rgba(255, 211, 77, 0.55); }
 .choice img { box-shadow: 0 0 0 3px var(--yellow); background: #fff; object-fit: contain; }
 .online-card { position: relative; isolation: isolate; border: 0; background: rgba(28, 22, 44, 0.6); }
+/* The rim is a border-box background (not a ::before) so it stays put when a long sheet scrolls. */
 .modal .sheet {
-  position: relative; isolation: isolate; color: var(--text); border: 0;
-  background: linear-gradient(160deg, #2a2140, #15101f);
+  --rim: conic-gradient(from var(--angle, 0deg), #ffd34d, #ff5fc8, #9b6bff, #45c8ff, #5cf08a, #ffd34d) border-box;
+  position: relative; isolation: isolate; color: var(--text); border: 3px solid transparent;
+  background: linear-gradient(160deg, #2a2140, #15101f) padding-box, var(--rim);
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6), 0 0 60px rgba(155, 107, 255, 0.25);
+  animation: popIn 0.22s cubic-bezier(0.2, 1.4, 0.5, 1), rim 6s linear infinite;
 }
 .sheet p, .rules li { color: #e9e2f7; }
 .sheet .muted { color: var(--muted) !important; }
@@ -821,7 +824,7 @@ body::after {
 .rules h3 { color: #fff; }
 .log-list div { background: rgba(255, 255, 255, 0.06); color: #eee; }
 .inspect .details { background: linear-gradient(160deg, #2a2140, #15101f); color: #f0eaff; border-color: rgba(255, 255, 255, 0.2); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); }
-.result.sheet, .result.lose.sheet { background: radial-gradient(circle at 50% 20%, #3b2a67, #140f22 70%); }
+.result.sheet, .result.lose.sheet { background: radial-gradient(circle at 50% 20%, #3b2a67, #140f22 70%) padding-box, var(--rim); }
 .result h2 { font-size: 7rem; }
 .result.win h2 { color: #7dff9c; text-shadow: 0 6px 0 #000, 0 0 40px rgba(92, 240, 138, 0.8); }
 .result.lose h2 { color: #ff6b6b; text-shadow: 0 6px 0 #000, 0 0 40px rgba(255, 90, 90, 0.7); }
