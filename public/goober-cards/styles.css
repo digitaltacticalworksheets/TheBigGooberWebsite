@@ -321,6 +321,15 @@ h1, h2, h3 { font-family: var(--display); font-weight: 400; letter-spacing: 0.01
 .draw-card .card { --cw: min(200px, 56vw); }
 .admin-row { margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(255, 90, 90, 0.5); }
 .creator-note { padding: 8px 10px; border-radius: 12px; background: rgba(255, 159, 69, 0.15); border: 1px solid rgba(255, 159, 69, 0.45); }
+.friends-btn { position: relative; text-decoration: none; }
+.friend-add input { text-transform: none; letter-spacing: 0; font-family: inherit; font-size: 1.05rem; flex: 1; min-width: 140px; }
+.friend-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: rgba(255, 255, 255, 0.06); }
+.friend-row > div:nth-child(2) { flex: 1; min-width: 0; }
+.friend-row b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.friend-row small { display: block; font-weight: 800; color: var(--muted); }
+.friend-row .dot { width: 12px; height: 12px; border-radius: 50%; background: #6b6480; flex: none; }
+.friend-row .dot.on { background: #5cf08a; box-shadow: 0 0 8px #5cf08a; }
+.friend-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 .challenge-card { text-align: left; }
 .challenge-head { display: flex; gap: 14px; align-items: center; }
 .challenge-head > span { font-size: 3rem; line-height: 1; filter: drop-shadow(0 0 12px rgba(255, 95, 200, 0.7)); }

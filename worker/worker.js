@@ -10,6 +10,7 @@ export default {
       if (url.pathname === "/api/goobers" && request.method === "GET") return await listGoobers(env);
       if (url.pathname === "/api/goobers" && request.method === "POST") return await uploadGoober(request, env);
       if (url.pathname.startsWith("/api/auth/") || url.pathname === "/api/profile" || url.pathname.startsWith("/api/econ/")) return await routeAccounts(request, env, url);
+      if (url.pathname === "/api/friends" || url.pathname.startsWith("/api/friends/")) return await routeFriends(request, env, url);
       if (url.pathname === "/api/card-battle/create" && request.method === "POST") return await createCardBattleRoom();
       if ((url.pathname === "/api/card-battle/matchmaking" || url.pathname === "/api/card-battle/live") && request.method === "GET") return await routeMatchmaking(request, env);
       if (url.pathname.startsWith("/api/card-battle/") && request.method === "GET") return await routeCardBattleRoom(request, env);
@@ -464,6 +465,217 @@ export class Matchmaker {
   send(socket, payload) {
     try { socket.send(JSON.stringify(payload)); } catch { /* socket gone */ }
   }
+}
+
+// --- Friends: who's online ----------------------------------------------------
+// One global object that every logged-in player's open game connects to. Uses
+// hibernating WebSockets, so idle players cost nothing: a connected socket that has
+// pinged recently means "online", and its attachment says what they're doing.
+const PRESENCE_STATUSES = ["online", "solo", "searching", "watching", "playing"];
+const PRESENCE_FRESH_MS = 75 * 1000;
+
+export class Presence {
+  constructor(state, env) {
+    this.state = state;
+    this.env = env;
+    // Keepalive pings are answered without waking the object.
+    try { state.setWebSocketAutoResponse(new WebSocketRequestResponsePair('{"type":"ping"}', '{"type":"pong"}')); } catch { /* older runtime */ }
+  }
+
+  async fetch(request) {
+    const url = new URL(request.url);
+    if (url.pathname === "/connect") {
+      const userId = cleanText(url.searchParams.get("user"), 64);
+      if (!userId) return jsonResponse({ error: "No user." }, 400, NO_STORE_HEADERS);
+      const pair = new WebSocketPair();
+      const [client, server] = Object.values(pair);
+      this.state.acceptWebSocket(server, [`u:${userId}`]);
+      server.serializeAttachment({ userId, status: "online", roomCode: "", at: Date.now() });
+      return new Response(null, { status: 101, webSocket: client });
+    }
+    const body = await request.json().catch(() => ({}));
+    if (url.pathname === "/status") {
+      const out = {};
+      for (const id of (Array.isArray(body.ids) ? body.ids : []).slice(0, 200)) out[id] = this.statusOf(String(id));
+      return jsonResponse(out, 200, NO_STORE_HEADERS);
+    }
+    if (url.pathname === "/notify") {
+      let delivered = 0;
+      for (const ws of this.liveSockets(String(body.to || ""))) {
+        try { ws.send(JSON.stringify(body.message || {})); delivered++; } catch { /* socket gone */ }
+      }
+      return jsonResponse({ delivered }, 200, NO_STORE_HEADERS);
+    }
+    return jsonResponse({ error: "Not found" }, 404, NO_STORE_HEADERS);
+  }
+
+  liveSockets(userId) {
+    const now = Date.now();
+    return this.state.getWebSockets(`u:${userId}`).filter(ws => {
+      const seen = Math.max(ws.deserializeAttachment()?.at || 0, this.state.getWebSocketAutoResponseTimestamp?.(ws)?.getTime?.() || 0);
+      return now - seen < PRESENCE_FRESH_MS;
+    });
+  }
+
+  // Busiest status across the player's open tabs/devices.
+  statusOf(userId) {
+    let best = null;
+    for (const ws of this.liveSockets(userId)) {
+      const a = ws.deserializeAttachment() || {};
+      if (!best || PRESENCE_STATUSES.indexOf(a.status) > PRESENCE_STATUSES.indexOf(best.status)) best = a;
+    }
+    return best ? { online: true, status: best.status, roomCode: best.roomCode || "" } : { online: false, status: "offline", roomCode: "" };
+  }
+
+  webSocketMessage(ws, message) {
+    let msg;
+    try { msg = JSON.parse(message); } catch { return; }
+    const a = ws.deserializeAttachment() || {};
+    a.at = Date.now();
+    if (msg.type === "status") {
+      a.status = PRESENCE_STATUSES.includes(msg.status) ? msg.status : "online";
+      a.roomCode = getRoomCodeFromPath(`/api/card-battle/${cleanText(msg.roomCode, 12)}`) || "";
+    }
+    ws.serializeAttachment(a);
+  }
+
+  webSocketClose(ws) { try { ws.close(); } catch { /* already closed */ } }
+  webSocketError() { /* the runtime drops it */ }
+}
+
+function presenceStub(env) { return env.PRESENCE.get(env.PRESENCE.idFromName("global")); }
+
+async function presenceCall(env, path, body) {
+  if (!env.PRESENCE) return null;
+  try {
+    const res = await presenceStub(env).fetch(new Request(`https://presence.internal${path}`, { method: "POST", body: JSON.stringify(body) }));
+    return await res.json();
+  } catch (error) {
+    console.error("Presence call failed", error);
+    return null;
+  }
+}
+
+// --- Friends: lists, requests, invites ---------------------------------------
+// Friend lists live in each player's profile (server-only fields), so a request or
+// an accept updates both players' profiles.
+async function routeFriends(request, env, url) {
+  const action = url.pathname.replace(/^\/api\/friends\/?/, "");
+  if (action === "presence") {
+    // WebSockets can't send headers, so the login token comes in the query string.
+    const user = await userFromToken(env, url.searchParams.get("auth"));
+    if (!user) return unauthorized();
+    if (request.headers.get("upgrade") !== "websocket") return jsonResponse({ error: "WebSocket expected." }, 426, NO_STORE_HEADERS);
+    if (!env.PRESENCE) return jsonResponse({ error: "Friends aren't set up yet." }, 500, NO_STORE_HEADERS);
+    return presenceStub(env).fetch(new Request(`https://presence.internal/connect?user=${encodeURIComponent(user.id)}`, { headers: request.headers }));
+  }
+  const user = await requireUser(request, env);
+  if (!user) return unauthorized();
+  const me = { id: String(user.id), name: user.username };
+  if (action === "" && request.method === "GET") return listFriends(env, user);
+  if (request.method !== "POST") return jsonResponse({ error: "Not found" }, 404, NO_STORE_HEADERS);
+  const body = await readJson(request);
+  const otherId = cleanText(body.id, 64);
+  switch (action) {
+    case "request": return friendRequest(env, user, me, cleanText(body.username, 20));
+    case "accept": return friendAccept(env, user, me, otherId);
+    case "decline": return friendDrop(env, user, otherId, "friendIn", "friendOut");
+    case "cancel": return friendDrop(env, user, otherId, "friendOut", "friendIn");
+    case "remove": return friendDrop(env, user, otherId, "friends", "friends");
+    case "invite": return friendInvite(env, user, me, otherId, cleanText(body.roomCode, 12));
+    default: return jsonResponse({ error: "Not found" }, 404, NO_STORE_HEADERS);
+  }
+}
+
+const without = (list, id) => list.filter(f => f.id !== id);
+const hasPerson = (list, id) => list.some(f => f.id === id);
+
+async function loadProfile(env, userId) {
+  const row = await env.DB.prepare(`SELECT data FROM profiles WHERE user_id = ?`).bind(userId).first();
+  return econ.normalizeProfile(row ? JSON.parse(row.data) : null);
+}
+
+async function listFriends(env, user) {
+  const p = await loadProfile(env, user.id);
+  const presence = p.friends.length ? (await presenceCall(env, "/status", { ids: p.friends.map(f => f.id) })) || {} : {};
+  const friends = p.friends.map(f => ({ id: f.id, name: f.name, ...(presence[f.id] || { online: false, status: "offline", roomCode: "" }) }));
+  const order = s => ["playing", "watching", "searching", "solo", "online"].includes(s.status) ? 0 : 1;
+  friends.sort((a, b) => order(a) - order(b) || a.name.localeCompare(b.name));
+  return jsonResponse({ friends, incoming: p.friendIn, outgoing: p.friendOut, limit: econ.FRIEND_LIMIT }, 200, NO_STORE_HEADERS);
+}
+
+async function friendRequest(env, user, me, username) {
+  if (!username) return jsonResponse({ error: "Type their username." }, 400, NO_STORE_HEADERS);
+  const target = await env.DB.prepare(`SELECT id, username FROM users WHERE username_key = ?`).bind(username.toLowerCase()).first();
+  if (!target) return jsonResponse({ error: `No player called ${username}.` }, 404, NO_STORE_HEADERS);
+  const them = { id: String(target.id), name: target.username };
+  if (them.id === me.id) return jsonResponse({ error: "That's you!" }, 400, NO_STORE_HEADERS);
+  const mine = await loadProfile(env, user.id);
+  if (hasPerson(mine.friends, them.id)) return jsonResponse({ error: `You're already friends with ${them.name}.` }, 409, NO_STORE_HEADERS);
+  // They already asked you: asking back is the same as accepting.
+  if (hasPerson(mine.friendIn, them.id)) return friendAccept(env, user, me, them.id);
+  if (hasPerson(mine.friendOut, them.id)) return jsonResponse({ error: `You already asked ${them.name}. Waiting on them.` }, 409, NO_STORE_HEADERS);
+  if (mine.friendOut.length >= econ.FRIEND_REQUEST_LIMIT) return jsonResponse({ error: "You have too many requests waiting. Cancel some first." }, 409, NO_STORE_HEADERS);
+  if (mine.friends.length >= econ.FRIEND_LIMIT) return jsonResponse({ error: `You can have up to ${econ.FRIEND_LIMIT} friends.` }, 409, NO_STORE_HEADERS);
+  const at = Date.now();
+  const theirs = await applyEconomy(env, them.id, them.name, p => {
+    if (hasPerson(p.friends, me.id)) return { ok: true, already: true };
+    if (p.friendIn.length >= econ.FRIEND_REQUEST_LIMIT) return { ok: false, error: `${them.name} has too many friend requests right now.` };
+    p.friendIn = [...without(p.friendIn, me.id), { ...me, at }];
+    return { ok: true };
+  });
+  if (!theirs.ok) return jsonResponse({ error: theirs.result?.error || "Couldn't send that." }, 409, NO_STORE_HEADERS);
+  if (theirs.result.already) {
+    // They still list you as a friend (you removed them earlier): just add them back.
+    await applyEconomy(env, user.id, user.username, p => { p.friends = [...without(p.friends, them.id), { ...them, at }]; return { ok: true }; });
+    return jsonResponse({ ok: true, friends: true }, 200, NO_STORE_HEADERS);
+  }
+  await applyEconomy(env, user.id, user.username, p => { p.friendOut = [...without(p.friendOut, them.id), { ...them, at }]; return { ok: true }; });
+  await presenceCall(env, "/notify", { to: them.id, message: { type: "friend-request", from: me } });
+  return jsonResponse({ ok: true, sent: true, name: them.name }, 200, NO_STORE_HEADERS);
+}
+
+async function friendAccept(env, user, me, otherId) {
+  const mine = await loadProfile(env, user.id);
+  const them = mine.friendIn.find(f => f.id === otherId);
+  if (!them) return jsonResponse({ error: "That friend request is gone." }, 404, NO_STORE_HEADERS);
+  if (mine.friends.length >= econ.FRIEND_LIMIT) return jsonResponse({ error: `You can have up to ${econ.FRIEND_LIMIT} friends.` }, 409, NO_STORE_HEADERS);
+  const at = Date.now();
+  await applyEconomy(env, them.id, them.name, p => {
+    p.friendOut = without(p.friendOut, me.id);
+    p.friendIn = without(p.friendIn, me.id);
+    if (!hasPerson(p.friends, me.id) && p.friends.length < econ.FRIEND_LIMIT) p.friends = [...p.friends, { ...me, at }];
+    return { ok: true };
+  });
+  await applyEconomy(env, user.id, user.username, p => {
+    p.friendIn = without(p.friendIn, them.id);
+    p.friendOut = without(p.friendOut, them.id);
+    if (!hasPerson(p.friends, them.id)) p.friends = [...p.friends, { id: them.id, name: them.name, at }];
+    return { ok: true };
+  });
+  await presenceCall(env, "/notify", { to: them.id, message: { type: "friend-accepted", from: me } });
+  return jsonResponse({ ok: true, friends: true, name: them.name }, 200, NO_STORE_HEADERS);
+}
+
+// Decline / cancel / remove: take them out of my list and me out of theirs.
+async function friendDrop(env, user, otherId, myList, theirList) {
+  if (!otherId) return jsonResponse({ error: "Who?" }, 400, NO_STORE_HEADERS);
+  const mine = await loadProfile(env, user.id);
+  const them = mine[myList].find(f => f.id === otherId);
+  await applyEconomy(env, user.id, user.username, p => { p[myList] = without(p[myList], otherId); return { ok: true }; });
+  if (them) await applyEconomy(env, otherId, them.name, p => { p[theirList] = without(p[theirList], String(user.id)); return { ok: true }; });
+  return jsonResponse({ ok: true }, 200, NO_STORE_HEADERS);
+}
+
+async function friendInvite(env, user, me, otherId, roomCode) {
+  const code = getRoomCodeFromPath(`/api/card-battle/${roomCode}`);
+  if (!code) return jsonResponse({ error: "Make a room first." }, 400, NO_STORE_HEADERS);
+  const mine = await loadProfile(env, user.id);
+  const them = mine.friends.find(f => f.id === otherId);
+  if (!them) return jsonResponse({ error: "You can only invite friends." }, 403, NO_STORE_HEADERS);
+  const out = await presenceCall(env, "/notify", { to: them.id, message: { type: "invite", from: me, roomCode: code } });
+  if (!out?.delivered) return jsonResponse({ error: `${them.name} isn't online right now.`, offline: true }, 409, NO_STORE_HEADERS);
+  return jsonResponse({ ok: true, delivered: out.delivered }, 200, NO_STORE_HEADERS);
 }
 
 async function rankPointsFor(env, userId) {

@@ -52,6 +52,9 @@ export function freshProfile() {
     editsRev: 0,
     paidGames: [],
     creations: [],
+    friends: [],
+    friendIn: [],
+    friendOut: [],
     rank: freshRank(),
     settings: { sound: true, haptics: true },
     tutorialSeen: false,
@@ -73,10 +76,18 @@ export function normalizeProfile(data) {
   p.editsRev = Math.max(0, Math.floor(Number(p.editsRev) || 0));
   p.paidGames = Array.isArray(p.paidGames) ? p.paidGames.slice(-30) : [];
   p.creations = Array.isArray(p.creations) ? p.creations.filter(id => typeof id === "string").slice(-200) : [];
+  // Friends and friend requests: [{ id, name, at }]. Only the server changes these.
+  const people = list => (Array.isArray(list) ? list.filter(f => f && typeof f.id === "string" && typeof f.name === "string").map(f => ({ id: f.id, name: f.name.slice(0, 24), at: Number(f.at) || 0 })) : []);
+  p.friends = people(p.friends).slice(0, FRIEND_LIMIT);
+  p.friendIn = people(p.friendIn).slice(-FRIEND_REQUEST_LIMIT);
+  p.friendOut = people(p.friendOut).slice(-FRIEND_REQUEST_LIMIT);
   p.rank = { ...freshRank(), ...(p.rank && typeof p.rank === "object" ? p.rank : {}) };
   p.rank.rp = Math.max(0, Math.floor(Number(p.rank.rp) || 0));
   return p;
 }
+
+export const FRIEND_LIMIT = 100;
+export const FRIEND_REQUEST_LIMIT = 50;
 
 // --- Ranked (Find a Match only, logged-in players on both sides) -----------
 // Rank Points climb through bread tiers. You can't drop out of a tier once you reach it.
