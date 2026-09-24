@@ -10,6 +10,7 @@ import * as account from "./account.js";
 import { $, $$, esc, sleep, cardHTML, cardBackHTML, toast, modal, confirmDialog, keywordGlossary, onLongPress } from "./ui.js";
 import { sfx, setSoundEnabled, buzz } from "./sound.js";
 import { prepareDrawing } from "./image.js";
+import { friendsApi, startPresence, stopPresence, setPresence, STATUS_LABEL } from "./friends.js";
 
 const app = document.getElementById("app");
 const GOOBER_CACHE_KEY = "gooberCardsGoobers";
@@ -56,6 +57,7 @@ window.addEventListener("hashchange", () => route());
 function route() {
   if (match || online?.battle) return;
   stopSearching();
+  if (!online) setPresence("online");
   const [name, arg] = location.hash.replace(/^#/, "").split("/");
   document.body.classList.remove("in-battle");
   document.querySelectorAll(".modal, .opening").forEach(el => el.remove());
@@ -68,6 +70,7 @@ function route() {
     case "challenge": return renderChallenge(arg);
     case "login": case "signup": return renderAuthLink(name, arg);
     case "draw": return renderDraw();
+    case "friends": return renderFriends();
     case "packs": return renderPacks();
     case "collection": return renderCollection();
     case "decks": return renderDecks();
@@ -96,6 +99,7 @@ function renderHome() {
     <div class="home-top">
       <a class="icon-btn" href="/" aria-label="Back to The Big Goober Website">🏠</a>
       <div class="spacer"></div>
+      ${account.currentUser() ? `<a class="icon-btn friends-btn" href="#friends" aria-label="Friends">👥${friendBadge.requests ? `<em class="badge">${friendBadge.requests}</em>` : ""}</a>` : ""}
       ${accountChipHTML()}
       <span class="pill coins-pill">${COIN}${p.coins}</span>
       <button class="icon-btn" data-settings aria-label="Settings">⚙️</button>
@@ -180,6 +184,156 @@ function accountChipHTML() {
 }
 
 // Log in / sign up / account screen.
+// ------------------------------------------------------------------ friends
+// Logged-in players stay connected while the game is open, so friends see them
+// online and invites arrive instantly.
+const friendBadge = { requests: 0 };
+
+function syncPresence() {
+  if (account.currentUser()) { startPresence(onFriendEvent); refreshFriendBadge(); }
+  else { stopPresence(); friendBadge.requests = 0; }
+}
+
+async function refreshFriendBadge() {
+  const res = await friendsApi.list();
+  if (!res.ok) return;
+  const before = friendBadge.requests;
+  friendBadge.requests = res.incoming.length;
+  if (before !== friendBadge.requests && location.hash.replace(/^#/, "").split("/")[0] === "home" && !match && !online) route();
+}
+
+function onFriendEvent(msg) {
+  const name = esc(msg.from?.name || "A friend");
+  if (msg.type === "invite") {
+    sfx.turn();
+    buzz([40, 30, 40]);
+    if (match || online?.battle) { toast(`⚔️ ${msg.from?.name} invited you to battle. Finish this match first!`); return; }
+    const m = modal(`<h2>⚔️ Invite!</h2><p><b>${name}</b> wants to battle you right now.</p>
+      <div class="actions"><button class="btn" data-close>Nah</button><button class="btn primary" data-join-invite>Let's go</button></div>`);
+    $("[data-join-invite]", m.el).onclick = () => {
+      m.close();
+      stopSearching();
+      history.replaceState(null, "", "#online");
+      renderOnline();
+      joinOnline(msg.roomCode);
+    };
+    return;
+  }
+  if (msg.type === "friend-request") {
+    toast(`👥 ${msg.from?.name} sent you a friend request!`, "good");
+    friendBadge.requests += 1;
+  } else if (msg.type === "friend-accepted") {
+    toast(`👥 You and ${msg.from?.name} are friends now!`, "good");
+  } else return;
+  if ($("[data-friends-body]", app)) loadFriends();
+  else if (location.hash.replace(/^#/, "").split("/")[0] === "home" && !match && !online) route();
+}
+
+let friendsTimer = null;
+
+function renderFriends() {
+  clearInterval(friendsTimer);
+  if (!account.currentUser()) {
+    app.innerHTML = `<div class="screen">${topbar("Friends")}
+      <div class="online-card" style="text-align:center">
+        <b>👥 Friends need a free Goober Cards account.</b>
+        <p class="muted">Add friends by username, see who's online, and invite them to battle.</p>
+        <div class="row" style="justify-content:center"><button class="btn primary" data-friends-login>Log in</button><button class="btn pink" data-friends-signup>Make an account</button></div>
+      </div></div>`;
+    const open = mode => showAccount(mode, { onDone: () => { if (!profile().name) { profile().name = account.currentUser()?.username || "Goober Fan"; store.saveProfile(); } renderFriends(); } });
+    $("[data-friends-login]", app).onclick = () => open("login");
+    $("[data-friends-signup]", app).onclick = () => open("signup");
+    return;
+  }
+  app.innerHTML = `<div class="screen">${topbar("Friends")}
+    <form class="online-card friend-add" data-friend-add>
+      <b>Add a friend</b>
+      <div class="row"><input name="username" maxlength="20" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Their username" required><button class="btn blue" type="submit">Send</button></div>
+      <small class="muted">Your username is <b>${esc(account.currentUser().username)}</b>. Tell your friends!</small>
+    </form>
+    <div data-friends-body><div class="online-card"><div class="spinner" style="margin:auto"></div></div></div>
+  </div>`;
+  const form = $("[data-friend-add]", app);
+  form.addEventListener("submit", async e => {
+    e.preventDefault();
+    const button = form.querySelector("button");
+    button.disabled = true;
+    const res = await friendsApi.request(form.username.value.trim());
+    button.disabled = false;
+    if (!res.ok) { toast(res.error, "bad"); sfx.error(); return; }
+    toast(res.friends ? `You and ${res.name || "them"} are friends now!` : `Friend request sent to ${res.name}!`, "good");
+    form.reset();
+    loadFriends();
+  });
+  $("[data-friends-body]", app).addEventListener("click", onFriendsClick);
+  loadFriends();
+  friendsTimer = setInterval(() => { if ($("[data-friends-body]", app)) loadFriends(); else clearInterval(friendsTimer); }, 10000);
+}
+
+let friendsData = null;
+
+async function loadFriends() {
+  const res = await friendsApi.list();
+  const body = $("[data-friends-body]", app);
+  if (!body) return;
+  if (!res.ok) { body.innerHTML = `<div class="online-card"><p class="muted">${esc(res.error)}</p></div>`; return; }
+  friendsData = res;
+  friendBadge.requests = res.incoming.length;
+  const onlineCount = res.friends.filter(f => f.online).length;
+  const row = (f, actions, sub) => `<div class="friend-row" data-friend="${esc(f.id)}"><span class="dot ${f.online ? "on" : ""}"></span><div><b>${esc(f.name)}</b><small>${sub}</small></div><div class="friend-actions">${actions}</div></div>`;
+  body.innerHTML = `
+    ${res.incoming.length ? `<div class="online-card"><b>📨 Friend requests</b>${res.incoming.map(f => row({ ...f, online: false }, `<button class="btn small primary" data-accept>Accept</button><button class="btn small" data-decline>✕</button>`, "wants to be friends")).join("")}</div>` : ""}
+    <div class="online-card">
+      <b>👥 Friends <span class="muted">${res.friends.length ? `${onlineCount} online` : ""}</span></b>
+      ${res.friends.length ? res.friends.map(f => row(f, [
+        f.online && !["playing", "watching"].includes(f.status) ? `<button class="btn small pink" data-invite>⚔️ Invite</button>` : "",
+        f.roomCode && ["playing", "watching"].includes(f.status) ? `<button class="btn small blue" data-watch-friend="${esc(f.roomCode)}">👀 Watch</button>` : "",
+        `<button class="btn small ghost" data-remove aria-label="Remove friend">⋯</button>`
+      ].join(""), STATUS_LABEL[f.status] || "Offline")).join("") : `<p class="muted">No friends yet. Add someone by their username above.</p>`}
+    </div>
+    ${res.outgoing.length ? `<div class="online-card"><b>⏳ Sent requests</b>${res.outgoing.map(f => row({ ...f, online: false }, `<button class="btn small" data-cancel-request>Cancel</button>`, "waiting for them to accept")).join("")}</div>` : ""}`;
+}
+
+async function onFriendsClick(e) {
+  const rowEl = e.target.closest("[data-friend]");
+  if (!rowEl || !friendsData) return;
+  const id = rowEl.dataset.friend;
+  const friend = [...friendsData.friends, ...friendsData.incoming, ...friendsData.outgoing].find(f => f.id === id);
+  const button = e.target.closest("button");
+  if (!button || !friend) return;
+  const act = async (fn, ok) => {
+    button.disabled = true;
+    const res = await fn(id);
+    if (!res.ok) { toast(res.error, "bad"); sfx.error(); button.disabled = false; return; }
+    if (ok) toast(ok, "good");
+    loadFriends();
+  };
+  if (button.hasAttribute("data-accept")) return act(friendsApi.accept, `You and ${friend.name} are friends now!`);
+  if (button.hasAttribute("data-decline")) return act(friendsApi.decline);
+  if (button.hasAttribute("data-cancel-request")) return act(friendsApi.cancel);
+  if (button.hasAttribute("data-remove")) {
+    if (await confirmDialog(`Remove ${friend.name}?`, "You'll stop seeing each other in your friends lists.", { yes: "Remove", danger: true })) act(friendsApi.remove);
+    return;
+  }
+  if (button.dataset.watchFriend) { history.replaceState(null, "", `#watch/${button.dataset.watchFriend}`); renderOnline("", button.dataset.watchFriend); return; }
+  if (button.hasAttribute("data-invite")) inviteFriend(friend, button);
+}
+
+// Make a private room, sit in it, and ping the friend: they get a Join pop-up.
+async function inviteFriend(friend, button) {
+  if (button) button.disabled = true;
+  let roomCode;
+  try { ({ roomCode } = await createRoom()); }
+  catch (error) { toast(error.message, "bad"); if (button) button.disabled = false; return; }
+  clearInterval(friendsTimer);
+  history.replaceState(null, "", "#online");
+  renderOnline();
+  joinOnline(roomCode, { challenge: true });
+  const res = await friendsApi.invite(friend.id, roomCode);
+  if (res.ok) toast(`⚔️ Invite sent to ${friend.name}!`, "good");
+  else toast(res.offline ? `${friend.name} just went offline. Send them the link instead.` : res.error, "bad");
+}
+
 // ------------------------------------------------------------------ draw a goober
 // Upload right here (not on the main site), so it works inside the installed app too,
 // which keeps its own login separate from the browser's.
@@ -335,6 +489,7 @@ function showAccount(mode = "login", { onDone, onCancel } = {}) {
       if (!(await confirmDialog("Log out?", "Your progress is saved to your account. This device will go back to a fresh guest.", { yes: "Log out" }))) return;
       m.close();
       await account.logout();
+      syncPresence();
       toast("Logged out. See you soon.", "good");
       location.hash = "#home";
       route();
@@ -370,6 +525,7 @@ function showAccount(mode = "login", { onDone, onCancel } = {}) {
       m.close();
       sfx.coins();
       toast(signingUp ? `Account made. Welcome, ${u.username}! ☁️` : `Welcome back, ${u.username}!`, "good");
+      syncPresence();
       if (onDone) onDone(); else route();
     } catch (error) {
       err.hidden = false;
@@ -521,6 +677,7 @@ function startSolo(level) {
   const oppDeck = aiDeck(level).map(id => ({ id, shiny: level === "biggoober" && Math.random() < 0.15 }));
   const state = createGame({ decks: [entries, oppDeck], names: [profile().name || "You", AI_LEVELS[level].name], seed: (Math.random() * 2 ** 32) >>> 0 });
   history.pushState(null, "", "#battle");
+  setPresence("solo");
   // Logged-in players get a server ticket so the win can be paid out.
   const ticket = account.econ.startSolo(level);
   match = new SoloMatch({
@@ -611,6 +768,7 @@ function renderOnline(code, watchCode = "") {
     </div>
     <div class="online-card">
       <button class="btn big pink" data-create>⚔️ Challenge a Friend</button>
+      ${account.currentUser() ? `<a class="btn" href="#friends">👥 Invite from your Friends list</a>` : ""}
       <div class="muted" style="text-align:center;font-weight:800">Makes a private room and sends them a link. Or type a code to join or watch:</div>
       <div class="row"><input data-code maxlength="8" placeholder="CODE" value="${esc(code || "")}" autocomplete="off" autocapitalize="characters" style="flex:1;min-width:140px"><button class="btn blue" data-join>Join</button><button class="btn" data-watch-code>👀 Watch</button></div>
     </div>
@@ -685,6 +843,7 @@ function rankCardHTML() {
 
 function startSearching() {
   stopSearching();
+  setPresence("searching");
   if (online) { online.close(); online = null; }
   const box = $("[data-quick]", app);
   const started = Date.now();
@@ -785,6 +944,7 @@ async function renderChallenge(code) {
 
 function joinOnline(code, { watch = false, challenge = false } = {}) {
   if (online) online.close();
+  setPresence(watch ? "watching" : "playing", code);
   const { entries } = store.playableDeck(catalog);
   history.replaceState(null, "", `#${watch ? "watch" : "online"}/${code}`);
   const lobby = $("[data-lobby]", app);
@@ -1254,7 +1414,8 @@ function boot() {
   });
   route();
   refreshCatalog();
-  account.resume().then(user => { if (user && !match && !online) route(); });
+  account.resume().then(user => {
+    syncPresence(); if (user && !match && !online) route(); });
   // An installed app can sit in the background for days without reloading: when it comes
   // back, pull the latest save and cards (new uploads, creator prices, coins from elsewhere).
   let hiddenAt = 0;

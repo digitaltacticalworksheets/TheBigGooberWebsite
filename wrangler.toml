@@ -24,6 +24,10 @@ class_name = "CardBattleRoom"
 name = "MATCHMAKER"
 class_name = "Matchmaker"
 
+[[durable_objects.bindings]]
+name = "PRESENCE"
+class_name = "Presence"
+
 [[migrations]]
 tag = "v1-card-battle-rooms"
 new_sqlite_classes = ["CardBattleRoom"]
@@ -31,6 +35,10 @@ new_sqlite_classes = ["CardBattleRoom"]
 [[migrations]]
 tag = "v2-matchmaker"
 new_sqlite_classes = ["Matchmaker"]
+
+[[migrations]]
+tag = "v3-presence"
+new_sqlite_classes = ["Presence"]
 
 # Workers AI powers the upload auto-moderator.
 [ai]
