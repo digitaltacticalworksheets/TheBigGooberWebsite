@@ -17,6 +17,8 @@ export function currentUser() {
   try { return JSON.parse(read(USER_KEY) || "null"); } catch { return null; }
 }
 function token() { return read(TOKEN_KEY); }
+export function sessionToken() { return token() || ""; }
+const loggedIn = () => Boolean(token());
 function version() { return Number(read(VERSION_KEY)) || 0; }
 
 async function api(path, { method = "GET", body, keepalive = false } = {}) {
@@ -113,7 +115,12 @@ async function pushNow({ keepalive = false } = {}) {
   listeners.status("saving");
   try {
     const res = await api("/api/profile", { method: "PUT", body: { data: store.loadProfile(), version: version() }, keepalive });
-    if (res.ok) { write(VERSION_KEY, String(res.data.version)); listeners.status("saved"); }
+    if (res.ok) {
+      write(VERSION_KEY, String(res.data.version));
+      // The server owns coins/cards/packs; keep its numbers, keep our edits.
+      if (res.data.profile) store.adoptServerProfile(res.data.profile);
+      listeners.status("saved");
+    }
     else if (res.status === 409 && res.data.data) {
       // Another device saved newer progress: use that.
       store.replaceProfile(res.data.data);
@@ -141,6 +148,56 @@ export async function flush() {
   timer = null;
   await pushNow({ keepalive: true });
 }
+
+// --- Economy: the server decides for logged-in players; guests run locally. ---------
+async function serverEcon(action, body = {}) {
+  let res;
+  try {
+    res = await api(`/api/econ/${action}`, { method: "POST", body });
+  } catch {
+    return { ok: false, error: "Can't reach the server. Check your connection." };
+  }
+  if (res.status === 401) { expire(); return { ok: false, error: "Please log in again." }; }
+  if (res.data.profile) {
+    store.adoptServerProfile(res.data.profile);
+    write(VERSION_KEY, String(res.data.version));
+  }
+  if (!res.ok) return { ok: false, error: res.data.error || "That didn't work." };
+  return { ok: true, ...(res.data.result || {}) };
+}
+
+export const econ = {
+  async claimDaily() {
+    if (!loggedIn()) return store.claimDaily();
+    const r = await serverEcon("daily");
+    return r.ok ? { packs: 1 } : null;
+  },
+  async buyPack(type) { return loggedIn() ? serverEcon("buy", { type }) : store.buyPack(type); },
+  async openPack(type, catalog) { return loggedIn() ? serverEcon("open", { type }) : store.openPack(type, catalog); },
+  async craftCard(id, catalog) { return loggedIn() ? serverEcon("craft", { id }) : store.craftCard(id, catalog); },
+  async recycleExtras(catalog) { return loggedIn() ? serverEcon("recycle") : store.recycleExtras(catalog); },
+  // Solo matches get a server ticket so rewards are only paid for real games.
+  async startSolo(level) {
+    if (!loggedIn()) return null;
+    const r = await serverEcon("solo-start", { level });
+    return r.ok ? r.ticket : null;
+  },
+  async finishSolo({ ticket, won, draw, reward }) {
+    if (!loggedIn()) return store.recordResult({ won, reward });
+    if (!ticket) return { ok: false, coins: 0 };
+    const r = await serverEcon("solo-finish", { ticket, won, draw });
+    return r.ok ? r : { ...r, coins: 0 };
+  },
+  // Online rewards are paid by the game server; pull the updated profile.
+  async refresh() {
+    if (!loggedIn()) return;
+    try {
+      const res = await api("/api/profile");
+      if (res.ok && res.data.data) { store.adoptServerProfile(res.data.data); write(VERSION_KEY, String(res.data.version)); }
+    } catch { /* offline */ }
+  },
+  isServer: () => loggedIn()
+};
 
 // Every local save gets synced (debounced) while logged in.
 store.setSaveHook(() => { if (token()) schedule(); });

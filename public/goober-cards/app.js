@@ -134,9 +134,9 @@ function askName(then) {
       <button class="btn ghost" data-guest>Play as guest</button>
     </div>
     <p class="muted" style="font-size:.9rem">No email needed. An account keeps your cards safe and lets you play on any device.</p>`, { dismissable: false });
-  const done = () => {
+  const done = async () => {
     if (then) { then(); return; }
-    store.claimDaily();
+    await account.econ.claimDaily();
     toast("4 free packs just dropped. 🎁", "good");
     renderHome();
     if (!profile().tutorialSeen) showRules();
@@ -223,9 +223,9 @@ function showAccount(mode = "login", { onDone, onCancel } = {}) {
   });
 }
 
-function maybeDaily() {
-  const gift = store.claimDaily();
-  if (!gift) return;
+async function maybeDaily() {
+  const gift = await account.econ.claimDaily();
+  if (!gift || !location.hash.match(/^(#home)?$/)) return;
   sfx.coins();
   modal(`<div style="text-align:center"><div style="font-size:4rem">🎁</div><h2>Daily Drop</h2><p>Free Goober Pack. Come back tomorrow for another one. Don't break the streak.</p><div class="actions" style="justify-content:center"><button class="btn" data-close>Later</button><a class="btn primary" href="#packs" data-close>Rip it</a></div></div>`, { onClose: () => renderHome() });
 }
@@ -362,15 +362,17 @@ function startSolo(level) {
   const oppDeck = aiDeck(level).map(id => ({ id, shiny: level === "biggoober" && Math.random() < 0.15 }));
   const state = createGame({ decks: [entries, oppDeck], names: [profile().name || "You", AI_LEVELS[level].name], seed: (Math.random() * 2 ** 32) >>> 0 });
   history.pushState(null, "", "#battle");
+  // Logged-in players get a server ticket so the win can be paid out.
+  const ticket = account.econ.startSolo(level);
   match = new SoloMatch({
     catalog, state, level,
     heroArt: [heroArt(profile().hero), AI_ART[level]],
     showRules, toggleSound, soundOn: () => profile().settings.sound,
     onExit: () => exitMatch(),
-    onEnd: ({ won, draw }) => {
+    onEnd: async ({ won, draw }) => {
       const reward = won ? AI_LEVELS[level].reward : draw ? 20 : 15;
-      const result = store.recordResult({ won, reward });
-      showResult({ won, draw, coins: result.coins, firstWin: result.firstWin, again: () => { exitMatch(false); startSolo(level); }, deckName: deck.name });
+      const result = await account.econ.finishSolo({ ticket: await ticket, won, draw, reward });
+      showResult({ won, draw, coins: result.coins, firstWin: result.firstWin, capped: result.capped, again: () => { exitMatch(false); startSolo(level); }, deckName: deck.name });
     }
   });
 }
@@ -410,7 +412,7 @@ function confetti(count = 90) {
   }
 }
 
-function showResult({ won, draw, coins, firstWin, again, onlineRoom }) {
+function showResult({ won, draw, coins, firstWin, capped, again, onlineRoom }) {
   if (won) { sfx.win(); buzz([60, 40, 60]); confetti(); } else sfx.lose();
   const title = draw ? "Draw??" : won ? "W" : "L";
   const m = modal(`<div class="result ${won ? "win" : "lose"}">
@@ -418,6 +420,7 @@ function showResult({ won, draw, coins, firstWin, again, onlineRoom }) {
       <div class="portrait" style="background-image:url('${esc(heroArt(profile().hero))}')"></div>
       ${coins ? `<div class="reward">🪙 +${coins}</div>` : ""}
       ${firstWin ? `<p><b>First win of the day bonus included!</b></p>` : ""}
+      ${capped ? `<p class="muted">You hit today's coin limit for this mode. More tomorrow!</p>` : ""}
       <p>${won ? pick(["+1000 aura.", "Absolutely cooked them.", "Built different.", "They're gonna need a minute."]) : draw ? "Nobody wins. Awkward." : pick(["Skill issue.", "-500 aura.", "You got cooked.", "It's giving… defeat."])}</p>
       <div class="actions" style="justify-content:center">
         <button class="btn" data-home>Home</button>
@@ -467,7 +470,7 @@ function joinOnline(code) {
   const lobby = $("[data-lobby]", app);
   const link = `${location.origin}/goober-cards/#online/${code}`;
   online = new OnlineMatch({
-    code, name: profile().name || "Goober Fan", heroId: profile().hero || "original-goober", deck: entries, catalog,
+    code, name: profile().name || "Goober Fan", auth: account.sessionToken(), heroId: profile().hero || "original-goober", deck: entries, catalog,
     heroArtFor: heroArt, showRules, toggleSound, soundOn: () => profile().settings.sound,
     onExit: () => exitMatch(),
     onLobby: (room, seat, status) => {
@@ -494,10 +497,18 @@ function joinOnline(code) {
       };
       $("[data-copy]", lobby).onclick = () => copyText(link);
     },
-    onEnd: ({ won, draw }) => {
-      const result = store.recordResult({ won, reward: won ? 100 : draw ? 30 : 30 });
+    onEnd: async ({ won, draw }) => {
+      // Logged in: the game server pays out. Guests: record it on this device.
+      let result;
+      if (account.econ.isServer()) {
+        for (let i = 0; i < 10 && !online?.lastReward; i++) await sleep(200);
+        result = online?.lastReward || { coins: 0 };
+        await account.econ.refresh();
+      } else {
+        result = store.recordResult({ won, reward: won ? 100 : 30 });
+      }
       showResult({
-        won, draw, coins: result.coins, firstWin: result.firstWin, onlineRoom: true,
+        won, draw, coins: result.coins, firstWin: result.firstWin, capped: result.capped, onlineRoom: true,
         again: () => { const { entries: fresh } = store.playableDeck(catalog); online?.rematch(fresh); renderRematchWait(code); }
       });
     }
@@ -543,8 +554,10 @@ function renderPacks() {
     <div class="pity">🌟 Legendary guaranteed within <b>${store.PITY_LIMIT - p.pity}</b> pack${store.PITY_LIMIT - p.pity === 1 ? "" : "s"}<div class="bar"><i style="width:${(p.pity / store.PITY_LIMIT) * 100}%"></i></div></div>
     <p class="muted">Earn coins by winning battles (+50 bonus for your first win each day). Extra copies you can't use can be recycled for coins in your Collection.</p>
   </div>`;
-  $$("[data-buy]", app).forEach(b => b.onclick = () => {
-    const res = store.buyPack(b.dataset.buy);
+  $$("[data-buy]", app).forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    const res = await account.econ.buyPack(b.dataset.buy);
+    b.disabled = false;
     if (!res.ok) { toast(res.error, "bad"); sfx.error(); return; }
     sfx.coins();
     renderPacks();
@@ -565,11 +578,11 @@ function openPackFlow(type) {
   art.onclick = async () => {
     if (opened) return;
     opened = true;
-    const res = store.openPack(type, catalog);
-    if (!res.ok) { toast(res.error, "bad"); close(); return; }
     sfx.packShake(); buzz(20);
     art.classList.add("shake");
-    await sleep(500);
+    // The server rolls the cards for logged-in players; the shake covers the wait.
+    const [res] = await Promise.all([account.econ.openPack(type, catalog), sleep(500)]);
+    if (!res.ok) { toast(res.error, "bad"); sfx.error(); close(); return; }
     sfx.packOpen(); buzz(50);
     art.classList.remove("shake");
     art.classList.add("burst");
@@ -686,7 +699,8 @@ function renderCollection() {
   const recycle = $("[data-recycle]", app);
   if (recycle) recycle.onclick = async () => {
     if (!(await confirmDialog("Recycle extras?", "Copies beyond what a deck can use (2, or 1 for Legendaries) turn into coins. Shinies are kept when possible.", { yes: "Recycle" }))) return;
-    const res = store.recycleExtras(catalog);
+    const res = await account.econ.recycleExtras(catalog);
+    if (!res.ok) { toast(res.error, "bad"); sfx.error(); return; }
     sfx.coins();
     toast(`Recycled ${res.count} cards for ${res.coins} coins!`, "good");
     renderCollection();
@@ -715,8 +729,10 @@ function showCardDetail(id, refresh) {
     </div>
     <button class="btn primary" data-close>Close</button></div>`, { bare: true, onClose: refresh });
   const craft = $("[data-craft]", m.el);
-  if (craft) craft.onclick = () => {
-    const res = store.craftCard(id, catalog);
+  if (craft) craft.onclick = async () => {
+    craft.disabled = true;
+    const res = await account.econ.craftCard(id, catalog);
+    craft.disabled = false;
     if (!res.ok) { toast(res.error, "bad"); sfx.error(); return; }
     sfx.flip(card.rarity);
     toast(`Crafted ${card.name}!`, "good");

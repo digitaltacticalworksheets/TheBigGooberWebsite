@@ -1,62 +1,19 @@
-// Player profile: coins, card collection, packs, and decks. Stored on this device.
-import { MAX_COPIES, DECK_SIZE, RARITIES, autoDeck, validateDeck } from "./cards.js";
+// Player profile: coins, card collection, packs, and decks, cached on this device.
+// Guests' economy runs here; logged-in players' economy runs on the server
+// (see account.js), which sends back the updated profile.
+import { MAX_COPIES, DECK_SIZE, autoDeck, validateDeck } from "./cards.js";
+import * as econ from "./economy.js";
 
 const STORAGE_KEY = "gooberCardsProfile.v2";
 
-export const PACKS = {
-  goober: { id: "goober", name: "Goober Pack", price: 100, size: 5, blurb: "5 cards from the whole set. At least one Rare or better.", color: "#ffd34d", shinyChance: 0.06, onlyGoobers: false },
-  gallery: { id: "gallery", name: "Gallery Pack", price: 150, size: 5, blurb: "Only uploaded Goobers. Better odds for shinies and Epics.", color: "#ff8bd1", shinyChance: 0.12, onlyGoobers: true, epicBoost: true }
-};
-
-export const RECYCLE_VALUE = { common: 5, rare: 20, epic: 60, legendary: 200 };
-export const CRAFT_COST = { common: 40, rare: 100, epic: 300, legendary: 800 };
-export const PITY_LIMIT = 10;
+export const { PACKS, RECYCLE_VALUE, CRAFT_COST, PITY_LIMIT } = econ;
 export const MAX_DECKS = 6;
 
-const STARTER = [
-  ["treat-bonk", 2], ["treat-belly-rub", 2], ["treat-snack-time", 2], ["treat-zoomies", 2],
-  ["treat-cozy-blanket", 2], ["treat-squeaky-toy", 2], ["cool-goober", 2], ["party-goober", 2], ["cowboy-goober", 1]
-];
-
-function today() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function freshProfile() {
-  const cards = {};
-  for (const [id, n] of STARTER) cards[id] = { n, s: 0 };
-  return {
-    v: 2,
-    name: "",
-    coins: 150,
-    packs: { goober: 3, gallery: 0 },
-    cards,
-    newCards: {},
-    decks: [],
-    activeDeck: null,
-    pity: 0,
-    stats: { wins: 0, losses: 0, packsOpened: 0, shinies: 0, streak: 0 },
-    lastDaily: "",
-    lastWinDay: "",
-    settings: { sound: true, haptics: true },
-    tutorialSeen: false,
-    created: Date.now()
-  };
-}
+const today = () => econ.localDay();
+const freshProfile = econ.freshProfile;
+const normalize = econ.normalizeProfile;
 
 let profile = null;
-
-function normalize(data) {
-  const p = { ...freshProfile(), ...(data || {}) };
-  p.settings = { sound: true, haptics: true, ...(p.settings || {}) };
-  p.stats = { ...freshProfile().stats, ...(p.stats || {}) };
-  p.packs = { goober: 0, gallery: 0, ...(p.packs || {}) };
-  p.cards = p.cards && typeof p.cards === "object" ? p.cards : {};
-  p.decks = Array.isArray(p.decks) ? p.decks : [];
-  p.newCards = p.newCards && typeof p.newCards === "object" ? p.newCards : {};
-  return p;
-}
 
 export function loadProfile() {
   if (profile) return profile;
@@ -84,6 +41,11 @@ export function replaceProfile(data) {
   return profile;
 }
 
+// Take the server's economy (coins, cards, packs...) but keep this device's own edits.
+export function adoptServerProfile(server) {
+  return replaceProfile(econ.mergeClientEdits(server, loadProfile(), { username: server?.name }));
+}
+
 // Wipe this device's copy (on log out) so the next person starts fresh.
 export function resetProfile() {
   try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
@@ -105,126 +67,40 @@ export function ownedCounts() {
   return out;
 }
 
-export function addCard(id, shiny = false) {
-  const p = loadProfile();
-  const entry = p.cards[id] || { n: 0, s: 0 };
-  if (!entry.n) p.newCards[id] = true;
-  entry.n += 1;
-  if (shiny) { entry.s += 1; p.stats.shinies += 1; }
-  p.cards[id] = entry;
-}
-
 export function markSeen(id) { const p = loadProfile(); if (p.newCards[id]) { delete p.newCards[id]; saveProfile(); } }
 
-// Daily gift: one free Goober Pack per calendar day.
+// --- Guest economy (logged-in players use the server; see account.js) -----------
 export function claimDaily() {
-  const p = loadProfile();
-  if (p.lastDaily === today()) return null;
-  p.lastDaily = today();
-  p.packs.goober += 1;
+  const res = econ.claimDaily(loadProfile(), today());
+  if (!res.ok) return null;
   saveProfile();
   return { packs: 1 };
 }
 
 export function buyPack(type) {
-  const p = loadProfile(), def = PACKS[type];
-  if (!def) return { ok: false, error: "Unknown pack." };
-  if (p.coins < def.price) return { ok: false, error: `You need ${def.price - p.coins} more coins.` };
-  p.coins -= def.price;
-  p.packs[type] = (p.packs[type] || 0) + 1;
-  saveProfile();
-  return { ok: true };
+  const res = econ.buyPack(loadProfile(), type);
+  if (res.ok) saveProfile();
+  return res;
 }
 
-function rollRarity(guaranteeRare, def, forceLegendary) {
-  if (forceLegendary) return "legendary";
-  const r = Math.random() * 100;
-  const epicOdds = def.epicBoost ? 12 : 7;
-  if (r < 2.5) return "legendary";
-  if (r < 2.5 + epicOdds) return "epic";
-  if (r < 30 || guaranteeRare) return "rare";
-  return "common";
-}
-
-// Open one pack. Returns [{id, shiny, isNew, rarity}] or an error.
 export function openPack(type, catalog) {
-  const p = loadProfile(), def = PACKS[type];
-  if (!def || !(p.packs[type] > 0)) return { ok: false, error: "No packs of that kind to open." };
-  const pool = {};
-  for (const r of RARITIES) pool[r] = [];
-  for (const card of Object.values(catalog)) {
-    if (card.token) continue;
-    if (def.onlyGoobers && card.type !== "minion") continue;
-    pool[card.rarity].push(card.id);
-  }
-  const total = RARITIES.reduce((n, r) => n + pool[r].length, 0);
-  if (!total) return { ok: false, error: "No cards available for this pack yet." };
-
-  p.packs[type] -= 1;
-  const results = [];
-  let gotRarePlus = false, gotLegendary = false;
-  const forceLegendary = p.pity + 1 >= PITY_LIMIT;
-  for (let slot = 0; slot < def.size; slot++) {
-    const last = slot === def.size - 1;
-    let rarity = rollRarity(last && !gotRarePlus, def, last && forceLegendary && !gotLegendary);
-    // Fall back to the nearest rarity that actually has cards.
-    let idx = RARITIES.indexOf(rarity);
-    while (idx >= 0 && !pool[RARITIES[idx]].length) idx--;
-    if (idx < 0) { idx = RARITIES.findIndex(r => pool[r].length); }
-    rarity = RARITIES[idx];
-    const list = pool[rarity];
-    const id = list[Math.floor(Math.random() * list.length)];
-    const shiny = Math.random() < def.shinyChance + (rarity === "legendary" ? 0.1 : 0);
-    const isNew = !owned(id) && !results.some(r => r.id === id);
-    addCard(id, shiny);
-    if (rarity !== "common") gotRarePlus = true;
-    if (rarity === "legendary") gotLegendary = true;
-    results.push({ id, shiny, isNew, rarity });
-  }
-  p.pity = gotLegendary ? 0 : p.pity + 1;
-  p.stats.packsOpened += 1;
-  saveProfile();
-  return { ok: true, cards: results };
+  const res = econ.openPack(loadProfile(), type, catalog);
+  if (res.ok) saveProfile();
+  return res;
 }
 
-export function extrasOf(id, catalog) {
-  const card = catalog[id];
-  if (!card) return 0;
-  return Math.max(0, owned(id) - MAX_COPIES[card.rarity]);
-}
+export function extrasOf(id, catalog) { return econ.extrasOf(loadProfile(), id, catalog); }
 
 export function recycleExtras(catalog) {
-  const p = loadProfile();
-  let coins = 0, count = 0;
-  for (const [id, entry] of Object.entries(p.cards)) {
-    const card = catalog[id];
-    if (!card) continue;
-    const extra = Math.max(0, entry.n - MAX_COPIES[card.rarity]);
-    if (!extra) continue;
-    // Keep shinies when possible: recycle plain copies first.
-    const plainOut = Math.min(extra, entry.n - entry.s);
-    const shinyOut = extra - plainOut;
-    coins += plainOut * RECYCLE_VALUE[card.rarity] + shinyOut * RECYCLE_VALUE[card.rarity] * 2;
-    entry.n -= extra;
-    entry.s -= shinyOut;
-    count += extra;
-  }
-  p.coins += coins;
+  const res = econ.recycleExtras(loadProfile(), catalog);
   saveProfile();
-  return { coins, count };
+  return res;
 }
 
 export function craftCard(id, catalog) {
-  const p = loadProfile(), card = catalog[id];
-  if (!card || card.token) return { ok: false, error: "That card can't be crafted." };
-  if (owned(id) >= MAX_COPIES[card.rarity]) return { ok: false, error: "You already have the max playable copies." };
-  const cost = CRAFT_COST[card.rarity];
-  if (p.coins < cost) return { ok: false, error: `You need ${cost - p.coins} more coins.` };
-  p.coins -= cost;
-  addCard(id, false);
-  delete p.newCards[id];
-  saveProfile();
-  return { ok: true };
+  const res = econ.craftCard(loadProfile(), id, catalog);
+  if (res.ok) saveProfile();
+  return res;
 }
 
 // --- Decks -------------------------------------------------------------------
@@ -310,18 +186,7 @@ export function playableDeck(catalog) {
 }
 
 export function recordResult({ won, reward }) {
-  const p = loadProfile();
-  let coins = reward;
-  let firstWin = false;
-  if (won) {
-    p.stats.wins += 1;
-    p.stats.streak += 1;
-    if (p.lastWinDay !== today()) { p.lastWinDay = today(); coins += 50; firstWin = true; }
-  } else {
-    p.stats.losses += 1;
-    p.stats.streak = 0;
-  }
-  p.coins += coins;
+  const res = econ.recordResult(loadProfile(), { won, reward, day: today() });
   saveProfile();
-  return { coins, firstWin };
+  return res;
 }
