@@ -520,6 +520,7 @@ body.in-battle { overflow: hidden; position: fixed; inset: 0; }
 .minion.fluffy .body::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0.6em 0.3em rgba(255, 236, 150, 0.95); background: rgba(255, 245, 200, 0.18); }
 .minion.fluffy { filter: drop-shadow(0 0 0.35em rgba(255, 225, 100, 0.95)); }
 .minion.sneaky .body { opacity: 0.55; border-style: dashed; }
+.minion.silenced .body { filter: grayscale(0.85) brightness(0.9); }
 .minion.frozen .body::before { content: "💤"; position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; font-size: 1.8em; background: rgba(130, 190, 255, 0.45); }
 .minion.can-attack { filter: drop-shadow(0 0 0.35em #6dff8c) drop-shadow(0 0 0.2em #6dff8c); }
 .minion.selected { transform: translateY(-8%) scale(1.08); filter: drop-shadow(0 0 0.5em #fff) drop-shadow(0 0 0.3em var(--yellow)); }

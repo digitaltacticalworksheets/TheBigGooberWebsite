@@ -1,5 +1,5 @@
 // Shared UI helpers: card rendering, toasts, modals.
-import { KEYWORDS, CATEGORY_STYLE, RARITY_LABEL, TRIGGER_LABEL } from "./cards.js";
+import { KEYWORDS, STATUS, CATEGORY_STYLE, RARITY_LABEL, TRIGGER_LABEL } from "./cards.js";
 
 export const $ = (sel, root = document) => root.querySelector(sel);
 export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -90,7 +90,12 @@ export function confirmDialog(title, body, { yes = "Yes", no = "Cancel", danger 
 }
 
 export function keywordGlossary(keywords = [], card = null) {
-  const lines = keywords.filter(k => KEYWORDS[k]).map(k => `<p class="kw-line"><b>${KEYWORDS[k].icon} ${KEYWORDS[k].label}</b><span>${KEYWORDS[k].text}</span></p>`);
+  const line = k => `<p class="kw-line"><b>${k.icon} ${k.label}</b><span>${k.text}</span></p>`;
+  const effect = card?.effect || card?.ability;
+  const granted = effect?.keyword && !keywords.includes(effect.keyword) ? [effect.keyword] : [];
+  const lines = [...keywords, ...granted].filter(k => KEYWORDS[k]).map(k => line(KEYWORDS[k]));
+  if (effect?.type === "freeze" || effect?.freeze) lines.push(line(STATUS.muted));
+  if (effect?.type === "silence") lines.push(line(STATUS.shadowbanned));
   const trig = card?.ability?.trigger;
   if (trig === "battlecry") lines.push(`<p class="kw-line"><b>📣 Entrance</b><span>Happens when you play this card from your hand.</span></p>`);
   if (trig === "lastBark") lines.push(`<p class="kw-line"><b>☠️ Last Words</b><span>Happens when this Goober gets knocked out.</span></p>`);

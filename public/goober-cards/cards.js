@@ -14,7 +14,14 @@ export const KEYWORDS = {
   lifesnack: { label: "Leech", icon: "🧛", text: "Damage it deals heals your hero." },
   doubleWag: { label: "Double Tap", icon: "✌️", text: "Can attack twice each turn." },
   bitey: { label: "One-Shot", icon: "💀", text: "Destroys any minion it damages." },
-  sneaky: { label: "Ghosting", icon: "👻", text: "Can't be targeted until it attacks." }
+  sneaky: { label: "Ghosting", icon: "👻", text: "Can't be targeted until it attacks." },
+  leftOnRead: { label: "Left on Read", icon: "📵", text: "Minions it damages get Muted." }
+};
+
+// Status text for effects that aren't keywords, shared by the rules and card inspect.
+export const STATUS = {
+  muted: { label: "Muted", icon: "🔇", text: "Can't attack next turn." },
+  shadowbanned: { label: "Shadowbanned", icon: "🤐", text: "Lost all its keywords and abilities. Stats stay." }
 };
 
 export const TRIGGER_LABEL = { battlecry: "Entrance:", lastBark: "Last Words:", endTurn: "End of turn:" };
@@ -58,9 +65,12 @@ export const TREATS = [
   { id: "treat-cozy-blanket", name: "Built Different", cost: 2, rarity: "common", art: { emoji: "💪" }, effect: { type: "buff", attack: 1, health: 2, target: "friendlyMinion", keyword: "guard" }, flavor: "Not like the other Goobers." },
   { id: "treat-squeaky-toy", name: "Call the Squad", cost: 2, rarity: "common", art: { emoji: "📞" }, effect: { type: "summon", token: "token-pup", count: 2 }, flavor: "Pull up. All of you." },
   { id: "treat-nap-time", name: "Get Muted", cost: 2, rarity: "rare", art: { emoji: "🔇" }, effect: { type: "freeze", target: "enemyMinion", damage: 1 }, flavor: "Nobody asked." },
+  { id: "treat-shadowban", name: "Shadowban", cost: 1, rarity: "rare", art: { emoji: "🤐" }, effect: { type: "silence", target: "enemyMinion" }, flavor: "Your posts are now visible to no one." },
+  { id: "treat-left-on-read", name: "Left on Read", cost: 2, rarity: "common", art: { emoji: "📵" }, effect: { type: "buff", attack: 1, health: 1, target: "friendlyMinion", keyword: "leftOnRead" }, flavor: "Seen 3:14 AM." },
   { id: "treat-fetch", name: "Yeet", cost: 3, rarity: "rare", art: { emoji: "🚀" }, effect: { type: "damage", amount: 4, target: "enemyMinion", draw: 1 }, flavor: "Reduced to atoms." },
   { id: "treat-bath-time", name: "Spam the Chat", cost: 3, rarity: "rare", art: { emoji: "💬" }, effect: { type: "damage", amount: 1, target: "allEnemyMinions", freeze: true }, flavor: "@everyone" },
   { id: "treat-pizza-party", name: "Aura Farming", cost: 4, rarity: "epic", art: { emoji: "😎" }, effect: { type: "buff", attack: 1, health: 1, target: "allFriendlyMinions", heal: 4 }, flavor: "+1000 aura for the whole squad." },
+  { id: "treat-mass-report", name: "Mass Report", cost: 4, rarity: "epic", art: { emoji: "🚩" }, effect: { type: "silence", target: "allEnemyMinions", draw: 1 }, flavor: "Community guidelines have been violated. Vaguely." },
   { id: "treat-thunder", name: "Emotional Damage", cost: 5, rarity: "epic", art: { emoji: "😭" }, effect: { type: "damage", amount: 3, target: "allEnemyMinions" }, flavor: "Not physical. Worse." },
   { id: "treat-big-goober-energy", name: "Big Goober Energy", cost: 6, rarity: "legendary", art: { emoji: "👑" }, effect: { type: "buff", attack: 2, health: 2, target: "allFriendlyMinions", summon: "token-pup", summonCount: 2 }, flavor: "The loaf becomes the legend. Unironically." }
 ].map(card => ({ ...card, type: "spell", category: "treat", keywords: [], text: describeEffect(card.effect, "spell") }));
@@ -229,6 +239,7 @@ export function describeEffect(effect, source = "minion") {
     }
     case "mana": parts.push(`Gain ${effect.amount} Aura this turn only.`); break;
     case "armor": parts.push(`Gain ${effect.amount} Drip (armor).`); break;
+    case "silence": parts.push(`Shadowban ${targetWords(effect.target)}: ${effect.target === "allEnemyMinions" ? "they lose" : "it loses"} all keywords and abilities.`); break;
     case "freeze": parts.push(`Deal ${effect.damage || 0} damage to ${targetWords(effect.target)}. It gets muted and can't attack next turn.`); break;
     default: break;
   }

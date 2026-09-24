@@ -1,5 +1,5 @@
 // Goober Cards app shell: menus, collection, packs, decks, and starting matches.
-import { buildCatalog, collectibleIds, MAX_COPIES, DECK_SIZE, RARITIES, RARITY_LABEL, CATEGORIES, CATEGORY_STYLE, KEYWORDS, HERO_POWER, autoDeck, validateDeck } from "./cards.js";
+import { buildCatalog, collectibleIds, MAX_COPIES, DECK_SIZE, RARITIES, RARITY_LABEL, CATEGORIES, CATEGORY_STYLE, KEYWORDS, STATUS, HERO_POWER, autoDeck, validateDeck } from "./cards.js";
 import { createGame, STARTING_HP, BOARD_LIMIT } from "./engine.js";
 import { AI_LEVELS } from "./ai.js";
 import { SoloMatch } from "./battle.js";
@@ -300,7 +300,7 @@ export function showRules() {
     <ul><li>Once per turn, spend ${HERO_POWER.cost} Aura. Your hero barks, then farts. Deals 1 damage to an enemy. Devastating.</li></ul>
     <h3>✨ Keywords</h3>
     <ul>${Object.values(KEYWORDS).map(k => `<li>${k.icon} <b>${k.label}:</b> ${k.text}</li>`).join("")}
-    <li>📣 <b>Entrance:</b> Happens when you play it.</li><li>☠️ <b>Last Words:</b> Happens when it gets knocked out.</li><li>🔇 <b>Muted:</b> Can't attack next turn.</li></ul>
+    <li>📣 <b>Entrance:</b> Happens when you play it.</li><li>☠️ <b>Last Words:</b> Happens when it gets knocked out.</li>${Object.values(STATUS).map(s => `<li>${s.icon} <b>${s.label}:</b> ${s.text}</li>`).join("")}</ul>
     <h3>🎁 Collecting</h3>
     <ul><li>Win games to earn coins. Rip packs. Pull rare and ✨shiny✨ Goobers.</li><li>Every Goober uploaded to the site becomes a card with its own stats and rarity.</li><li>Decks have exactly ${DECK_SIZE} cards: max 2 copies of a card (1 for Legendaries).</li><li>Press and hold any card to read it up close.</li></ul>
     <div class="actions"><button class="btn primary" data-close>Bet</button></div></div>`);

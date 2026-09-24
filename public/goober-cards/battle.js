@@ -1,7 +1,7 @@
 // Battle screen: renders a game state, handles touch input, and animates engine events.
 import { playInfo, attackTargets, canAttack, powerTargets, legalActions, applyAction, BOARD_LIMIT, MAX_MANA } from "./engine.js";
 import { chooseAiAction } from "./ai.js";
-import { HERO_POWER, KEYWORDS, CATEGORY_STYLE } from "./cards.js";
+import { HERO_POWER, KEYWORDS, STATUS, CATEGORY_STYLE } from "./cards.js";
 import { $, esc, sleep, cardHTML, cardBackHTML, artHTML, modal, confirmDialog, keywordGlossary, onLongPress, toast } from "./ui.js";
 import { sfx, buzz } from "./sound.js";
 
@@ -201,7 +201,7 @@ export class Battle {
         el.style.setProperty("--cat", (CATEGORY_STYLE[def.category] || CATEGORY_STYLE.random).color);
       }
       const kws = m.keywords || [];
-      const cls = ["minion", def.rarity, m.shiny ? "shiny" : "", ...kws.filter(k => ["guard", "fluffy", "sneaky"].includes(k)), m.frozen ? "frozen" : ""];
+      const cls = ["minion", def.rarity, m.shiny ? "shiny" : "", ...kws.filter(k => ["guard", "fluffy", "sneaky"].includes(k)), m.frozen ? "frozen" : "", m.silenced ? "silenced" : ""];
       if (mine && canAttack(this.state, this.me, m.uid) && this.canInput) cls.push("can-attack");
       if (mine && m.sick && !m.frozen && this.myTurn) cls.push("sick");
       if (this.sel?.uid === m.uid) cls.push("selected");
@@ -214,8 +214,9 @@ export class Battle {
       hp.textContent = m.health;
       hp.classList.toggle("hurt", m.health < m.maxHealth);
       hp.classList.toggle("buffed", m.health >= m.maxHealth && m.maxHealth > (def.health ?? m.maxHealth));
-      const icons = kws.filter(k => ["bitey", "lifesnack", "doubleWag"].includes(k)).map(k => KEYWORDS[k].icon);
-      if (def.ability && TRIGGER_ICON[def.ability.trigger]) icons.push(TRIGGER_ICON[def.ability.trigger]);
+      const icons = kws.filter(k => ["bitey", "lifesnack", "doubleWag", "leftOnRead"].includes(k)).map(k => KEYWORDS[k].icon);
+      if (def.ability && !m.silenced && TRIGGER_ICON[def.ability.trigger]) icons.push(TRIGGER_ICON[def.ability.trigger]);
+      if (m.silenced) icons.push(STATUS.shadowbanned.icon);
       $(".icons", el).textContent = icons.join("");
       return el;
     });
@@ -624,6 +625,7 @@ export class Battle {
           def = this.def(m.id); shiny = m.shiny;
           stats = { attack: m.attack, health: m.health };
           if (m.frozen) notes.push("🔇 Muted: can't attack this turn.");
+          if (m.silenced) notes.push(`${STATUS.shadowbanned.icon} ${STATUS.shadowbanned.label}: lost all its keywords and abilities.`);
           if (m.sick && idx === this.me) notes.push("Just got here: can attack next turn.");
           if (idx === this.me && !m.sick && !m.frozen && m.attacksLeft <= 0 && m.attack > 0) notes.push("Already attacked this turn.");
           if (m.attack <= 0) notes.push("0 Attack: it can't attack. Just here for the vibes.");
@@ -631,6 +633,7 @@ export class Battle {
           const extraKw = (m.keywords || []).filter(k => !(def?.keywords || []).includes(k));
           if (extraKw.length) notes.push(`Gained: ${extraKw.map(k => KEYWORDS[k]?.label).join(", ")}.`);
           def = def && { ...def, keywords: m.keywords };
+          if (def && m.silenced) def = { ...def, ability: null, text: `${STATUS.shadowbanned.icon} ${STATUS.shadowbanned.label}.` };
         }
       }
     }
@@ -847,6 +850,7 @@ export class Battle {
         case "buff": if (e.attack || e.health) this.floatAt(e.uid, `+${e.attack}/+${e.health}`, "buff"); break;
         case "shield": { sfx.shield(); this.floatAt(e.uid, "Plot armor!", "info"); const el = this.elFor(e.uid); if (el) el.classList.add("pop-shield"); break; }
         case "freeze": this.floatAt(e.uid, "🔇 Muted", "info"); break;
+        case "silence": { this.floatAt(e.uid, "🤐 Shadowbanned", "info"); sfx.error(); const el = this.elFor(e.uid); if (el) { el.classList.remove("shake"); void el.offsetWidth; el.classList.add("shake"); } break; }
         case "armor": this.floatAt(`h${e.player}`, `+${e.amount} Drip`, "info"); break;
         case "death": { hits = true; const el = this.elFor(e.uid); if (el) el.classList.add("dying"); this.burst(e.uid, 18, "poof"); sfx.death(); break; }
         case "fatigue": toast(`${e.player === this.me ? "You're" : "They're"} out of cards! ${e.amount} burnout damage.`, "bad"); break;

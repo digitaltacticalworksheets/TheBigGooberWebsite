@@ -180,6 +180,7 @@ function damageCharacter(state, uid, amount, source) {
     dealt = amount;
   }
   emit(state, { t: "damage", uid, amount });
+  if (found.kind === "minion" && source && source.kind === "minion" && hasKw(source.entity, "leftOnRead")) freeze(state, uid);
   if (source && source.kind === "minion" && hasKw(source.entity, "lifesnack")) {
     healCharacter(state, heroUid(source.owner), dealt);
   }
@@ -301,6 +302,7 @@ function resolveEffect(state, catalog, idx, effect, { targetUid = null, source =
       break;
     }
     case "heal": for (const uid of targetsFor(effect.target)) healCharacter(state, uid, effect.amount); break;
+    case "silence": for (const uid of targetsFor(effect.target)) silence(state, uid); break;
     case "draw": for (let i = 0; i < effect.amount; i++) drawCard(state, idx); break;
     case "buff": {
       for (const uid of targetsFor(effect.target)) {
@@ -344,6 +346,21 @@ function freeze(state, uid) {
   emit(state, { t: "freeze", uid });
 }
 
+// Shadowban: strip keywords, abilities and Muted. Stats (including buffs) stay.
+function silence(state, uid) {
+  const found = findCharacter(state, uid);
+  if (!found || found.kind !== "minion" || found.entity.health <= 0) return;
+  const m = found.entity;
+  m.keywords = [];
+  m.silenced = true;
+  m.frozen = false;
+  m.attacksLeft = Math.min(m.attacksLeft, 1);
+  emit(state, { t: "silence", uid });
+}
+
+// A minion's triggered ability, unless it has been Shadowbanned.
+const abilityOf = (catalog, m) => (m.silenced ? null : catalog[m.id]?.ability || null);
+
 // Remove dead minions, fire Last Bark effects, check for a winner.
 function cleanup(state, catalog) {
   for (let guard = 0; guard < 20; guard++) {
@@ -356,10 +373,10 @@ function cleanup(state, catalog) {
     if (!dead.length) break;
     for (const { idx, minion } of dead) {
       emit(state, { t: "death", uid: minion.uid, player: idx });
-      const def = catalog[minion.id];
-      if (def?.ability?.trigger === "lastBark") {
-        log(state, `${def.name}'s Last Words!`, idx);
-        resolveEffect(state, catalog, idx, def.ability, { source: { kind: "minion", owner: idx, entity: minion } });
+      const ability = abilityOf(catalog, minion);
+      if (ability?.trigger === "lastBark") {
+        log(state, `${catalog[minion.id].name}'s Last Words!`, idx);
+        resolveEffect(state, catalog, idx, ability, { source: { kind: "minion", owner: idx, entity: minion } });
       }
     }
   }
@@ -397,8 +414,8 @@ function endTurn(state, catalog) {
   const idx = state.active;
   const p = state.players[idx];
   for (const m of [...p.board]) {
-    const def = catalog[m.id];
-    if (def?.ability?.trigger === "endTurn" && m.health > 0) resolveEffect(state, catalog, idx, def.ability, { selfUid: m.uid, source: { kind: "minion", owner: idx, entity: m } });
+    const ability = abilityOf(catalog, m);
+    if (ability?.trigger === "endTurn" && m.health > 0) resolveEffect(state, catalog, idx, ability, { selfUid: m.uid, source: { kind: "minion", owner: idx, entity: m } });
   }
   for (const m of p.board) {
     if (m.frozen && m.frozenAt < state.turn) { m.frozen = false; emit(state, { t: "thaw", uid: m.uid }); }
