@@ -20,57 +20,6 @@
   <meta name="theme-color" content="#ffd34d" />
   <link rel="stylesheet" href="/styles.css" />
   <style>
-    nav .nav-dropdown {
-      position: relative !important;
-      display: inline-flex !important;
-      align-items: center !important;
-    }
-
-    nav .nav-dropdown-toggle {
-      color: var(--ink) !important;
-      text-decoration: none !important;
-      font-weight: 800 !important;
-      border: 3px solid var(--ink) !important;
-      border-radius: 999px !important;
-      background: white !important;
-      padding: 10px 16px !important;
-      box-shadow: 3px 3px 0 var(--ink) !important;
-      cursor: pointer !important;
-      font-family: inherit !important;
-      font-size: 0.98rem !important;
-      line-height: 1 !important;
-    }
-
-    nav .nav-dropdown-menu {
-      position: absolute !important;
-      top: calc(100% + 10px) !important;
-      right: 0 !important;
-      z-index: 100 !important;
-      min-width: 255px !important;
-      display: none !important;
-      grid-template-columns: 1fr !important;
-      gap: 8px !important;
-      background: white !important;
-      border: 4px solid var(--ink) !important;
-      border-radius: 22px !important;
-      box-shadow: 6px 6px 0 var(--ink) !important;
-      padding: 10px !important;
-    }
-
-    nav .nav-dropdown:hover .nav-dropdown-menu,
-    nav .nav-dropdown:focus-within .nav-dropdown-menu,
-    nav .nav-dropdown.open .nav-dropdown-menu {
-      display: grid !important;
-    }
-
-    nav .nav-dropdown-menu a {
-      display: block !important;
-      width: 100% !important;
-      text-align: left !important;
-      white-space: nowrap !important;
-      margin: 0 !important;
-    }
-
     .gallery-tools {
       display: grid;
       gap: 14px;
@@ -268,22 +217,6 @@
       }
     }
 
-    @media (max-width: 560px) {
-      nav .nav-dropdown,
-      nav .nav-dropdown-toggle,
-      nav .nav-dropdown-menu {
-        width: 100% !important;
-      }
-
-      nav .nav-dropdown {
-        display: grid !important;
-      }
-
-      nav .nav-dropdown-menu {
-        position: static !important;
-        margin-top: 8px !important;
-      }
-    }
   </style>
   <script src="/app.js" defer></script>
 </head>
@@ -299,15 +232,7 @@
 
     <nav>
       <a href="#goobers">Goober Gallery</a>
-      <div class="nav-dropdown">
-        <button class="nav-dropdown-toggle" type="button" aria-expanded="false">Games ▾</button>
-        <div class="nav-dropdown-menu">
-          <a href="/goober-run/">Goober Run</a>
-          <a href="/snowball-goobers/">Snowball Goobers</a>
-          <a href="/goobers-around-the-world/">Goobers Around the World</a>
-          <a href="/goober-cards/">Goober Trading Cards</a>
-        </div>
-      </div>
+      <a href="/goober-cards/">Goober Cards</a>
       <a href="#about">What is a Goober?</a>
       <a href="#upload">Add Goober</a>
     </nav>
@@ -448,6 +373,10 @@
           Add a new loaf-sitting Goober to the collection. Give it a name, choose the type that fits best,
           describe its personality, and upload the image with the family upload code.
         </p>
+        <p>
+          Every upload gets checked by the auto-mod first. Keep it funny, not gross-gross: no swearing, no inappropriate stuff,
+          no real people's photos or personal info. Approved Goobers become cards in Goober Cards.
+        </p>
       </div>
 
       <form class="upload-form" id="gooberUploadForm">
@@ -527,24 +456,5 @@
     The Big Goober Website - Built for maximum goober appreciation Created by Leo and Evan
   </footer>
 
-  <script>
-    document.querySelectorAll(".nav-dropdown-toggle").forEach((button) => {
-      button.addEventListener("click", (event) => {
-        event.preventDefault();
-        const dropdown = button.closest(".nav-dropdown");
-        const isOpen = dropdown.classList.toggle("open");
-        button.setAttribute("aria-expanded", String(isOpen));
-      });
-    });
-
-    document.addEventListener("click", (event) => {
-      document.querySelectorAll(".nav-dropdown.open").forEach((dropdown) => {
-        if (!dropdown.contains(event.target)) {
-          dropdown.classList.remove("open");
-          dropdown.querySelector(".nav-dropdown-toggle")?.setAttribute("aria-expanded", "false");
-        }
-      });
-    });
-  </script>
 </body>
 </html>

@@ -10,6 +10,7 @@ routes = [
 binding = "DB"
 database_name = "thebiggooberwebsite-db"
 database_id = "58f2457b-a74c-4370-9ad7-bc43067048af"
+migrations_dir = "migrations"
 
 [[r2_buckets]]
 binding = "GOOBER_IMAGES"
@@ -22,3 +23,7 @@ class_name = "CardBattleRoom"
 [[migrations]]
 tag = "v1-card-battle-rooms"
 new_sqlite_classes = ["CardBattleRoom"]
+
+# Workers AI powers the upload auto-moderator.
+[ai]
+binding = "AI"

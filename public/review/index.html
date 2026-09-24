@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Goober Review Queue</title>
+  <link rel="icon" href="/assets/original-goober.jpg" type="image/jpeg">
+  <style>
+    :root { --ink: #1f1f1f; --paper: #fffaf0; --yellow: #ffd34d; --green: #98e7a7; --red: #ff8f8f; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Trebuchet MS", system-ui, sans-serif; background: var(--paper); color: var(--ink); }
+    main { max-width: 900px; margin: 0 auto; padding: 20px 16px 40px; }
+    h1 { margin: 0 0 6px; font-size: 2rem; }
+    p { line-height: 1.4; }
+    .login { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0; }
+    input { flex: 1; min-width: 200px; padding: 10px 14px; border: 3px solid var(--ink); border-radius: 12px; font: inherit; font-weight: 700; }
+    button { padding: 10px 16px; border: 3px solid var(--ink); border-radius: 12px; font: inherit; font-weight: 800; background: #fff; box-shadow: 0 3px 0 var(--ink); cursor: pointer; }
+    button.ok { background: var(--green); }
+    button.no { background: var(--red); }
+    button.primary { background: var(--yellow); }
+    button:disabled { opacity: 0.5; }
+    .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+    .item { border: 3px solid var(--ink); border-radius: 18px; background: #fff; overflow: hidden; box-shadow: 0 4px 0 var(--ink); }
+    .item img { width: 100%; aspect-ratio: 4 / 3; object-fit: contain; background: #f4f1ea; display: block; border-bottom: 3px solid var(--ink); }
+    .item .body { padding: 12px; display: grid; gap: 6px; }
+    .item h2 { margin: 0; font-size: 1.2rem; }
+    .item small { color: #6b6257; font-weight: 700; }
+    .item .row { display: flex; gap: 8px; }
+    .item .row button { flex: 1; }
+    #status { font-weight: 800; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>🛡️ Goober Review Queue</h1>
+  <p>Uploads the auto-mod wasn't sure about wait here. Approve to put them in the gallery and the card game, or delete them.</p>
+  <form class="login" id="login">
+    <input id="code" type="password" placeholder="Admin code" autocomplete="current-password" required>
+    <button class="primary" type="submit">Load queue</button>
+  </form>
+  <p id="status"></p>
+  <div class="grid" id="grid"></div>
+</main>
+<script>
+  const $ = id => document.getElementById(id);
+  let code = sessionStorage.getItem("gooberAdminCode") || "";
+  $("code").value = code;
+  const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+  async function load() {
+    $("status").textContent = "Loading…";
+    const res = await fetch("/api/goobers/pending", { headers: { "x-goober-admin-code": code }, cache: "no-store" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { $("status").textContent = data.error || "Couldn't load the queue."; $("grid").innerHTML = ""; return; }
+    sessionStorage.setItem("gooberAdminCode", code);
+    $("status").textContent = data.length ? `${data.length} Goober${data.length === 1 ? "" : "s"} waiting.` : "Queue is empty. Nice.";
+    $("grid").innerHTML = data.map(g => `
+      <article class="item" data-id="${esc(g.id)}">
+        <img src="${esc(g.imageUrl)}" alt="${esc(g.name)}" loading="lazy">
+        <div class="body">
+          <h2>${esc(g.name)}</h2>
+          <small>${esc(g.category)} · ${esc(g.createdAt)}</small>
+          <p>${esc(g.description)}</p>
+          <div class="row"><button class="ok" data-act="approve">✅ Approve</button><button class="no" data-act="delete">🗑️ Delete</button></div>
+        </div>
+      </article>`).join("");
+  }
+
+  $("login").addEventListener("submit", e => { e.preventDefault(); code = $("code").value.trim(); load(); });
+  $("grid").addEventListener("click", async e => {
+    const btn = e.target.closest("[data-act]");
+    if (!btn) return;
+    const item = btn.closest(".item");
+    const id = encodeURIComponent(item.dataset.id);
+    const approve = btn.dataset.act === "approve";
+    if (!approve && !confirm("Delete this Goober for good?")) return;
+    item.querySelectorAll("button").forEach(b => (b.disabled = true));
+    const res = await fetch(approve ? `/api/goobers/${id}/approve` : `/api/goobers/${id}`, { method: approve ? "POST" : "DELETE", headers: { "x-goober-admin-code": code } });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { alert(data.error || "That didn't work."); item.querySelectorAll("button").forEach(b => (b.disabled = false)); return; }
+    item.remove();
+    const left = document.querySelectorAll(".item").length;
+    $("status").textContent = left ? `${left} left.` : "Queue is empty. Nice.";
+  });
+  if (code) load();
+</script>
+</body>
+</html>
