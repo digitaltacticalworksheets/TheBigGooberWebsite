@@ -100,6 +100,7 @@ export class CardBattleRoom {
     await this.saveRoom();
     this.send(server, { type: "catalog", cards: await this.getCatalog() });
     this.broadcast();
+    this.retryRewards();
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -111,7 +112,7 @@ export class CardBattleRoom {
     const seat = session.seat;
     const isPlayer = seat === 0 || seat === 1;
 
-    if (message.type === "ping") return this.send(socket, { type: "pong" });
+    if (message.type === "ping") { this.retryRewards(); return this.send(socket, { type: "pong" }); }
 
     if (message.type === "emote") {
       if (!isPlayer || !EMOTES.has(message.key)) return;
@@ -166,7 +167,8 @@ export class CardBattleRoom {
     this.room.rematch = [false, false];
     this.room.timeouts = [0, 0];
     this.room.lastEvents = [];
-    this.room.rewarded = false;
+    this.room.gameId = crypto.randomUUID();
+    this.room.paid = [false, false];
     this.setTurnDeadline();
   }
 
@@ -184,23 +186,45 @@ export class CardBattleRoom {
     }
   }
 
-  // Pay match rewards to logged-in players, once per game.
+  // Pay match rewards to logged-in players. Each seat is marked paid only after its
+  // payout succeeds (so a failure can be retried later), and the game id is recorded
+  // in the player's profile so a retry can never pay twice.
   async payRewards() {
-    const game = this.room.game;
-    if (!game?.over || this.room.rewarded) return;
-    this.room.rewarded = true;
-    const day = econ.utcDay();
-    const results = {};
-    for (const seat of [0, 1]) {
-      const userId = this.room.seats[seat]?.userId;
-      if (!userId) continue;
-      const won = game.winner === seat;
-      try {
-        const out = await applyEconomy(this.env, userId, this.room.seats[seat].name, p => econ.recordResult(p, { won, reward: won ? econ.ONLINE_REWARD.win : econ.ONLINE_REWARD.loss, day, kind: "online", cap: econ.DAILY_REWARD_CAP.online }));
-        if (out.ok) results[seat] = { coins: out.result.coins, firstWin: out.result.firstWin, capped: out.result.capped };
-      } catch (error) { console.error("Reward payout failed", error); }
-    }
-    for (const [socket, session] of this.sessions.entries()) if (results[session.seat]) this.send(socket, { type: "reward", ...results[session.seat] });
+    if (this.paying) return this.paying;
+    this.paying = (async () => {
+      const game = this.room.game;
+      if (!game?.over || !this.room.gameId) return;
+      this.room.paid = this.room.paid || [false, false];
+      const day = econ.utcDay();
+      for (const seat of [0, 1]) {
+        const userId = this.room.seats[seat]?.userId;
+        if (!userId || this.room.paid[seat]) continue;
+        const won = game.winner === seat;
+        const gameId = this.room.gameId;
+        try {
+          const out = await applyEconomy(this.env, userId, this.room.seats[seat].name, p => {
+            if (p.paidGames.includes(gameId)) return { ok: true, coins: 0, already: true };
+            p.paidGames = [...p.paidGames, gameId].slice(-30);
+            return econ.recordResult(p, { won, reward: won ? econ.ONLINE_REWARD.win : econ.ONLINE_REWARD.loss, day, kind: "online", cap: econ.DAILY_REWARD_CAP.online });
+          });
+          if (!out.ok) continue;
+          this.room.paid[seat] = true;
+          await this.saveRoom();
+          if (!out.result.already) {
+            for (const [socket, session] of this.sessions.entries()) {
+              if (session.seat === seat) this.send(socket, { type: "reward", coins: out.result.coins, firstWin: out.result.firstWin, capped: out.result.capped });
+            }
+          }
+        } catch (error) {
+          console.error("Reward payout failed; will retry", error);
+        }
+      }
+    })().finally(() => { this.paying = null; });
+    return this.paying;
+  }
+
+  retryRewards() {
+    if (this.room.phase === "over" && this.room.paid && this.room.paid.includes(false)) this.payRewards().catch(() => {});
   }
 
   afterAction(events, turnBefore) {
@@ -629,7 +653,17 @@ async function putProfile(request, env) {
   if (!user) return unauthorized();
   const body = await readJson(request);
   if (!body.data || typeof body.data !== "object" || Array.isArray(body.data)) return jsonResponse({ error: "Invalid save data." }, 400, NO_STORE_HEADERS);
-  const out = await applyEconomy(env, user.id, user.username, p => { Object.assign(p, econ.mergeClientEdits(p, body.data, { username: user.username })); return { ok: true }; });
+  // `editsRev` counts deck/settings saves. A device saving on top of an older count
+  // (say, a tab left open on another phone) is refused and gets the newer edits instead.
+  const baseRev = body.editsRev === undefined ? null : Number(body.editsRev);
+  const out = await applyEconomy(env, user.id, user.username, p => {
+    if (baseRev !== null && baseRev !== p.editsRev) return { ok: false, conflict: true, error: "Your decks were changed on another device." };
+    const merged = econ.mergeClientEdits(p, body.data, { username: user.username });
+    for (const key of Object.keys(p)) delete p[key];
+    Object.assign(p, merged, { editsRev: merged.editsRev + 1 });
+    return { ok: true };
+  });
+  if (!out.ok) return jsonResponse({ error: out.result?.error, conflict: Boolean(out.result?.conflict), profile: out.profile, version: out.version }, 409, NO_STORE_HEADERS);
   return jsonResponse({ ok: true, version: out.version, profile: out.profile }, 200, NO_STORE_HEADERS);
 }
 

@@ -1,5 +1,6 @@
 // Player accounts: username + password logins and cloud saves of the profile.
 import * as store from "./collection.js";
+import { adoptOnDevice as econ_adopt } from "./economy.js";
 
 const TOKEN_KEY = "gooberCardsSession";
 const USER_KEY = "gooberCardsUser";
@@ -114,19 +115,25 @@ async function pushNow({ keepalive = false } = {}) {
   dirty = false;
   listeners.status("saving");
   try {
-    const res = await api("/api/profile", { method: "PUT", body: { data: store.loadProfile(), version: version() }, keepalive });
+    const local = store.loadProfile();
+    const sentSeen = [...(local.seenQueue || [])];
+    const res = await api("/api/profile", { method: "PUT", body: { data: local, editsRev: local.editsRev || 0 }, keepalive });
     if (res.ok) {
       write(VERSION_KEY, String(res.data.version));
-      // The server owns coins/cards/packs; keep its numbers, keep our edits.
-      if (res.data.profile) store.adoptServerProfile(res.data.profile);
+      // The server owns coins/cards/packs; keep its numbers, keep any edits made meanwhile.
+      if (res.data.profile) {
+        const adopted = store.adoptServerProfile(res.data.profile);
+        adopted.seenQueue = (adopted.seenQueue || []).filter(id => !sentSeen.includes(id));
+        store.replaceProfile(adopted);
+      }
       listeners.status("saved");
-    }
-    else if (res.status === 409 && res.data.data) {
-      // Another device saved newer progress: use that.
-      store.replaceProfile(res.data.data);
+    } else if (res.status === 409 && res.data.profile) {
+      // Another device changed decks/settings more recently: take those, keep badge clears.
+      store.replaceProfile(econ_adopt(res.data.profile, { seenQueue: local.seenQueue }));
       write(VERSION_KEY, String(res.data.version));
       listeners.replaced();
       listeners.status("saved");
+      if ((local.seenQueue || []).length) schedule();
     } else if (res.status === 401) expire();
     else listeners.status("offline");
   } catch {

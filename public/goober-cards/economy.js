@@ -46,6 +46,8 @@ export function freshProfile() {
     lastWinDay: "",
     rewardDay: { day: "", solo: 0, online: 0 },
     openMatch: null,
+    editsRev: 0,
+    paidGames: [],
     settings: { sound: true, haptics: true },
     tutorialSeen: false,
     created: Date.now()
@@ -63,6 +65,8 @@ export function normalizeProfile(data) {
   p.rewardDay = { day: "", solo: 0, online: 0, ...(p.rewardDay || {}) };
   p.coins = Math.max(0, Math.floor(Number(p.coins) || 0));
   p.pity = Math.max(0, Math.floor(Number(p.pity) || 0));
+  p.editsRev = Math.max(0, Math.floor(Number(p.editsRev) || 0));
+  p.paidGames = Array.isArray(p.paidGames) ? p.paidGames.slice(-30) : [];
   return p;
 }
 
@@ -201,9 +205,9 @@ export function recordResult(p, { won, reward, day, kind = "solo", cap = Infinit
 
 // Fields a logged-in player's device may change directly. Everything else
 // (coins, packs, cards, pity, stats, rewards) only changes through server actions.
-export function mergeClientEdits(server, client, { username } = {}) {
-  const p = normalizeProfile(server);
-  const c = client && typeof client === "object" ? client : {};
+// "New" badges are added by the server (pack opens) and cleared by the device
+// through `seenQueue`, so neither side can wipe out the other's changes.
+function applyEditableFields(p, c) {
   if (Array.isArray(c.decks)) {
     p.decks = c.decks.slice(0, 6).map(d => ({
       id: String(d?.id || "").slice(0, 40),
@@ -215,37 +219,61 @@ export function mergeClientEdits(server, client, { username } = {}) {
   }
   if (typeof c.activeDeck === "string" || c.activeDeck === null) p.activeDeck = c.activeDeck ? c.activeDeck.slice(0, 40) : null;
   if (c.settings && typeof c.settings === "object") p.settings = { sound: c.settings.sound !== false, haptics: c.settings.haptics !== false };
-  if (c.newCards && typeof c.newCards === "object") {
-    p.newCards = {};
-    for (const id of Object.keys(c.newCards).slice(0, 500)) if (ownedCount(p, id)) p.newCards[id] = true;
-  }
   if (typeof c.hero === "string" && ownedCount(p, c.hero)) p.hero = c.hero;
   if (typeof c.tutorialSeen === "boolean") p.tutorialSeen = c.tutorialSeen;
+}
+
+const seenList = c => (Array.isArray(c?.seenQueue) ? c.seenQueue.slice(0, 500).map(String) : []);
+
+// Server side of a device save: apply the device's edits and badge clears.
+export function mergeClientEdits(server, client, { username } = {}) {
+  const p = normalizeProfile(server);
+  const c = client && typeof client === "object" ? client : {};
+  applyEditableFields(p, c);
+  for (const id of seenList(c)) delete p.newCards[id];
+  delete p.seenQueue;
   if (username) p.name = username;
   return p;
 }
 
-// A guest bringing local progress into a new account: keep it, but only what's plausible
-// for how many packs they've opened, so edited local saves can't mint a collection.
+// Device side: take the server's profile but keep this device's unsaved edits
+// and badge clears (they'll be sent on the next save).
+export function adoptOnDevice(server, local) {
+  const p = normalizeProfile(server);
+  const c = local && typeof local === "object" ? local : {};
+  applyEditableFields(p, c);
+  const seen = seenList(c);
+  for (const id of seen) delete p.newCards[id];
+  p.seenQueue = seen;
+  return p;
+}
+
+// Guest progress brought into a new account. The guest save lives on the device and can
+// be edited, so only a small, fixed allowance comes along (roughly the free starting
+// packs): no card beyond deck limits, at most one Legendary, a few shinies, capped coins.
+export const GUEST_IMPORT = { extraCards: 20, legendaries: 1, shinies: 3, coins: 500, packs: 3 };
+
 export function importGuestProfile(guest, catalog) {
   const g = normalizeProfile(guest);
   const p = freshProfile();
-  const opened = Math.min(40, Math.max(0, Math.floor(g.stats.packsOpened || 0)));
-  let budget = opened * 5;
-  const cards = { ...p.cards };
+  let budget = GUEST_IMPORT.extraCards, legendaries = 0, shinies = 0;
   for (const [id, entry] of Object.entries(g.cards)) {
-    if (!catalog[id] || catalog[id].token) continue;
-    const have = cards[id]?.n || 0;
-    const extra = Math.min(Math.max(0, Math.floor(entry?.n || 0) - have), budget);
+    const card = catalog[id];
+    if (!card || card.token) continue;
+    const have = p.cards[id]?.n || 0;
+    const want = Math.min(Math.floor(entry?.n || 0), MAX_COPIES[card.rarity]);
+    let extra = Math.min(Math.max(0, want - have), budget);
+    if (card.rarity === "legendary") { extra = Math.min(extra, GUEST_IMPORT.legendaries - legendaries); legendaries += Math.max(0, extra); }
     if (extra <= 0) continue;
     budget -= extra;
-    cards[id] = { n: have + extra, s: Math.min(have + extra, Math.max(0, Math.floor(entry?.s || 0))) };
+    const n = have + extra;
+    const s = Math.min(n, Math.max(0, Math.floor(entry?.s || 0)), GUEST_IMPORT.shinies - shinies);
+    shinies += s;
+    p.cards[id] = { n, s };
   }
-  p.cards = cards;
-  p.coins = Math.min(g.coins, 1500);
-  p.packs = { goober: Math.min(g.packs.goober || 0, 10), gallery: Math.min(g.packs.gallery || 0, 10) };
-  p.pity = Math.min(g.pity, PITY_LIMIT - 1);
-  p.stats = { ...p.stats, packsOpened: opened, wins: Math.min(g.stats.wins, 500), losses: Math.min(g.stats.losses, 500), shinies: Math.min(g.stats.shinies, 200) };
+  p.coins = Math.min(g.coins, GUEST_IMPORT.coins);
+  p.packs = { goober: Math.min(g.packs.goober || 0, GUEST_IMPORT.packs), gallery: Math.min(g.packs.gallery || 0, GUEST_IMPORT.packs) };
   p.lastDaily = g.lastDaily;
-  return mergeClientEdits(p, g);
+  applyEditableFields(p, g);
+  return p;
 }

@@ -43,7 +43,7 @@ export function replaceProfile(data) {
 
 // Take the server's economy (coins, cards, packs...) but keep this device's own edits.
 export function adoptServerProfile(server) {
-  return replaceProfile(econ.mergeClientEdits(server, loadProfile(), { username: server?.name }));
+  return replaceProfile(econ.adoptOnDevice(server, loadProfile()));
 }
 
 // Wipe this device's copy (on log out) so the next person starts fresh.
@@ -67,7 +67,14 @@ export function ownedCounts() {
   return out;
 }
 
-export function markSeen(id) { const p = loadProfile(); if (p.newCards[id]) { delete p.newCards[id]; saveProfile(); } }
+// Clearing a "new" badge is queued so a logged-in save can tell the server.
+export function markSeen(id) {
+  const p = loadProfile();
+  if (!p.newCards[id]) return;
+  delete p.newCards[id];
+  p.seenQueue = [...(p.seenQueue || []).filter(x => x !== id), id].slice(-500);
+  saveProfile();
+}
 
 // --- Guest economy (logged-in players use the server; see account.js) -----------
 export function claimDaily() {
