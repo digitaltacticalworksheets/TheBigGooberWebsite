@@ -272,7 +272,12 @@ export class Battle {
       const rot = offset * Math.min(5, 28 / n);
       const y = Math.abs(offset) * Math.abs(offset) * 1.6;
       el.style.zIndex = String(10 + i);
-      if (el.classList.contains("selected")) {
+      if (el.classList.contains("selected") && this.currentTargets().length) {
+        // Picking a target: tuck the card back down so the glowing targets are visible.
+        el.classList.add("aiming");
+        el.style.transform = `translateX(calc(-50% + ${x}px)) translateY(-18%) scale(0.92)`;
+      } else if (el.classList.contains("selected")) {
+        el.classList.remove("aiming");
         // Blow the card up so its text is easy to read, keeping it on screen.
         const scale = Math.max(1.25, Math.min(1.9, (window.innerWidth * 0.5) / cw, (window.innerHeight * 0.42) / (cw * 1.4)));
         const half = (cw * scale) / 2;
@@ -310,14 +315,14 @@ export class Battle {
       details = true;
       const def = this.def(this.state.players[this.me].hand.find(c => c.uid === this.sel.uid)?.id);
       if (this.sel.preview) text = `${this.sel.reason || "Can't play this yet"}`;
-      else if (this.sel.isMinion && !this.sel.placed) text = this.sel.targets ? `Drop ${def?.name} on the table, then pick a target` : `Tap the table (or the card again) to play ${def?.name}`;
+      else if (this.sel.isMinion && !this.sel.placed) text = this.sel.targets ? `Tap the table to place ${def?.name}, then pick a target` : `Tap the table to play ${def?.name}`;
       else if (this.sel.targets) text = `Pick a glowing target for ${def?.name}`;
-      else text = `Tap again or drag up to use ${def?.name}`;
+      else text = `Tap the table to use ${def?.name}`;
     } else if (this.sel?.kind === "attack") text = "Tap a glowing enemy to attack";
     else if (this.sel?.kind === "power") text = `${HERO_POWER.name} 💨: tap an enemy`;
     this.tip.hidden = !text;
     const mid = this.root.querySelector(".midline")?.getBoundingClientRect();
-    if (mid) this.tip.style.top = `${mid.top + mid.height / 2}px`;
+    if (mid) this.tip.style.top = `${mid.bottom + 4}px`;
     this.tip.innerHTML = `<span>${esc(text)}</span>${details ? `<button type="button" data-details>ⓘ Details</button>` : ""}`;
   }
 
@@ -550,6 +555,11 @@ export class Battle {
         return;
       }
       this.selectHand(hcard.dataset.uid);
+      return;
+    }
+    // A spell with no target: tapping anywhere on the table plays it (even on a minion).
+    if (sel?.kind === "hand" && !sel.preview && !sel.isMinion && !sel.targets && t.closest(".my-board, .opp-board, .midline")) {
+      this.commit(null);
       return;
     }
     const enemyMinion = t.closest(".opp-board .minion");
