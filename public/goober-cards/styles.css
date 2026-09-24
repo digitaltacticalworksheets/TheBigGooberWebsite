@@ -939,3 +939,11 @@ body::after {
 .card-tip { transform: translate(-50%, 0); max-width: calc(100vw - 24px); gap: 8px; font-size: 0.82rem; }
 .card-tip span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .card-tip button { flex: none; padding: 5px 10px; }
+
+/* Starting-hand screen: fit short phones (cards shrink with height, screen scrolls,
+   and the Keep/Swap button stays pinned at the bottom). */
+.mulligan { overflow-y: auto; place-items: start center; padding-bottom: calc(16px + var(--safe-bottom)); }
+.mulligan-box { margin: auto 0; }
+.mull-card { --cw: min(28vw, 150px, 22vh); }
+.mulligan h2 { font-size: clamp(2rem, 8vw, 3.6rem); }
+.mulligan .actions { position: sticky; bottom: 0; padding-top: 10px; background: linear-gradient(transparent, rgba(8, 6, 14, 0.95) 40%); }
