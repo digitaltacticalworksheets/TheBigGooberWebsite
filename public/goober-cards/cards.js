@@ -93,7 +93,8 @@ const CATEGORY_ABILITIES = {
 };
 
 const RARITY_BONUS = { common: 0, rare: 1, epic: 2, legendary: 3 };
-const COST_TABLE = [1, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 6, 7];
+// Weighted toward cheap cards so every deck has early plays.
+const COST_TABLE = [1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 4, 4, 5, 6, 7];
 
 export function hashString(text) {
   let h = 2166136261;
@@ -284,22 +285,31 @@ export function validateDeck(catalog, deckIds) {
   return { ok: true };
 }
 
-// A sensible deck from whatever the catalog has (used for AI opponents and fallback decks).
+// Target number of cards at each cost (7 = 7+), so decks always have early plays.
+export const CURVE_TARGET = { 1: 3, 2: 5, 3: 4, 4: 3, 5: 2, 6: 2, 7: 1 };
+
+// A sensible deck from whatever the catalog has (used for AI opponents and starter decks).
 export function autoDeck(catalog, ownedCounts = null, rng = Math.random) {
   const pool = [];
   for (const card of Object.values(catalog)) {
     if (card.token) continue;
     const owned = ownedCounts ? Math.min(ownedCounts[card.id] || 0, MAX_COPIES[card.rarity]) : MAX_COPIES[card.rarity];
-    for (let i = 0; i < owned; i++) pool.push(card);
+    for (let i = 0; i < owned; i++) pool.push({ card, score: RARITY_BONUS[card.rarity] * 2 + (card.type === "minion" ? 1.5 : 0) + rng() * 3 });
   }
-  // Prefer a healthy curve: score each copy, add a bit of randomness.
-  const minions = pool.filter(c => c.type === "minion");
-  const spells = pool.filter(c => c.type === "spell");
-  const score = card => (RARITY_BONUS[card.rarity] * 2) + (card.cost <= 4 ? 3 : 1) + rng() * 4;
-  minions.sort((a, b) => score(b) - score(a));
-  spells.sort((a, b) => score(b) - score(a));
-  const deck = [...minions.slice(0, 14), ...spells.slice(0, 6)];
-  const rest = [...minions.slice(14), ...spells.slice(6)].sort((a, b) => score(b) - score(a));
-  while (deck.length < DECK_SIZE && rest.length) deck.push(rest.shift());
+  pool.sort((a, b) => b.score - a.score);
+  const deck = [];
+  const used = new Set();
+  const bucket = card => Math.min(7, Math.max(1, card.cost));
+  // Fill each cost slot with the best cards available at that cost.
+  for (const [cost, want] of Object.entries(CURVE_TARGET)) {
+    let got = 0;
+    for (let i = 0; i < pool.length && got < want; i++) {
+      if (used.has(i) || bucket(pool[i].card) !== Number(cost)) continue;
+      used.add(i); deck.push(pool[i].card); got++;
+    }
+  }
+  // Top up with the cheapest leftovers so gaps never make the deck top-heavy.
+  const rest = pool.map((entry, i) => ({ ...entry, i })).filter(entry => !used.has(entry.i)).sort((a, b) => a.card.cost - b.card.cost || b.score - a.score);
+  while (deck.length < DECK_SIZE && rest.length) deck.push(rest.shift().card);
   return deck.slice(0, DECK_SIZE).map(card => card.id).sort((a, b) => catalog[a].cost - catalog[b].cost || catalog[a].name.localeCompare(catalog[b].name));
 }

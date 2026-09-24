@@ -3,8 +3,10 @@
 // in the browser for solo games and in the worker for online rooms.
 import { TOKENS, HERO_POWER } from "./cards.js";
 
-export const STARTING_HP = 20;
+export const STARTING_HP = 25;
 export const MAX_MANA = 10;
+export const STARTING_MANA = 2;
+export const MULLIGAN_MAX = 4;
 export const BOARD_LIMIT = 6;
 export const HAND_LIMIT = 10;
 
@@ -39,6 +41,7 @@ export function createGame({ decks, names = ["Player 1", "Player 2"], seed = Dat
     over: false,
     log: [],
     events: [],
+    history: [],
     players: [0, 1].map(idx => ({
       name: names[idx] || `Player ${idx + 1}`,
       hero: { uid: heroUid(idx), hp: STARTING_HP, maxHp: STARTING_HP, armor: 0 },
@@ -48,6 +51,7 @@ export function createGame({ decks, names = ["Player 1", "Player 2"], seed = Dat
       hand: [],
       board: [],
       fatigue: 0,
+      mulliganDone: false,
       powerUsed: false,
       conceded: false
     }))
@@ -378,7 +382,7 @@ function startTurn(state) {
   state.turn += 1;
   const idx = state.active;
   const p = state.players[idx];
-  p.maxMana = Math.min(MAX_MANA, p.maxMana + 1);
+  p.maxMana = Math.min(MAX_MANA, p.maxMana ? p.maxMana + 1 : STARTING_MANA);
   p.mana = p.maxMana;
   p.powerUsed = false;
   for (const m of p.board) {
@@ -408,7 +412,8 @@ function endTurn(state, catalog) {
 
 // --- Actions ------------------------------------------------------------------
 // action: {type:"play", uid, target?, position?} | {type:"attack", uid, target} |
-//         {type:"power", target} | {type:"end"} | {type:"concede"}
+//         {type:"power", target} | {type:"end"} | {type:"concede"} |
+//         {type:"mulligan", uids} (once, before your first move of the game)
 export function applyAction(state, catalog, idx, action) {
   state.events = [];
   if (!action || typeof action !== "object") return { ok: false, error: "Invalid action." };
@@ -422,6 +427,27 @@ export function applyAction(state, catalog, idx, action) {
   if (state.over) return { ok: false, error: "The game is over." };
   if (state.active !== idx) return { ok: false, error: "It's not your turn." };
   const me = state.players[idx];
+
+  if (action.type === "mulligan") {
+    if (me.mulliganDone) return { ok: false, error: "You already swapped your starting hand." };
+    me.mulliganDone = true;
+    const picks = new Set((Array.isArray(action.uids) ? action.uids : []).slice(0, MULLIGAN_MAX));
+    const back = me.hand.filter(c => picks.has(c.uid) && c.id !== "token-crumb");
+    if (!back.length) return { ok: true, events: state.events };
+    me.hand = me.hand.filter(c => !back.includes(c));
+    me.deck.push(...back);
+    shuffleInPlace(state, me.deck);
+    // Draw replacements that aren't the cards you just threw back, when possible.
+    for (let i = 0; i < back.length; i++) {
+      const at = me.deck.findIndex(c => !back.includes(c));
+      const [card] = me.deck.splice(at >= 0 ? at : 0, 1);
+      me.hand.push(card);
+      emit(state, { t: "draw", player: idx, uid: card.uid });
+    }
+    log(state, `${me.name} swapped ${back.length} card${back.length === 1 ? "" : "s"}.`, idx);
+    return { ok: true, events: state.events };
+  }
+  me.mulliganDone = true;
 
   if (action.type === "end") {
     log(state, `${me.name} ended the turn.`, idx);
@@ -442,6 +468,7 @@ export function applyAction(state, catalog, idx, action) {
     const inst = me.hand.splice(handIndex, 1)[0];
     me.mana -= def.cost;
     emit(state, { t: "play", player: idx, id: def.id, uid: inst.uid, shiny: inst.shiny });
+    state.history = [...(state.history || []), { player: idx, id: def.id, shiny: inst.shiny, turn: state.turn }].slice(-8);
     if (def.type === "minion") {
       const minion = summonMinion(state, catalog, idx, def.id, { shiny: inst.shiny, position: action.position });
       log(state, `${me.name} played ${def.name}.`, idx);

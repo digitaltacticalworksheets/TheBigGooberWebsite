@@ -1,43 +1,6 @@
 const API_BASE = "";
 
 function initializeSiteTheme() {
-  const themeStyles = document.createElement("link");
-  themeStyles.rel = "stylesheet";
-  themeStyles.href = "/site-theme.css";
-  document.head.appendChild(themeStyles);
-
-  const savedTheme = localStorage.getItem("gooberSiteTheme") || localStorage.getItem("gooberCardsTheme");
-  const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-  const theme = savedTheme || (prefersDark ? "dark" : "light");
-
-  function applyTheme(nextTheme) {
-    const isDark = nextTheme === "dark";
-    document.body.classList.toggle("dark-site", isDark);
-    document.documentElement.classList.toggle("dark-site", isDark);
-    document.querySelectorAll("[data-theme-toggle]").forEach((button) => {
-      button.textContent = isDark ? "Light Mode" : "Dark Mode";
-      button.setAttribute("aria-label", isDark ? "Switch to light mode" : "Switch to dark mode");
-    });
-  }
-
-  applyTheme(theme);
-
-  const nav = document.querySelector("header nav");
-  if (nav && !document.querySelector("[data-theme-toggle]")) {
-    const toggle = document.createElement("button");
-    toggle.type = "button";
-    toggle.className = "theme-toggle";
-    toggle.dataset.themeToggle = "true";
-    toggle.addEventListener("click", () => {
-      const nextTheme = document.body.classList.contains("dark-site") ? "light" : "dark";
-      localStorage.setItem("gooberSiteTheme", nextTheme);
-      localStorage.setItem("gooberCardsTheme", nextTheme);
-      applyTheme(nextTheme);
-    });
-    nav.appendChild(toggle);
-    applyTheme(theme);
-  }
-
   document.querySelectorAll('a[href="/goober-cards/"]').forEach((link) => {
     if (link.textContent.trim().toLowerCase().includes("trading")) {
       link.textContent = "Goober Cards";
@@ -65,7 +28,6 @@ const gooberNameInput = document.getElementById("gooberName");
 const gooberCategoryInput = document.getElementById("gooberCategory");
 const gooberDescriptionInput = document.getElementById("gooberDescription");
 const gooberImageInput = document.getElementById("gooberImage");
-const gooberUploadCodeInput = document.getElementById("gooberUploadCode");
 const gooberSearchInput = document.getElementById("gooberSearch");
 const gooberSearchButton = document.getElementById("gooberSearchButton");
 const gooberClearSearchButton = document.getElementById("gooberClearSearch");
@@ -456,13 +418,6 @@ if (uploadForm) {
     event.preventDefault();
 
     const file = gooberImageInput.files[0];
-    const uploadCode = gooberUploadCodeInput?.value.trim() || "";
-
-    if (!uploadCode) {
-      uploadStatus.textContent = "Enter the upload code first.";
-      return;
-    }
-
     if (!file) {
       uploadStatus.textContent = "Choose a Goober image first.";
       return;
@@ -483,7 +438,6 @@ if (uploadForm) {
     }
 
     const formData = new FormData();
-    formData.append("uploadCode", uploadCode);
     formData.append("name", name);
     formData.append("category", category);
     formData.append("description", description);
@@ -509,9 +463,7 @@ if (uploadForm) {
         throw new Error(result.error || "Upload failed.");
       }
 
-      const savedCode = uploadCode;
       uploadForm.reset();
-      if (gooberUploadCodeInput) gooberUploadCodeInput.value = savedCode;
       filePreview.textContent = "Image preview will appear here.";
       if (result.moderation === "pending") {
         uploadStatus.textContent = `⏳ ${result.name || name} is waiting for a mod to approve it. It'll show up once it's checked.`;

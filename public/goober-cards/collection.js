@@ -47,21 +47,54 @@ function freshProfile() {
 
 let profile = null;
 
+function normalize(data) {
+  const p = { ...freshProfile(), ...(data || {}) };
+  p.settings = { sound: true, haptics: true, ...(p.settings || {}) };
+  p.stats = { ...freshProfile().stats, ...(p.stats || {}) };
+  p.packs = { goober: 0, gallery: 0, ...(p.packs || {}) };
+  p.cards = p.cards && typeof p.cards === "object" ? p.cards : {};
+  p.decks = Array.isArray(p.decks) ? p.decks : [];
+  p.newCards = p.newCards && typeof p.newCards === "object" ? p.newCards : {};
+  return p;
+}
+
 export function loadProfile() {
   if (profile) return profile;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) profile = { ...freshProfile(), ...JSON.parse(raw) };
+    if (raw) profile = normalize(JSON.parse(raw));
   } catch { profile = null; }
   if (!profile) profile = freshProfile();
-  profile.settings = { sound: true, haptics: true, ...(profile.settings || {}) };
-  profile.stats = { ...freshProfile().stats, ...(profile.stats || {}) };
-  profile.packs = { goober: 0, gallery: 0, ...(profile.packs || {}) };
   return profile;
 }
 
+// Called after every local save (the account module uses it to sync to the cloud).
+let saveHook = null;
+export function setSaveHook(fn) { saveHook = fn; }
+
 export function saveProfile() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(profile)); } catch { /* storage full or blocked */ }
+  saveHook?.(profile);
+}
+
+// Swap in a profile that came from the player's account.
+export function replaceProfile(data) {
+  profile = normalize(data);
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(profile)); } catch { /* storage full or blocked */ }
+  return profile;
+}
+
+// Wipe this device's copy (on log out) so the next person starts fresh.
+export function resetProfile() {
+  try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+  profile = null;
+  return loadProfile();
+}
+
+// A brand-new profile hasn't done anything worth keeping yet.
+export function hasProgress() {
+  const p = loadProfile();
+  return p.stats.wins + p.stats.losses + p.stats.packsOpened > 0 || p.decks.length > 0;
 }
 
 export function owned(id) { return loadProfile().cards[id]?.n || 0; }
@@ -243,12 +276,23 @@ export function deckProblems(deck, catalog) {
 // Deck to take into a game: the active deck if valid, otherwise a fresh auto deck.
 export function playableDeck(catalog) {
   const p = loadProfile();
+  // Auto-built starter decks from before the cost rebalance get rebuilt once.
+  for (const d of p.decks) {
+    if (d.name === "Starter Deck" && !d.curve2) {
+      const cards = autoDeck(catalog, ownedCounts());
+      if (validateDeck(catalog, cards).ok) d.cards = cards;
+      d.curve2 = true;
+      saveProfile();
+    }
+  }
   let deck = getDeck(p.activeDeck);
   if (!deck || deckProblems(deck, catalog).length) deck = p.decks.find(d => !deckProblems(d, catalog).length) || null;
   if (!deck) {
     const cards = autoDeck(catalog, ownedCounts());
     if (validateDeck(catalog, cards).ok) {
       deck = createDeck(catalog, "Starter Deck", cards) || { id: "auto", name: "Starter Deck", cards };
+      deck.curve2 = true;
+      saveProfile();
     } else {
       deck = { id: "auto", name: "Loaner Deck", cards: autoDeck(catalog) };
     }

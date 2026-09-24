@@ -46,6 +46,12 @@ const clone = s => JSON.parse(JSON.stringify(s));
 
 export function chooseAiAction(state, catalog, me, level = "goodboy", random = Math.random) {
   const cfg = AI_LEVELS[level] || AI_LEVELS.goodboy;
+  const self = state.players[me];
+  if (!self.mulliganDone && state.active === me) {
+    // Throw back pricey cards from the opening hand.
+    const uids = self.hand.filter(c => (catalog[c.id]?.cost ?? 0) >= 4).map(c => c.uid).slice(0, 4);
+    return { type: "mulligan", uids };
+  }
   const actions = legalActions(state, catalog, me);
   if (!actions.length) return { type: "end" };
   const nonEnd = actions.filter(a => a.type !== "end");

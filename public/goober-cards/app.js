@@ -5,6 +5,7 @@ import { AI_LEVELS } from "./ai.js";
 import { SoloMatch } from "./battle.js";
 import { OnlineMatch, createRoom } from "./online.js";
 import * as store from "./collection.js";
+import * as account from "./account.js";
 import { $, $$, esc, sleep, cardHTML, cardBackHTML, toast, modal, confirmDialog, keywordGlossary, onLongPress } from "./ui.js";
 import { sfx, setSoundEnabled, buzz } from "./sound.js";
 
@@ -84,6 +85,7 @@ function renderHome() {
     <div class="home-top">
       <a class="icon-btn" href="/" aria-label="Back to The Big Goober Website">🏠</a>
       <div class="spacer"></div>
+      ${accountChipHTML()}
       <span class="pill coins-pill">🪙 ${p.coins}</span>
       <button class="icon-btn" data-settings aria-label="Settings">⚙️</button>
     </div>
@@ -91,6 +93,7 @@ function renderHome() {
       <img src="/assets/original-goober.jpg" alt="">
       <h1>Goober Cards<small>Collect Goobers. Farm aura. Bonk your friends.</small></h1>
     </div>
+    ${account.currentUser() || !store.hasProgress() ? "" : `<button class="save-nudge" data-save-nudge>☁️ <b>Don't lose your cards.</b> Make a free account to save them. <span>Sign up →</span></button>`}
     <section class="home-hero">
       <div>
         <h2>Lock in, ${esc(p.name || "Goober Fan")}.</h2>
@@ -108,35 +111,116 @@ function renderHome() {
       <button class="tile white" data-hero><span class="ico">🖼️</span><b>My Portrait</b><span>Pick your main</span></button>
     </div>
     <div class="home-foot">
-      <span class="muted">Collection is saved on this device.</span>
+      <span class="muted">${account.currentUser() ? "☁️ Your cards are saved to your account." : "Playing as a guest: cards only live on this device."}</span>
       <a href="/">← The Big Goober Website</a>
     </div>
   </div>`;
   $("[data-rules]", app).onclick = showRules;
   $("[data-settings]", app).onclick = showSettings;
+  $("[data-account]", app).onclick = () => showAccount();
+  const nudge = $("[data-save-nudge]", app);
+  if (nudge) nudge.onclick = () => showAccount("signup");
   $("[data-hero]", app).onclick = pickPortrait;
   if (!p.name) askName();
   else maybeDaily();
 }
 
+// First visit: make an account, log in, or play as a guest.
 function askName(then) {
-  const m = modal(`<h2>Goober Cards 💨</h2><p>Every Goober drawn on this site is a card. Rip packs, build a deck, and humble your friends.</p><p>What's your gamertag?</p><input type="text" maxlength="20" placeholder="Gamertag" data-name><div class="actions"><button class="btn primary" data-save>Let's cook</button></div>`, { dismissable: false });
+  const m = modal(`<h2>Goober Cards 💨</h2><p>Every Goober drawn on this site is a card. Rip packs, build a deck, and humble your friends.</p>
+    <div class="welcome-actions">
+      <button class="btn primary big" data-signup>Make an account</button>
+      <button class="btn blue" data-login>I have an account</button>
+      <button class="btn ghost" data-guest>Play as guest</button>
+    </div>
+    <p class="muted" style="font-size:.9rem">No email needed. An account keeps your cards safe and lets you play on any device.</p>`, { dismissable: false });
+  const done = () => {
+    if (then) { then(); return; }
+    store.claimDaily();
+    toast("4 free packs just dropped. 🎁", "good");
+    renderHome();
+    if (!profile().tutorialSeen) showRules();
+  };
+  $("[data-signup]", m.el).onclick = () => { m.close(); showAccount("signup", { onDone: done, onCancel: () => askName(then) }); };
+  $("[data-login]", m.el).onclick = () => { m.close(); showAccount("login", { onDone: () => { if (!profile().name) profile().name = account.currentUser()?.username || "Goober Fan"; renderHome(); }, onCancel: () => askName(then) }); };
+  $("[data-guest]", m.el).onclick = () => { m.close(); askGuestName(done); };
+}
+
+function askGuestName(done) {
+  const m = modal(`<h2>Guest mode</h2><p>What's your gamertag?</p><input type="text" maxlength="20" placeholder="Gamertag" data-name><div class="actions"><button class="btn primary" data-save>Let's cook</button></div>`, { dismissable: false });
   const input = $("[data-name]", m.el);
   setTimeout(() => input.focus(), 50);
   const save = () => {
     profile().name = input.value.trim().slice(0, 20) || "Goober Fan";
     store.saveProfile();
     m.close();
-    if (then) then();
-    else {
-      store.claimDaily();
-      toast("4 free packs just dropped. 🎁", "good");
-      renderHome();
-      if (!profile().tutorialSeen) showRules();
-    }
+    done();
   };
   $("[data-save]", m.el).onclick = save;
   input.addEventListener("keydown", e => { if (e.key === "Enter") save(); });
+}
+
+function accountChipHTML() {
+  const user = account.currentUser();
+  return user
+    ? `<button class="pill account-pill" data-account title="Account">👤 ${esc(user.username)} <span data-sync>☁️</span></button>`
+    : `<button class="btn small pink" data-account>Log in</button>`;
+}
+
+// Log in / sign up / account screen.
+function showAccount(mode = "login", { onDone, onCancel } = {}) {
+  const user = account.currentUser();
+  if (user) {
+    const m = modal(`<h2>👤 ${esc(user.username)}</h2>
+      <p>You're logged in. Your cards, coins, and decks save to your account automatically, so you can log in on any phone or tablet.</p>
+      <div class="actions"><button class="btn danger" data-logout>Log out</button><button class="btn primary" data-close>Done</button></div>`);
+    $("[data-logout]", m.el).onclick = async () => {
+      if (!(await confirmDialog("Log out?", "Your progress is saved to your account. This device will go back to a fresh guest.", { yes: "Log out" }))) return;
+      m.close();
+      await account.logout();
+      toast("Logged out. See you soon.", "good");
+      location.hash = "#home";
+      route();
+    };
+    return;
+  }
+  const signingUp = mode === "signup";
+  let finished = false;
+  const m = modal(`<form class="auth-form" data-auth>
+      <div class="tabs"><button type="button" class="${signingUp ? "" : "on"}" data-mode="login">Log in</button><button type="button" class="${signingUp ? "on" : ""}" data-mode="signup">Sign up</button></div>
+      <label>Username<input type="text" name="username" maxlength="20" autocomplete="username" autocapitalize="off" spellcheck="false" required placeholder="3-20 letters, numbers, _"></label>
+      <label>Password<input type="password" name="password" maxlength="200" autocomplete="${signingUp ? "new-password" : "current-password"}" required placeholder="At least 6 characters"></label>
+      ${signingUp ? `<label>Password again<input type="password" name="password2" maxlength="200" autocomplete="new-password" required></label>
+      <p class="muted" style="font-size:.9rem">No email, so write your password down somewhere safe. ${store.hasProgress() ? "Your current cards and coins move into the new account." : ""}</p>` : `<p class="muted" style="font-size:.9rem">Logging in loads your account's cards onto this device.</p>`}
+      <p class="auth-error" data-error hidden></p>
+      <div class="actions"><button type="button" class="btn" data-cancel>Cancel</button><button type="submit" class="btn primary">${signingUp ? "Create account" : "Log in"}</button></div>
+    </form>`, { onClose: () => { if (!finished) onCancel?.(); } });
+  const form = $("[data-auth]", m.el);
+  setTimeout(() => form.username.focus(), 50);
+  $$("[data-mode]", m.el).forEach(b => b.onclick = () => { finished = true; m.close(); showAccount(b.dataset.mode, { onDone, onCancel }); });
+  $("[data-cancel]", m.el).onclick = () => m.close();
+  form.addEventListener("submit", async e => {
+    e.preventDefault();
+    const err = $("[data-error]", m.el);
+    const submit = form.querySelector("[type=submit]");
+    const username = form.username.value.trim(), password = form.password.value;
+    if (signingUp && password !== form.password2.value) { err.hidden = false; err.textContent = "Those passwords don't match."; return; }
+    submit.disabled = true;
+    err.hidden = true;
+    try {
+      const u = signingUp ? await account.signup(username, password) : await account.login(username, password);
+      finished = true;
+      m.close();
+      sfx.coins();
+      toast(signingUp ? `Account made. Welcome, ${u.username}! ☁️` : `Welcome back, ${u.username}!`, "good");
+      if (onDone) onDone(); else route();
+    } catch (error) {
+      err.hidden = false;
+      err.textContent = error.message || "Something went wrong.";
+      submit.disabled = false;
+      sfx.error();
+    }
+  });
 }
 
 function maybeDaily() {
@@ -148,21 +232,27 @@ function maybeDaily() {
 
 function showSettings() {
   const p = profile();
+  const user = account.currentUser();
   const m = modal(`<h2>Settings</h2>
-    <p><b>Name</b></p><input type="text" maxlength="20" value="${esc(p.name)}" data-name>
+    <p><b>${user ? "Username" : "Gamertag"}</b></p><input type="text" maxlength="20" value="${esc(user ? user.username : p.name)}" data-name ${user ? "readonly" : ""}>
     <div class="row" style="margin-top:14px">
       <button class="btn small" data-sound>${p.settings.sound ? "🔊 Sound on" : "🔇 Sound off"}</button>
       <button class="btn small" data-haptics>${p.settings.haptics ? "📳 Buzz on" : "📴 Buzz off"}</button>
     </div>
-    <p class="muted" style="color:#5a5160">Your cards, coins, and decks are saved in this browser. Clearing site data resets them.</p>
+    <p class="muted">${user ? "☁️ Your cards, coins, and decks save to your account." : "Guest mode: your cards live in this browser only. Make an account to keep them safe."}</p>
+    ${user ? "" : `<button class="btn small pink" data-make-account>☁️ Make an account</button>`}
     <div class="actions"><button class="btn danger" data-reset>Reset progress</button><button class="btn primary" data-close>Done</button></div>`, {
-    onClose: () => { p.name = $("[data-name]", m.el).value.trim().slice(0, 20) || p.name; store.saveProfile(); renderHome(); }
+    onClose: () => { if (!user) p.name = $("[data-name]", m.el).value.trim().slice(0, 20) || p.name; store.saveProfile(); renderHome(); }
   });
+  const make = $("[data-make-account]", m.el);
+  if (make) make.onclick = () => { m.close(); showAccount("signup"); };
   $("[data-sound]", m.el).onclick = e => { e.target.textContent = toggleSound() ? "🔊 Sound on" : "🔇 Sound off"; };
   $("[data-haptics]", m.el).onclick = e => { p.settings.haptics = !p.settings.haptics; store.saveProfile(); e.target.textContent = p.settings.haptics ? "📳 Buzz on" : "📴 Buzz off"; };
   $("[data-reset]", m.el).onclick = async () => {
-    if (!(await confirmDialog("Reset everything?", "All cards, coins, and decks on this device will be erased.", { yes: "Erase", danger: true }))) return;
-    try { localStorage.removeItem("gooberCardsProfile.v2"); } catch { /* ignore */ }
+    const warning = user ? "All cards, coins, and decks on your account will be erased. This can't be undone." : "All cards, coins, and decks on this device will be erased.";
+    if (!(await confirmDialog("Reset everything?", warning, { yes: "Erase", danger: true }))) return;
+    const fresh = store.resetProfile();
+    if (user) { fresh.name = user.username; store.saveProfile(); await account.flush(); }
     location.hash = "";
     location.reload();
   };
@@ -199,7 +289,7 @@ export function showRules() {
     <h2>How to Play</h2>
     <p>Take your opponent's hero from <b>${STARTING_HP}</b> Health to 0. Take turns playing cards and bonking with your Goobers. That's it. That's the game.</p>
     <h3>✨ Aura</h3>
-    <ul><li>Cards cost Aura (the number in the top-left).</li><li>You get 1 Aura on turn one, +1 each turn, up to 10. It refills every turn.</li><li>Whoever goes second gets <b>Bonus Aura</b>: one free extra Aura, once.</li></ul>
+    <ul><li>Cards cost Aura (the number in the top-left).</li><li>You get 2 Aura on your first turn, +1 each turn after, up to 10. It refills every turn.</li><li>Whoever goes second gets <b>Bonus Aura</b>: one free extra Aura, once.</li><li>At the start, you can swap up to 4 cards from your starting hand.</li><li>Tap any card to read it, even ones you can\'t afford yet.</li></ul>
     <h3>🐶 Goobers (minions)</h3>
     <ul><li>Tap a card, then tap the table to play it (or drag it up).</li><li>New Goobers need a turn before they can attack (unless they have Speedrun).</li><li>Tap one of your glowing Goobers, then tap an enemy to attack. Or drag an arrow!</li><li>When Goobers fight, both deal their Attack (yellow) to each other's Health (red).</li><li>Up to ${BOARD_LIMIT} Goobers fit on your side of the table.</li></ul>
     <h3>⚡ Spells</h3>
@@ -305,8 +395,23 @@ window.addEventListener("popstate", async () => {
   }
 });
 
+function confetti(count = 90) {
+  const colors = ["#ffd34d", "#ff5fc8", "#9b6bff", "#45c8ff", "#5cf08a", "#ff9f45"];
+  for (let i = 0; i < count; i++) {
+    const c = document.createElement("i");
+    c.className = "confetti";
+    c.style.left = `${Math.random() * 100}vw`;
+    c.style.background = colors[i % colors.length];
+    c.style.animationDuration = `${1.8 + Math.random() * 1.8}s`;
+    c.style.animationDelay = `${Math.random() * 0.6}s`;
+    c.style.borderRadius = Math.random() < 0.4 ? "50%" : "2px";
+    document.body.appendChild(c);
+    setTimeout(() => c.remove(), 4400);
+  }
+}
+
 function showResult({ won, draw, coins, firstWin, again, onlineRoom }) {
-  if (won) { sfx.win(); buzz([60, 40, 60]); } else sfx.lose();
+  if (won) { sfx.win(); buzz([60, 40, 60]); confetti(); } else sfx.lose();
   const title = draw ? "Draw??" : won ? "W" : "L";
   const m = modal(`<div class="result ${won ? "win" : "lose"}">
       <h2>${title}</h2>
@@ -489,6 +594,7 @@ function showPulls(el, pulls, type, close) {
     flip.classList.add("flipped");
     const pull = order[Number(flip.dataset.i)];
     sfx.flip(pull.rarity);
+    if (pull.shiny) setTimeout(() => sfx.shiny(), 250);
     if (pull.rarity === "legendary" || pull.shiny) {
       const flash = document.createElement("div");
       flash.className = "legend-flash";
@@ -756,9 +862,14 @@ function boot() {
   const room = params.get("room");
   if (room) { history.replaceState(null, "", `${location.pathname}#online/${room.toUpperCase()}`); }
   if (location.hash === "#battle") history.replaceState(null, "", "#home");
+  account.onAccountEvents({
+    status: state => { const el = document.querySelector("[data-sync]"); if (el) el.textContent = { saving: "⏳", saved: "☁️", offline: "⚠️" }[state] || "☁️"; },
+    replaced: () => { toast("Loaded newer progress from your other device."); if (!match && !online) route(); },
+    expired: () => { toast("You got logged out. Log in again to keep saving.", "bad"); if (!match && !online) route(); }
+  });
   route();
   refreshCatalog();
-  document.addEventListener("pointerdown", () => { /* unlock audio on first touch */ }, { once: true });
+  account.resume().then(user => { if (user && !match && !online) route(); });
 }
 
 boot();
