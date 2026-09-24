@@ -186,10 +186,40 @@ function openGooberViewer(goober) {
   viewerTitle.textContent = goober.name || "Goober";
   viewerDescription.textContent = goober.description || "A mysterious Goober with powerful Goober energy.";
   viewerCategory.textContent = `${goober.category || "classic"} Goober`;
+  // Admins can delete uploaded Goobers (the built-in originals aren't in the database).
+  viewerGoober = goober;
+  const viewerAdmin = document.getElementById("viewerAdmin");
+  if (viewerAdmin) {
+    viewerAdmin.hidden = !(gooberCardsLogin()?.admin && String(goober.imageUrl || "").startsWith("/api/goober-image/"));
+    document.getElementById("viewerAdminStatus").textContent = "";
+  }
   gooberViewer.hidden = false;
   document.body.classList.add("viewer-open");
   viewerClose?.focus();
 }
+
+let viewerGoober = null;
+
+async function deleteViewerGoober() {
+  const login = gooberCardsLogin();
+  const goober = viewerGoober;
+  const status = document.getElementById("viewerAdminStatus");
+  if (!login?.admin || !goober?.id) return;
+  if (!window.confirm(`Delete "${goober.name}" for everyone? It leaves the gallery and Goober Cards, and its image is removed. This can't be undone.`)) return;
+  status.textContent = "Deleting…";
+  try {
+    const res = await fetch(`${API_BASE}/api/goobers/${encodeURIComponent(goober.id)}`, { method: "DELETE", headers: { authorization: `Bearer ${login.token}` }, cache: "no-store" });
+    const result = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(result.error || "Delete failed.");
+    closeGooberViewer();
+    await loadCloudGoobers({ bustCache: true });
+    if (uploadStatus) uploadStatus.textContent = `🗑️ Deleted ${goober.name}.`;
+  } catch (error) {
+    status.textContent = error.message || "Delete failed.";
+  }
+}
+
+document.getElementById("viewerDelete")?.addEventListener("click", deleteViewerGoober);
 
 function closeGooberViewer() {
   if (!gooberViewer) return;
@@ -435,7 +465,7 @@ function gooberCardsLogin() {
   try {
     const token = localStorage.getItem(GOOBER_CARDS_SESSION);
     const user = JSON.parse(localStorage.getItem(GOOBER_CARDS_USER) || "null");
-    return token && user?.username ? { token, username: user.username } : null;
+    return token && user?.username ? { token, username: user.username, admin: Boolean(user.admin) } : null;
   } catch {
     return null;
   }
@@ -489,6 +519,7 @@ function openAccountModal(mode = "login") {
     ? `<div class="account-sheet" role="dialog" aria-modal="true" aria-labelledby="accountTitle">
         <h3 id="accountTitle">👤 ${escapeHtml(login.username)}</h3>
         <p>You're logged in to Goober Cards. You can add Goobers here and play with the same account.</p>
+        ${login.admin ? `<p>🛡️ <b>Admin:</b> open any uploaded Goober in the gallery to delete it, or check the <a href="/review/">review queue</a>.</p>` : ""}
         <div class="upload-actions"><a class="upload-button primary" href="/goober-cards/">Open Goober Cards</a><button class="upload-button" type="button" data-logout>Log out</button><button class="upload-button" type="button" data-close>Close</button></div>
       </div>`
     : `<form class="account-sheet" role="dialog" aria-modal="true" aria-labelledby="accountTitle">
@@ -549,6 +580,17 @@ document.addEventListener("click", event => {
 document.addEventListener("keydown", event => { if (event.key === "Escape") closeAccountModal(); });
 
 renderUploadGate();
+// Refresh the saved account (picks up admin powers, and notices an expired login).
+(async () => {
+  const login = gooberCardsLogin();
+  if (!login) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/me`, { headers: { authorization: `Bearer ${login.token}` }, cache: "no-store" });
+    if (res.status === 401) { forgetGooberCardsLogin(); renderUploadGate(); return; }
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.user?.username) { localStorage.setItem(GOOBER_CARDS_USER, JSON.stringify(data.user)); renderUploadGate(); }
+  } catch { /* offline: keep the saved login */ }
+})();
 // Pick up a login from another tab, or from coming back after logging in.
 window.addEventListener("storage", event => {
   if (event.key === GOOBER_CARDS_SESSION || event.key === GOOBER_CARDS_USER) renderUploadGate();

@@ -1078,6 +1078,7 @@ function showCardDetail(id, refresh) {
         ${canCraft ? `<button class="btn small primary" data-craft>🔨 Craft (${COIN}${cost})</button>` : ""}
         ${card.type === "minion" && card.art?.image && n ? `<button class="btn small" data-portrait>🖼️ Use as portrait</button>` : ""}
       </div>
+      ${card.gooberId && account.currentUser()?.admin ? `<div class="row admin-row"><button class="btn small danger" data-admin-delete>🗑️ Delete Goober (admin)</button></div>` : ""}
     </div>
     <button class="btn primary" data-close>Close</button></div>`, { bare: true, onClose: refresh });
   const craft = $("[data-craft]", m.el);
@@ -1089,6 +1090,22 @@ function showCardDetail(id, refresh) {
     sfx.flip(card.rarity);
     toast(`Crafted ${card.name}!`, "good");
     m.close();
+  };
+  const adminDelete = $("[data-admin-delete]", m.el);
+  if (adminDelete) adminDelete.onclick = async () => {
+    if (!(await confirmDialog(`Delete ${card.name}?`, "It leaves the gallery and Goober Cards for everyone, and its image is removed. This can't be undone.", { yes: "Delete", danger: true }))) return;
+    adminDelete.disabled = true;
+    try {
+      const res = await fetch(`/api/goobers/${encodeURIComponent(card.gooberId)}`, { method: "DELETE", headers: { authorization: `Bearer ${account.sessionToken()}` }, cache: "no-store" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Delete failed.");
+      toast(`Deleted ${card.name}.`, "good");
+      m.close();
+      await refreshCatalog();
+    } catch (error) {
+      toast(error.message, "bad");
+      adminDelete.disabled = false;
+    }
   };
   const portrait = $("[data-portrait]", m.el);
   if (portrait) portrait.onclick = () => { profile().hero = id; store.saveProfile(); toast(`${card.name} is your hero now!`, "good"); };
