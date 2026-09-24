@@ -49,7 +49,7 @@ export const HERO_POWER = { name: "BARK FART", cost: 2, damage: 1, text: "Bark, 
 
 // Token minions summoned by abilities (not collectible).
 export const TOKENS = {
-  "token-pup": { id: "token-pup", type: "minion", name: "Lil Goober", cost: 1, attack: 1, health: 1, rarity: "common", category: "token", keywords: [], art: { emoji: "🐶" }, text: "", token: true },
+  "token-pup": { id: "token-pup", type: "minion", name: "Lil Goober", cost: 1, attack: 1, health: 1, rarity: "common", category: "token", keywords: [], art: { image: "/assets/lil-goober.jpg" }, text: "", token: true },
   "token-loaf": { id: "token-loaf", type: "minion", name: "Loaf", cost: 1, attack: 0, health: 3, rarity: "common", category: "token", keywords: ["guard"], art: { emoji: "🍞" }, text: "", token: true },
   "token-ghost": { id: "token-ghost", type: "minion", name: "Ghost Goober", cost: 1, attack: 2, health: 1, rarity: "common", category: "token", keywords: ["sneaky"], art: { emoji: "👻" }, text: "", token: true },
   "token-crumb": { id: "token-crumb", type: "spell", name: "Bonus Aura", cost: 0, rarity: "common", category: "token", keywords: [], art: { emoji: "🪙" }, effect: { type: "mana", amount: 1 }, text: "Gain 1 Aura this turn only.", token: true }
