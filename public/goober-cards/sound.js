@@ -20,6 +20,28 @@ function audio() {
   } catch { return null; }
 }
 
+// Browsers (iOS Safari especially) only let audio start inside a tap or key press.
+// Online, most sounds are triggered by server messages with no tap behind them, so an
+// AudioContext first created then stays muted. Wake it on any tap instead, and play a
+// silent sample in that tap, which iOS needs to fully unlock output.
+function unlockAudio() {
+  const a = audio();
+  if (!a || a.state === "running") return;
+  a.resume().catch(() => {});
+  try {
+    const src = a.createBufferSource();
+    src.buffer = a.createBuffer(1, 1, 22050);
+    src.connect(a.destination);
+    src.start(0);
+  } catch { /* nothing to unlock */ }
+}
+
+if (typeof window !== "undefined") {
+  for (const type of ["pointerdown", "touchend", "mousedown", "keydown", "click"]) window.addEventListener(type, unlockAudio, { capture: true, passive: true });
+  // iOS suspends audio when the app is backgrounded; pick it back up on return (or on the next tap).
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && ctx && ctx.state !== "running") ctx.resume().catch(() => {}); });
+}
+
 function buildBus(a) {
   const input = a.createGain();
   const comp = a.createDynamicsCompressor();
