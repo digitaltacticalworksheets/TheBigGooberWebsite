@@ -645,14 +645,14 @@ function bindDeckPicker(root, onPick) {
 }
 
 // ------------------------------------------------------------------ solo
-const AI_ART = { pup: "/assets/Party Goober.jpg", goodboy: "/assets/cowboy-goober.jpg", biggoober: "/assets/spider-goober.jpg" };
+const AI_ART = { sleepy: "/assets/lil-goober.jpg", pup: "/assets/Party Goober.jpg", goodboy: "/assets/cowboy-goober.jpg", biggoober: "/assets/spider-goober.jpg" };
 
 function renderSolo() {
   const level = view.solo.level;
   app.innerHTML = `<div class="screen">
     ${topbar("Solo Battle")}
     <span class="field-label">Pick your opponent</span>
-    <div class="choice-list three">${Object.entries(AI_LEVELS).map(([key, l]) => `
+    <div class="choice-list four">${Object.entries(AI_LEVELS).map(([key, l]) => `
       <button class="choice ${key === level ? "selected" : ""}" data-level="${key}"><img src="${AI_ART[key]}" alt=""><div><b>${l.name}</b><small>${l.blurb}</small><br><small>${COIN}Win: +${l.reward}</small></div></button>`).join("")}
     </div>
     <span class="field-label">Your deck</span>
@@ -666,7 +666,14 @@ function renderSolo() {
 
 function aiDeck(level) {
   if (level === "biggoober") return autoDeck(catalog, null, () => Math.random() * 0.5 + 0.5);
-  if (level === "pup") {
+  // Sleepy only brings cheap commons.
+  if (level === "sleepy") {
+    const counts = {};
+    for (const id of collectibleIds(catalog)) counts[id] = catalog[id].rarity === "common" && catalog[id].cost <= 4 ? 2 : 0;
+    const deck = autoDeck(catalog, counts);
+    if (deck.length === DECK_SIZE) return deck;
+  }
+  if (level === "pup" || level === "sleepy") {
     const counts = {};
     for (const id of collectibleIds(catalog)) counts[id] = catalog[id].rarity === "common" || catalog[id].rarity === "rare" ? 2 : 0;
     const deck = autoDeck(catalog, counts);
@@ -679,6 +686,10 @@ function startSolo(level) {
   const { deck, entries } = store.playableDeck(catalog);
   const oppDeck = aiDeck(level).map(id => ({ id, shiny: level === "biggoober" && Math.random() < 0.15 }));
   const state = createGame({ decks: [entries, oppDeck], names: [profile().name || "You", AI_LEVELS[level].name], seed: (Math.random() * 2 ** 32) >>> 0 });
+  // Some opponents start ahead: extra cards in hand and/or Drip (armor).
+  const opp = state.players[1];
+  for (let i = 0; i < (AI_LEVELS[level].startCards || 0) && opp.deck.length; i++) opp.hand.push(opp.deck.shift());
+  if (AI_LEVELS[level].startArmor) opp.hero.armor = AI_LEVELS[level].startArmor;
   history.pushState(null, "", "#battle");
   setPresence("solo");
   // Logged-in players get a server ticket so the win can be paid out.

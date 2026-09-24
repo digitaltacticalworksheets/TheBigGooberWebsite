@@ -3,10 +3,14 @@
 // best one until ending the turn looks best.
 import { applyAction, legalActions } from "./engine.js";
 
+// Sleepy is the gentle one for new players: besides random moves it often dozes off
+// (ends its turn with cards and Aura left), passes on attacks, and never BARK FARTs.
 export const AI_LEVELS = {
-  pup: { name: "NPC", blurb: "Just vibing. Barely knows the rules.", noise: 6, blunder: 0.25, reward: 40 },
+  sleepy: { name: "Sleepy Goober", blurb: "Mostly napping. Forgets to attack. Perfect for learning.", noise: 10, blunder: 0.55, doze: 0.3, skipAttack: 0.5, noPower: true, reward: 25 },
+  pup: { name: "NPC", blurb: "Knows the rules. Makes some goofy plays.", noise: 6, blunder: 0.25, reward: 40 },
   goodboy: { name: "Tryhard", blurb: "Actually reads the cards. Kind of sweaty.", noise: 1.2, blunder: 0.04, reward: 60 },
-  biggoober: { name: "Final Boss", blurb: "No mercy. Stacked deck. Good luck.", noise: 0, blunder: 0, reward: 90 }
+  // Final Boss also starts ahead: one extra card and 4 Drip (about 60/40 against Tryhard).
+  biggoober: { name: "Final Boss", blurb: "No mercy. Stacked deck. Starts with an extra card and 4 Drip.", noise: 0, blunder: 0, startCards: 1, startArmor: 4, reward: 90 }
 };
 
 const KW_VALUE = { guard: 1.2, fluffy: 1.6, lifesnack: 1, doubleWag: 0, bitey: 2.2, sneaky: 0.8, zoomies: 0, leftOnRead: 1 };
@@ -48,6 +52,7 @@ export function evaluate(state, me, catalog = null) {
 
 const clone = s => JSON.parse(JSON.stringify(s));
 
+
 export function chooseAiAction(state, catalog, me, level = "goodboy", random = Math.random) {
   const cfg = AI_LEVELS[level] || AI_LEVELS.goodboy;
   const self = state.players[me];
@@ -58,8 +63,11 @@ export function chooseAiAction(state, catalog, me, level = "goodboy", random = M
   }
   const actions = legalActions(state, catalog, me);
   if (!actions.length) return { type: "end" };
-  const nonEnd = actions.filter(a => a.type !== "end");
+  let nonEnd = actions.filter(a => a.type !== "end");
+  if (cfg.noPower) nonEnd = nonEnd.filter(a => a.type !== "power");
+  if (cfg.skipAttack && random() < cfg.skipAttack) nonEnd = nonEnd.filter(a => a.type !== "attack");
   if (!nonEnd.length) return { type: "end" };
+  if (cfg.doze && random() < cfg.doze) return { type: "end" };
   if (random() < cfg.blunder) {
     const pick = nonEnd[Math.floor(random() * nonEnd.length)];
     // Even a pup won't bonk its own face.

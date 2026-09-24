@@ -14,7 +14,7 @@ export const CRAFT_COST = { common: 40, rare: 100, epic: 300, legendary: 800 };
 // or craft it at a creator discount off the normal price (which scales with rarity).
 export const CREATOR_DISCOUNT = 0.5;
 export const PITY_LIMIT = 10;
-export const SOLO_REWARD = { pup: 40, goodboy: 60, biggoober: 90 };
+export const SOLO_REWARD = { sleepy: 25, pup: 40, goodboy: 60, biggoober: 90 };
 export const ONLINE_REWARD = { win: 100, loss: 30 };
 export const FIRST_WIN_BONUS = 50;
 // Server-side limits on match rewards (per UTC day), so fake "wins" can't print coins.
