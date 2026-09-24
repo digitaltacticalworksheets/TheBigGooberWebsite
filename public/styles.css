@@ -85,7 +85,7 @@ header::before {
 nav { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
 
 /* ---------- Buttons ---------- */
-nav a, .button, .filter-btn, .upload-button, .gallery-search-button, .delete-goober {
+nav a, .nav-account, .button, .filter-btn, .upload-button, .gallery-search-button, .delete-goober {
   position: relative; overflow: hidden;
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   padding: 10px 16px; border-radius: 14px;
@@ -237,6 +237,20 @@ main { max-width: 1240px; margin: 0 auto; padding: 10px 22px 70px; }
 .upload-gate .upload-actions { justify-content: center; }
 .upload-gate a { text-decoration: none; }
 .upload-as { margin: 0; color: var(--muted); font-weight: 900; font-size: 0.9rem; }
+.nav-account.logged-in { border-color: rgba(255, 211, 77, 0.7); color: var(--yellow); }
+.account-modal { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 16px; background: rgba(6, 4, 14, 0.72); }
+.account-sheet { width: min(420px, 100%); display: grid; gap: 12px; padding: 22px; border-radius: 22px; background: var(--panel-solid); border: 1px solid var(--edge); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6); }
+.account-sheet h3 { margin: 0; font-size: 1.4rem; text-transform: uppercase; color: var(--yellow); }
+.account-sheet p { margin: 0; color: var(--muted); font-weight: 700; line-height: 1.45; }
+.account-sheet label { display: grid; gap: 6px; font-weight: 900; color: var(--yellow); text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.85rem; }
+.account-sheet input { width: 100%; padding: 11px 13px; border-radius: 14px; font: inherit; font-weight: 700; text-transform: none; letter-spacing: 0; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.25); color: var(--text); }
+.account-sheet input:focus { outline: none; border-color: var(--yellow); box-shadow: 0 0 0 3px rgba(255, 211, 77, 0.3); }
+.account-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 4px; border-radius: 14px; background: rgba(255, 255, 255, 0.06); }
+.account-tabs button { padding: 8px; border: 0; border-radius: 10px; background: transparent; color: var(--muted); font: inherit; font-weight: 900; cursor: pointer; }
+.account-tabs button.on { background: rgba(255, 211, 77, 0.2); color: var(--yellow); }
+.account-note { font-size: 0.9rem; }
+.account-error { color: #ff8a8a !important; }
+.account-sheet .upload-actions { justify-content: flex-end; }
 .upload-status { margin: 0; color: var(--yellow); font-weight: 900; line-height: 1.4; }
 
 /* ---------- About ---------- */
@@ -284,7 +298,7 @@ footer {
 @media (max-width: 760px) {
   header { flex-direction: column; align-items: flex-start; padding: 12px 14px; position: relative; }
   nav { width: 100%; justify-content: flex-start; gap: 6px; }
-  nav a { padding: 8px 11px; font-size: 0.86rem; }
+  nav a, .nav-account { padding: 8px 11px; font-size: 0.86rem; }
   main { padding-left: 12px; padding-right: 12px; }
   .hero { grid-template-columns: 1fr; padding: 24px 14px 10px; gap: 26px; }
   .feature-card { rotate: 0deg; max-width: 420px; }

@@ -10,6 +10,9 @@ export const PACKS = {
 
 export const RECYCLE_VALUE = { common: 5, rare: 20, epic: 60, legendary: 200 };
 export const CRAFT_COST = { common: 40, rare: 100, epic: 300, legendary: 800 };
+// Uploading a Goober doesn't hand you its card: you pull it from packs like anyone,
+// or craft it at a creator discount off the normal price (which scales with rarity).
+export const CREATOR_DISCOUNT = 0.5;
 export const PITY_LIMIT = 10;
 export const SOLO_REWARD = { pup: 40, goodboy: 60, biggoober: 90 };
 export const ONLINE_REWARD = { win: 100, loss: 30 };
@@ -48,6 +51,7 @@ export function freshProfile() {
     openMatch: null,
     editsRev: 0,
     paidGames: [],
+    creations: [],
     rank: freshRank(),
     settings: { sound: true, haptics: true },
     tutorialSeen: false,
@@ -68,6 +72,7 @@ export function normalizeProfile(data) {
   p.pity = Math.max(0, Math.floor(Number(p.pity) || 0));
   p.editsRev = Math.max(0, Math.floor(Number(p.editsRev) || 0));
   p.paidGames = Array.isArray(p.paidGames) ? p.paidGames.slice(-30) : [];
+  p.creations = Array.isArray(p.creations) ? p.creations.filter(id => typeof id === "string").slice(-200) : [];
   p.rank = { ...freshRank(), ...(p.rank && typeof p.rank === "object" ? p.rank : {}) };
   p.rank.rp = Math.max(0, Math.floor(Number(p.rank.rp) || 0));
   return p;
@@ -216,11 +221,25 @@ export function recycleExtras(p, catalog) {
   return { ok: true, coins, count };
 }
 
+// Whether this player uploaded the Goober behind a card.
+export const isCreator = (p, card) => Boolean(card?.gooberId && p.creations.includes(card.gooberId));
+
+export function craftCostFor(p, card) {
+  const base = CRAFT_COST[card.rarity];
+  return isCreator(p, card) ? Math.round((base * CREATOR_DISCOUNT) / 5) * 5 : base;
+}
+
+// Server only: remember an upload so its card gets the creator price.
+export function recordCreation(p, gooberId) {
+  if (!p.creations.includes(gooberId)) p.creations = [...p.creations, gooberId].slice(-200);
+  return { ok: true };
+}
+
 export function craftCard(p, id, catalog) {
   const card = catalog[id];
   if (!card || card.token) return { ok: false, error: "That card can't be crafted." };
   if (ownedCount(p, id) >= MAX_COPIES[card.rarity]) return { ok: false, error: "You already have the max playable copies." };
-  const cost = CRAFT_COST[card.rarity];
+  const cost = craftCostFor(p, card);
   if (p.coins < cost) return { ok: false, error: `You need ${cost - p.coins} more coins.` };
   p.coins -= cost;
   addCard(p, id, false);

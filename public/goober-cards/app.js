@@ -5,7 +5,7 @@ import { AI_LEVELS } from "./ai.js";
 import { SoloMatch } from "./battle.js";
 import { OnlineMatch, createRoom, findMatch, liveGames, roomStatus, hasSeatIn } from "./online.js";
 import * as store from "./collection.js";
-import { RANK_TIERS, RANK_POINTS, tierFor, nextTier } from "./economy.js";
+import { RANK_TIERS, RANK_POINTS, tierFor, nextTier, craftCostFor, isCreator, CREATOR_DISCOUNT } from "./economy.js";
 import * as account from "./account.js";
 import { $, $$, esc, sleep, cardHTML, cardBackHTML, toast, modal, confirmDialog, keywordGlossary, onLongPress } from "./ui.js";
 import { sfx, setSoundEnabled, buzz } from "./sound.js";
@@ -28,7 +28,7 @@ function readCachedGoobers() {
   try { return JSON.parse(localStorage.getItem(GOOBER_CACHE_KEY) || "[]"); } catch { return []; }
 }
 
-async function refreshCatalog() {
+async function refreshCatalog({ rerender = true } = {}) {
   try {
     const res = await fetch("/api/goobers", { cache: "no-store" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -37,7 +37,7 @@ async function refreshCatalog() {
     try { localStorage.setItem(GOOBER_CACHE_KEY, JSON.stringify(goobers)); } catch { /* storage full */ }
     const before = collectibleIds(catalog).length;
     catalog = buildCatalog(goobers);
-    if (collectibleIds(catalog).length !== before && !match && !online) route();
+    if (rerender && collectibleIds(catalog).length !== before && !match && !online) route();
   } catch (error) {
     console.warn("Using cached Goobers:", error.message);
   }
@@ -66,6 +66,7 @@ function route() {
     case "watch": return renderOnline("", arg);
     case "challenge": return renderChallenge(arg);
     case "login": case "signup": return renderAuthLink(name, arg);
+    case "draw": return renderDraw();
     case "packs": return renderPacks();
     case "collection": return renderCollection();
     case "decks": return renderDecks();
@@ -116,7 +117,7 @@ function renderHome() {
       <a class="tile yellow" href="#collection"><span class="ico">📚</span><b>Collection</b><span>${discovered}/${ids.length} found</span>${newCount ? `<em class="badge">${newCount}</em>` : ""}</a>
       <a class="tile green" href="#decks"><span class="ico">🃏</span><b>My Decks</b><span>${p.decks.length} deck${p.decks.length === 1 ? "" : "s"}</span></a>
       <button class="tile blue" data-rules><span class="ico">📖</span><b>How to Play</b><span>Read this or get cooked</span></button>
-      <a class="tile orange" href="${account.currentUser() ? "/#upload" : "#login/upload"}"><span class="ico">✏️</span><b>Draw a Goober</b><span>${account.currentUser() ? "Your drawing becomes a card" : "Log in to upload yours"}</span></a>
+      <a class="tile orange" href="#draw"><span class="ico">✏️</span><b>Draw a Goober</b><span>${account.currentUser() ? "Your drawing becomes a card" : "Log in to upload yours"}</span></a>
       <button class="tile white" data-hero><span class="ico">🖼️</span><b>My Portrait</b><span>Pick your main</span></button>
     </div>
     <div class="home-foot">
@@ -178,6 +179,142 @@ function accountChipHTML() {
 }
 
 // Log in / sign up / account screen.
+// ------------------------------------------------------------------ draw a goober
+// Upload right here (not on the main site), so it works inside the installed app too,
+// which keeps its own login separate from the browser's.
+async function shrinkImage(file, maxSide = 1600) {
+  try {
+    if (file.type === "image/gif" || typeof createImageBitmap !== "function") return file;
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+    if (scale === 1 && file.size < 1.5 * 1024 * 1024) return file;
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", 0.88));
+    return blob ? new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" }) : file;
+  } catch {
+    return file;
+  }
+}
+
+function renderDraw() {
+  const user = account.currentUser();
+  if (!user) {
+    app.innerHTML = `<div class="screen">${topbar("Draw a Goober")}
+      <div class="online-card" style="text-align:center">
+        <b>✏️ Adding a Goober needs a free Goober Cards account.</b>
+        <p class="muted">No email needed. Once the auto-mod approves your drawing it becomes a card, and you can craft it at ${Math.round(CREATOR_DISCOUNT * 100)}% off.</p>
+        <div class="row" style="justify-content:center"><button class="btn primary" data-draw-login>Log in</button><button class="btn pink" data-draw-signup>Make an account</button></div>
+      </div></div>`;
+    const open = mode => showAccount(mode, { onDone: () => { if (!profile().name) { profile().name = account.currentUser()?.username || "Goober Fan"; store.saveProfile(); } renderDraw(); } });
+    $("[data-draw-login]", app).onclick = () => open("login");
+    $("[data-draw-signup]", app).onclick = () => open("signup");
+    return;
+  }
+  app.innerHTML = `<div class="screen">${topbar("Draw a Goober")}
+    <p class="muted">Uploading as <b>${esc(user.username)}</b>. Keep it funny, not gross-gross: no swearing, nothing inappropriate, no real people's photos or personal info. The auto-mod checks every upload.</p>
+    <form class="online-card draw-form" data-draw>
+      <label>Goober name<input type="text" name="name" maxlength="80" required placeholder="Wizard Goober"></label>
+      <label>Category<select name="category">${CATEGORIES.map(c => `<option value="${c}">${CATEGORY_STYLE[c]?.icon || ""} ${c[0].toUpperCase() + c.slice(1)}</option>`).join("")}</select></label>
+      <label>Description<textarea name="description" maxlength="280" required placeholder="A loaf-shaped Goober with suspicious magical powers."></textarea></label>
+      <label>Drawing<input type="file" name="image" accept="image/png,image/jpeg,image/webp,image/gif" required></label>
+      <div class="draw-preview" data-preview>Your drawing shows up here</div>
+      <button class="btn big primary" type="submit">Upload Goober</button>
+      <p class="draw-status" data-draw-status></p>
+    </form>
+    <div data-draw-result></div>
+  </div>`;
+  const form = $("[data-draw]", app), status = $("[data-draw-status]", app), preview = $("[data-preview]", app);
+  form.image.addEventListener("change", () => {
+    const file = form.image.files[0];
+    if (!file) { preview.textContent = "Your drawing shows up here"; return; }
+    const url = URL.createObjectURL(file);
+    preview.innerHTML = `<img src="${url}" alt="Your drawing">`;
+  });
+  form.addEventListener("submit", async e => {
+    e.preventDefault();
+    const file = form.image.files[0];
+    const name = form.name.value.trim(), description = form.description.value.trim();
+    if (!file || !file.type.startsWith("image/")) { status.textContent = "Pick an image of your drawing first."; return; }
+    if (!name || !description) { status.textContent = "Give your Goober a name and a description."; return; }
+    const submit = form.querySelector("[type=submit]");
+    submit.disabled = true;
+    status.textContent = "Getting your Goober ready…";
+    const body = new FormData();
+    body.append("name", name);
+    body.append("category", form.category.value);
+    body.append("description", description);
+    body.append("image", await shrinkImage(file));
+    status.textContent = "Uploading… the auto-mod is taking a look.";
+    let res, result;
+    try {
+      res = await fetch("/api/goobers", { method: "POST", headers: { authorization: `Bearer ${account.sessionToken()}` }, body, cache: "no-store" });
+      result = await res.json().catch(() => ({}));
+    } catch {
+      status.textContent = "Couldn't reach the server. Check your connection and try again.";
+      submit.disabled = false;
+      return;
+    }
+    submit.disabled = false;
+    if (res.status === 401) {
+      status.textContent = "Your login expired. Log in again, then hit Upload.";
+      showAccount("login", { onDone: () => { status.textContent = "Logged back in. Hit Upload again."; } });
+      return;
+    }
+    if (!res.ok) {
+      status.textContent = result.moderation === "blocked" ? `🚫 Auto-mod said no: ${result.reason || "that Goober isn't allowed"}. Try a different drawing or description.` : result.error || "Upload failed.";
+      sfx.error();
+      return;
+    }
+    form.reset();
+    preview.textContent = "Your drawing shows up here";
+    status.textContent = "";
+    await account.econ.refresh?.();
+    showDrawResult(result);
+  });
+}
+
+// After an upload: the card isn't given away. Show it, with the creator price to craft it.
+async function showDrawResult(result) {
+  const box = $("[data-draw-result]", app);
+  if (!box) return;
+  const price = result.card ? `${COIN}${result.card.creatorCost}` : "";
+  if (result.moderation !== "approved") {
+    box.innerHTML = `<div class="online-card" style="text-align:center"><b>⏳ ${esc(result.name)} is waiting for a mod.</b><p class="muted">Once it's approved it becomes a card. Craft it from your Collection at the creator price${price ? ` (${price})` : ""}, or pull it from packs.</p></div>`;
+    return;
+  }
+  sfx.shiny();
+  await refreshCatalog({ rerender: false });
+  if (!box.isConnected) return;
+  const card = catalog[result.card?.id];
+  if (!card) {
+    box.innerHTML = `<div class="online-card" style="text-align:center"><b>✅ ${esc(result.name)} is live!</b><p class="muted">Its card shows up in your Collection in a moment. Craft it there at the creator price${price ? ` (${price})` : ""}.</p></div>`;
+    return;
+  }
+  const cost = craftCostFor(profile(), card);
+  box.innerHTML = `<div class="online-card draw-result">
+    <b>✅ ${esc(card.name)} is a card now!</b>
+    <div class="draw-card">${cardHTML(card)}</div>
+    <p class="muted">It's a <b>${RARITY_LABEL[card.rarity]}</b>. Uploading doesn't give you the card, but you get the creator price: ${Math.round(CREATOR_DISCOUNT * 100)}% off crafting. Or try your luck in a Gallery Pack.</p>
+    <div class="row" style="justify-content:center">${store.owned(card.id) < MAX_COPIES[card.rarity] ? `<button class="btn primary" data-draw-craft>🔨 Craft it (${COIN}${cost})</button>` : ""}<a class="btn" href="#packs">🎁 Packs</a></div>
+  </div>`;
+  const craft = $("[data-draw-craft]", box);
+  if (craft) craft.onclick = async () => {
+    craft.disabled = true;
+    const res = await account.econ.craftCard(card.id, catalog);
+    craft.disabled = false;
+    if (!res.ok) { toast(res.error, "bad"); sfx.error(); return; }
+    sfx.flip(card.rarity);
+    toast(`Crafted ${card.name}!`, "good");
+    showDrawResult(result);
+  };
+}
+
 // Links from the main site (#login/upload, #signup/upload): log in here, then go back.
 function renderAuthLink(mode, next) {
   const back = next === "upload" ? "/#upload" : null;
@@ -333,7 +470,7 @@ export function showRules() {
     <h3>🏆 Ranked</h3>
     <ul><li>Find a Match is ranked when both players are logged in. Friend rooms and rematches aren't.</li><li>Win: +${RANK_POINTS.win} Rank Points, plus a streak bonus from your 3rd win in a row. Loss: -${RANK_POINTS.loss}.</li><li>Climb ${RANK_TIERS.map(t => `${t.icon} ${t.name}`).join(" → ")}. Once you reach a tier you can't drop out of it.</li></ul>
     <h3>🎁 Collecting</h3>
-    <ul><li>Win games to earn coins. Rip packs. Pull rare and ✨shiny✨ Goobers.</li><li>Every Goober uploaded to the site becomes a card with its own stats and rarity.</li><li>Decks have exactly ${DECK_SIZE} cards: max 2 copies of a card (1 for Legendaries).</li><li>Press and hold any card to read it up close.</li></ul>
+    <ul><li>Win games to earn coins. Rip packs. Pull rare and ✨shiny✨ Goobers.</li><li>Every Goober uploaded to the site becomes a card with its own stats and rarity. Upload one and you can craft its card at ${Math.round(CREATOR_DISCOUNT * 100)}% off (or pull it from packs).</li><li>Decks have exactly ${DECK_SIZE} cards: max 2 copies of a card (1 for Legendaries).</li><li>Press and hold any card to read it up close.</li></ul>
     <div class="actions"><button class="btn primary" data-close>Bet</button></div></div>`);
 }
 
@@ -900,7 +1037,7 @@ function renderCollection() {
     const newCards = profile().newCards;
     $("[data-grid]", app).innerHTML = cards.length ? cards.map(card => {
       const n = store.owned(card.id), s = store.ownedShiny(card.id);
-      return `<button class="grid-cell" data-card="${esc(card.id)}">${cardHTML(card, { shiny: s > 0, extraClass: n ? "" : "locked" })}${n ? `<span class="count">×${n}${s ? ` ✨${s}` : ""}</span>` : `<span class="count">${COIN}${store.CRAFT_COST[card.rarity]}</span>`}${newCards[card.id] ? `<span class="new">NEW</span>` : ""}</button>`;
+      return `<button class="grid-cell" data-card="${esc(card.id)}">${cardHTML(card, { shiny: s > 0, extraClass: n ? "" : "locked" })}${n ? `<span class="count">×${n}${s ? ` ✨${s}` : ""}</span>` : `<span class="count">${isCreator(profile(), card) ? "✏️ " : ""}${COIN}${craftCostFor(profile(), card)}</span>`}${newCards[card.id] ? `<span class="new">NEW</span>` : ""}</button>`;
     }).join("") : `<div class="empty-note">No cards match those filters.</div>`;
   };
   fillGrid();
@@ -928,9 +1065,11 @@ function showCardDetail(id, refresh) {
   const n = store.owned(id), s = store.ownedShiny(id);
   store.markSeen(id);
   const canCraft = n < MAX_COPIES[card.rarity];
-  const cost = store.CRAFT_COST[card.rarity];
+  const cost = craftCostFor(profile(), card);
+  const mine = isCreator(profile(), card);
   const m = modal(`<div class="inspect">${cardHTML(card, { shiny: s > 0 })}
     <div class="details">
+      ${mine ? `<p class="creator-note">✏️ <b>You drew this Goober.</b> Creator price: ${Math.round(CREATOR_DISCOUNT * 100)}% off crafting.</p>` : ""}
       <p><b>${RARITY_LABEL[card.rarity]}</b> · ${card.type === "spell" ? "Spell" : `${CATEGORY_STYLE[card.category]?.icon || ""} ${esc(card.category)} Goober`} · You own <b>${n}</b>${s ? ` (✨${s} shiny)` : ""}</p>
       ${card.flavor ? `<p><i>${esc(card.flavor)}</i></p>` : ""}
       ${keywordGlossary(card.keywords, card)}
