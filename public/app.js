@@ -438,6 +438,7 @@ function forgetGooberCardsLogin() {
 }
 
 function renderUploadGate(message = "") {
+  renderAccountButton();
   if (!uploadForm || !uploadGate) return;
   const login = gooberCardsLogin();
   uploadGate.hidden = Boolean(login);
@@ -448,6 +449,93 @@ function renderUploadGate(message = "") {
     uploadAs.textContent = `Uploading as ${login.username}`;
   }
 }
+
+// --- Goober Cards account on the main site ------------------------------------
+// Logging in here uses Goober Cards' own account code, so it's the same login
+// (and the same saved cards) as the game.
+const accountButton = document.getElementById("accountButton");
+let accountModule = null;
+const loadAccount = () => (accountModule ??= import("/goober-cards/account.js"));
+
+function renderAccountButton() {
+  if (!accountButton) return;
+  const login = gooberCardsLogin();
+  accountButton.textContent = login ? `👤 ${login.username}` : "Log in";
+  accountButton.classList.toggle("logged-in", Boolean(login));
+}
+
+function closeAccountModal() {
+  document.querySelector(".account-modal")?.remove();
+}
+
+function openAccountModal(mode = "login") {
+  closeAccountModal();
+  const login = gooberCardsLogin();
+  const modal = document.createElement("div");
+  modal.className = "account-modal";
+  const signingUp = mode === "signup";
+  modal.innerHTML = login
+    ? `<div class="account-sheet" role="dialog" aria-modal="true" aria-labelledby="accountTitle">
+        <h3 id="accountTitle">👤 ${escapeHtml(login.username)}</h3>
+        <p>You're logged in to Goober Cards. You can add Goobers here and play with the same account.</p>
+        <div class="upload-actions"><a class="upload-button primary" href="/goober-cards/">Open Goober Cards</a><button class="upload-button" type="button" data-logout>Log out</button><button class="upload-button" type="button" data-close>Close</button></div>
+      </div>`
+    : `<form class="account-sheet" role="dialog" aria-modal="true" aria-labelledby="accountTitle">
+        <h3 id="accountTitle">${signingUp ? "Make a Goober Cards account" : "Log in to Goober Cards"}</h3>
+        <div class="account-tabs"><button type="button" class="${signingUp ? "" : "on"}" data-mode="login">Log in</button><button type="button" class="${signingUp ? "on" : ""}" data-mode="signup">Sign up</button></div>
+        <label>Username<input name="username" maxlength="20" autocomplete="username" autocapitalize="off" spellcheck="false" required placeholder="3-20 letters, numbers, _"></label>
+        <label>Password<input name="password" type="password" maxlength="200" autocomplete="${signingUp ? "new-password" : "current-password"}" required placeholder="At least 6 characters"></label>
+        ${signingUp ? `<label>Password again<input name="password2" type="password" maxlength="200" autocomplete="new-password" required></label><p class="account-note">No email, so write your password down somewhere safe.</p>` : `<p class="account-note">Same account as the game: your cards and coins come with you.</p>`}
+        <p class="account-error" data-error hidden></p>
+        <div class="upload-actions"><button class="upload-button" type="button" data-close>Cancel</button><button class="upload-button primary" type="submit">${signingUp ? "Create account" : "Log in"}</button></div>
+      </form>`;
+  document.body.appendChild(modal);
+  modal.addEventListener("click", event => {
+    if (event.target === modal || event.target.closest("[data-close]")) closeAccountModal();
+    const switchTo = event.target.closest("[data-mode]")?.dataset.mode;
+    if (switchTo && switchTo !== mode) openAccountModal(switchTo);
+  });
+  const logout = modal.querySelector("[data-logout]");
+  if (logout) logout.onclick = async () => {
+    logout.disabled = true;
+    try { await (await loadAccount()).logout(); } catch { forgetGooberCardsLogin(); }
+    closeAccountModal();
+    renderUploadGate();
+  };
+  const form = modal.querySelector("form");
+  if (!form) return;
+  setTimeout(() => form.username.focus(), 30);
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    const error = form.querySelector("[data-error]");
+    const submit = form.querySelector("[type=submit]");
+    if (signingUp && form.password.value !== form.password2.value) { error.hidden = false; error.textContent = "Those passwords don't match."; return; }
+    submit.disabled = true;
+    error.hidden = true;
+    try {
+      const account = await loadAccount();
+      const user = signingUp ? await account.signup(form.username.value.trim(), form.password.value) : await account.login(form.username.value.trim(), form.password.value);
+      closeAccountModal();
+      renderUploadGate();
+      if (uploadStatus) uploadStatus.textContent = `Welcome${signingUp ? "" : " back"}, ${user.username}! You can add Goobers now.`;
+    } catch (err) {
+      error.hidden = false;
+      error.textContent = err.message || "Something went wrong.";
+      submit.disabled = false;
+    }
+  });
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
+}
+
+accountButton?.addEventListener("click", () => openAccountModal("login"));
+document.addEventListener("click", event => {
+  const mode = event.target.closest("[data-open-account]")?.dataset.openAccount;
+  if (mode) openAccountModal(mode);
+});
+document.addEventListener("keydown", event => { if (event.key === "Escape") closeAccountModal(); });
 
 renderUploadGate();
 // Pick up a login from another tab, or from coming back after logging in.
@@ -523,16 +611,15 @@ if (uploadForm) {
       uploadForm.reset();
       filePreview.textContent = "Image preview will appear here.";
       if (result.moderation === "pending") {
-        uploadStatus.textContent = `⏳ ${result.name || name} is waiting for a mod to approve it. It'll show up once it's checked.`;
+        uploadStatus.textContent = `⏳ ${result.name || name} is waiting for a mod to approve it. Once it's approved it becomes a card you can craft at the creator price${result.card ? ` (${result.card.creatorCost} coins)` : ""}.`;
         return;
       }
-      uploadStatus.textContent = `✅ ${result.name || name} passed the auto-mod and is live (and it's a card now).`;
-
+      // Refresh the gallery first: it writes its own status line, which would hide this one.
       await loadCloudGoobers({ bustCache: true });
 
-      document.getElementById("goobers").scrollIntoView({
-        behavior: "smooth"
-      });
+      uploadStatus.textContent = result.card
+        ? `✅ ${result.name || name} is live in the gallery and it's ${/^[aeiou]/.test(result.card.rarity) ? "an" : "a"} ${result.card.rarity} card now! Craft it in Goober Cards for ${result.card.creatorCost} coins (creator price, normally ${result.card.craftCost}) or pull it from a pack.`
+        : `✅ ${result.name || name} passed the auto-mod and is live (and it's a card now).`;
     } catch (error) {
       console.error(error);
 

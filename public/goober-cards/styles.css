@@ -303,6 +303,23 @@ h1, h2, h3 { font-family: var(--display); font-weight: 400; letter-spacing: 0.01
 .online-card { display: grid; gap: 12px; padding: 16px; border-radius: 22px; border: 3px dashed rgba(255, 255, 255, 0.35); margin-top: 14px; }
 .online-card input { width: 100%; padding: 12px 14px; border: 3px solid var(--ink); border-radius: 14px; font-family: var(--display); font-size: 1.4rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink); background: #fff; }
 .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.draw-form label { display: grid; gap: 6px; font-weight: 800; }
+.online-card.draw-form input[type="text"], .online-card.draw-form select, .online-card.draw-form textarea {
+  width: 100%; padding: 10px 12px; border-radius: 14px; font: inherit; font-weight: 700;
+  background: rgba(255, 255, 255, 0.08); color: var(--text); border: 1px solid rgba(255, 255, 255, 0.3);
+}
+.online-card.draw-form input, .online-card.draw-form select, .online-card.draw-form textarea { text-transform: none; letter-spacing: 0; font-family: inherit; }
+.online-card.draw-form input[type="file"] { padding: 8px; border-radius: 14px; background: rgba(255, 255, 255, 0.08); color: var(--text); border: 1px solid rgba(255, 255, 255, 0.3); font: inherit; font-size: 0.9rem; }
+.draw-form select option { background: #1d1628; }
+.draw-form textarea { min-height: 80px; resize: vertical; }
+.draw-form input:focus, .draw-form select:focus, .draw-form textarea:focus { outline: none; border-color: var(--yellow); box-shadow: 0 0 0 3px rgba(255, 211, 77, 0.3); }
+.draw-preview { min-height: 140px; display: grid; place-items: center; border: 2px dashed rgba(255, 255, 255, 0.3); border-radius: 16px; color: var(--muted); font-weight: 800; overflow: hidden; }
+.draw-preview img { max-width: 100%; max-height: 240px; object-fit: contain; background: #fff; border-radius: 10px; }
+.draw-status { margin: 0; color: var(--yellow); font-weight: 800; }
+.draw-result { text-align: center; }
+.draw-card { display: grid; justify-items: center; }
+.draw-card .card { --cw: min(200px, 56vw); }
+.creator-note { padding: 8px 10px; border-radius: 12px; background: rgba(255, 159, 69, 0.15); border: 1px solid rgba(255, 159, 69, 0.45); }
 .challenge-card { text-align: left; }
 .challenge-head { display: flex; gap: 14px; align-items: center; }
 .challenge-head > span { font-size: 3rem; line-height: 1; filter: drop-shadow(0 0 12px rgba(255, 95, 200, 0.7)); }

@@ -1,4 +1,4 @@
-import { buildCatalog, validateDeck } from "../public/goober-cards/cards.js";
+import { buildCatalog, validateDeck, cardFromGoober } from "../public/goober-cards/cards.js";
 import { createGame, applyAction, viewFor, eventsFor } from "../public/goober-cards/engine.js";
 import * as econ from "../public/goober-cards/economy.js";
 
@@ -538,7 +538,13 @@ async function uploadGoober(request, env) {
   const id = crypto.randomUUID(), extension = kind.ext, imageKey = `goobers/${id}.${extension}`;
   await env.GOOBER_IMAGES.put(imageKey, bytes, { httpMetadata: { contentType: kind.type }, customMetadata: { originalName: image.name || "goober-upload", gooberName: name, uploaderId: String(user.id), uploader: user.username, moderation: moderation.verdict, moderationReason: moderation.reason.slice(0, 200) } });
   await env.DB.prepare(`INSERT INTO goobers (id, name, category, description, image_key, image_type, approved, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`).bind(id, name, category, description, imageKey, kind.type, approved).run();
-  const body = { id, name, category, description, imageUrl: `/api/goober-image/${imageKey}`, moderation: approved === 1 ? "approved" : "pending", reason: moderation.reason };
+  // The uploader doesn't get the card for free: remember it so they can craft it at the creator price.
+  const imageUrl = `/api/goober-image/${imageKey}`;
+  const card = cardFromGoober({ id, name, category, description, imageUrl });
+  try { await applyEconomy(env, user.id, user.username, p => econ.recordCreation(p, id)); }
+  catch (error) { console.error("Couldn't record the creator for an upload", error); }
+  const creatorCost = Math.round((econ.CRAFT_COST[card.rarity] * econ.CREATOR_DISCOUNT) / 5) * 5;
+  const body = { id, name, category, description, imageUrl, moderation: approved === 1 ? "approved" : "pending", reason: moderation.reason, card: { id: card.id, rarity: card.rarity, craftCost: econ.CRAFT_COST[card.rarity], creatorCost } };
   return jsonResponse(body, approved === 1 ? 201 : 202, NO_STORE_HEADERS);
 }
 
@@ -865,8 +871,8 @@ async function putProfile(request, env) {
 
 // --- Server-side economy -----------------------------------------------------------
 let catalogCache = { at: 0, catalog: null };
-async function loadCatalog(env) {
-  if (catalogCache.catalog && Date.now() - catalogCache.at < 60_000) return catalogCache.catalog;
+async function loadCatalog(env, { fresh = false } = {}) {
+  if (!fresh && catalogCache.catalog && Date.now() - catalogCache.at < 60_000) return catalogCache.catalog;
   let goobers = [];
   try {
     const result = await env.DB.prepare(`SELECT id, name, category, description, image_key FROM goobers WHERE approved = 1`).all();
@@ -910,7 +916,14 @@ async function econAction(request, env, url) {
     case "daily": change = p => econ.claimDaily(p, day); break;
     case "buy": change = p => econ.buyPack(p, cleanText(body.type, 20)); break;
     case "open": { const catalog = await loadCatalog(env); change = p => econ.openPack(p, cleanText(body.type, 20), catalog, rng); break; }
-    case "craft": { const catalog = await loadCatalog(env); change = p => econ.craftCard(p, cleanText(body.id, 80), catalog); break; }
+    case "craft": {
+      const id = cleanText(body.id, 80);
+      // A Goober approved in the last minute may not be in this worker's cached catalog yet.
+      let catalog = await loadCatalog(env);
+      if (!catalog[id]) catalog = await loadCatalog(env, { fresh: true });
+      change = p => econ.craftCard(p, id, catalog);
+      break;
+    }
     case "recycle": { const catalog = await loadCatalog(env); change = p => econ.recycleExtras(p, catalog); break; }
     case "solo-start": {
       const level = cleanText(body.level, 20);
