@@ -195,6 +195,9 @@ export const econ = {
     const r = await serverEcon("solo-finish", { ticket, won, draw });
     return r.ok ? r : { ...r, coins: 0 };
   },
+  // Ask the server whether you uploaded this card's Goober (older uploads are checked
+  // against the uploader saved with the image). Updates the profile if so.
+  async checkCreator(id) { return loggedIn() ? serverEcon("creator-check", { id }) : { ok: false }; },
   // Online rewards are paid by the game server; pull the updated profile.
   async refresh() {
     if (!loggedIn()) return;

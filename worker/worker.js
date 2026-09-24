@@ -638,7 +638,7 @@ function toBase64(bytes) {
 }
 
 async function listPendingGoobers(request, env) {
-  if (!hasValidAdminCode(cleanText(request.headers.get("x-goober-admin-code"), 120), env)) return jsonResponse({ error: "Invalid admin code." }, 403, NO_STORE_HEADERS);
+  if (!(await isAdminRequest(request, env))) return jsonResponse({ error: "Invalid admin code." }, 403, NO_STORE_HEADERS);
   const result = await env.DB.prepare(`SELECT id, name, category, description, image_key, created_at FROM goobers WHERE approved = ? ORDER BY created_at ASC`).bind(PENDING_REVIEW).all();
   return jsonResponse((result.results || []).map(row => ({ id: row.id, name: row.name, category: row.category, description: row.description, imageUrl: `/api/goober-image/${row.image_key}`, createdAt: row.created_at })), 200, NO_STORE_HEADERS);
 }
@@ -646,13 +646,13 @@ async function listPendingGoobers(request, env) {
 async function approveGoober(request, env) {
   const id = decodeURIComponent(new URL(request.url).pathname.replace("/api/goobers/", "").replace(/\/approve$/, "")).trim();
   if (!id || id.includes("/") || id.includes("..")) return jsonResponse({ error: "Invalid goober id." }, 400, NO_STORE_HEADERS);
-  if (!hasValidAdminCode(await readAdminCode(request), env)) return jsonResponse({ error: "Invalid admin code." }, 403, NO_STORE_HEADERS);
+  if (!(await isAdminRequest(request, env, await readAdminCode(request)))) return jsonResponse({ error: "Invalid admin code." }, 403, NO_STORE_HEADERS);
   const row = await env.DB.prepare(`SELECT id FROM goobers WHERE id = ? AND approved = ?`).bind(id, PENDING_REVIEW).first();
   if (!row) return jsonResponse({ error: "No pending Goober with that id." }, 404, NO_STORE_HEADERS);
   await env.DB.prepare(`UPDATE goobers SET approved = 1 WHERE id = ?`).bind(id).run();
   return jsonResponse({ ok: true, id, approved: true }, 200, NO_STORE_HEADERS);
 }
-async function deleteGoober(request, env) { const url = new URL(request.url), id = decodeURIComponent(url.pathname.replace("/api/goobers/", "")).trim(); if (!id || id.includes("/") || id.includes("..")) return jsonResponse({ error: "Invalid goober id." }, 400, NO_STORE_HEADERS); const adminCode = await readAdminCode(request); if (!hasValidAdminCode(adminCode, env)) return jsonResponse({ error: "Invalid admin delete code." }, 403, NO_STORE_HEADERS); const row = await env.DB.prepare(`SELECT id, image_key FROM goobers WHERE id = ?`).bind(id).first(); if (!row) return jsonResponse({ error: "Goober not found." }, 404, NO_STORE_HEADERS); await env.DB.prepare(`UPDATE goobers SET approved = 0 WHERE id = ?`).bind(id).run(); try { if (row.image_key) await env.GOOBER_IMAGES.delete(row.image_key); } catch (error) { console.error("R2 image delete failed after DB soft delete", error); } return jsonResponse({ ok: true, id, deleted: true }, 200, NO_STORE_HEADERS); }
+async function deleteGoober(request, env) { const url = new URL(request.url), id = decodeURIComponent(url.pathname.replace("/api/goobers/", "")).trim(); if (!id || id.includes("/") || id.includes("..")) return jsonResponse({ error: "Invalid goober id." }, 400, NO_STORE_HEADERS); if (!(await isAdminRequest(request, env, await readAdminCode(request)))) return jsonResponse({ error: "Only admins can delete Goobers." }, 403, NO_STORE_HEADERS); const row = await env.DB.prepare(`SELECT id, image_key FROM goobers WHERE id = ?`).bind(id).first(); if (!row) return jsonResponse({ error: "Goober not found." }, 404, NO_STORE_HEADERS); await env.DB.prepare(`UPDATE goobers SET approved = 0 WHERE id = ?`).bind(id).run(); try { if (row.image_key) await env.GOOBER_IMAGES.delete(row.image_key); } catch (error) { console.error("R2 image delete failed after DB soft delete", error); } return jsonResponse({ ok: true, id, deleted: true }, 200, NO_STORE_HEADERS); }
 async function readAdminCode(request) { const headerCode = cleanText(request.headers.get("x-goober-admin-code"), 120); if (headerCode) return headerCode; const contentType = request.headers.get("content-type") || ""; if (contentType.includes("application/json")) { const body = await request.json().catch(() => ({})); return cleanText(body.adminCode, 120); } if (contentType.includes("multipart/form-data") || contentType.includes("application/x-www-form-urlencoded")) { const formData = await request.formData().catch(() => null); return cleanText(formData?.get("adminCode"), 120); } return ""; }
 function hasValidAdminCode(code, env) { const expected = cleanText(env.GOOBER_ADMIN_CODE || env.GOOBER_UPLOAD_CODE, 120); return Boolean(expected && code && safeEqual(code, expected)); }
 function safeEqual(a, b) { if (a.length !== b.length) return false; let result = 0; for (let i = 0; i < a.length; i++) result |= a.charCodeAt(i) ^ b.charCodeAt(i); return result === 0; }
@@ -680,6 +680,16 @@ const MAX_SIGNUPS_PER_DAY = 10;
 const MAX_LOGIN_TRIES = 5;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const USERNAME_RE = /^[A-Za-z0-9_]{3,20}$/;
+// Accounts with admin powers (approve and delete Goobers) without needing the admin code.
+const ADMIN_USERNAMES = new Set(["dbr"]);
+const isAdminUser = user => Boolean(user?.username && ADMIN_USERNAMES.has(String(user.username).toLowerCase()));
+
+// Admin actions accept either the admin code or a logged-in admin account.
+async function isAdminRequest(request, env, code = null) {
+  if (hasValidAdminCode(code ?? cleanText(request.headers.get("x-goober-admin-code"), 120), env)) return true;
+  return isAdminUser(await requireUser(request, env).catch(() => null));
+}
+
 const RESERVED_NAMES = new Set(["admin", "administrator", "mod", "moderator", "goober", "system", "support", "npc", "tryhard", "finalboss"]);
 
 async function routeAccounts(request, env, url) {
@@ -708,7 +718,7 @@ async function handleAccounts(request, env, url) {
 }
 
 function unauthorized() { return jsonResponse({ error: "Please log in again." }, 401, NO_STORE_HEADERS); }
-function publicUser(user) { return { id: user.id, username: user.username }; }
+function publicUser(user) { return { id: user.id, username: user.username, ...(isAdminUser(user) ? { admin: true } : {}) }; }
 
 async function readJson(request) {
   const text = await request.text();
@@ -871,6 +881,19 @@ async function putProfile(request, env) {
 
 // --- Server-side economy -----------------------------------------------------------
 let catalogCache = { at: 0, catalog: null };
+// Whether this account uploaded a Goober, from the uploader stored with its image.
+async function uploadedBy(env, gooberId, userId) {
+  try {
+    const row = await env.DB.prepare(`SELECT image_key FROM goobers WHERE id = ?`).bind(gooberId).first();
+    if (!row?.image_key) return false;
+    const object = await env.GOOBER_IMAGES.head(row.image_key);
+    return Boolean(object?.customMetadata?.uploaderId && object.customMetadata.uploaderId === String(userId));
+  } catch (error) {
+    console.error("Uploader lookup failed", error);
+    return false;
+  }
+}
+
 async function loadCatalog(env, { fresh = false } = {}) {
   if (!fresh && catalogCache.catalog && Date.now() - catalogCache.at < 60_000) return catalogCache.catalog;
   let goobers = [];
@@ -921,7 +944,23 @@ async function econAction(request, env, url) {
       // A Goober approved in the last minute may not be in this worker's cached catalog yet.
       let catalog = await loadCatalog(env);
       if (!catalog[id]) catalog = await loadCatalog(env, { fresh: true });
-      change = p => econ.craftCard(p, id, catalog);
+      const gooberId = catalog[id]?.gooberId;
+      const creator = gooberId ? await uploadedBy(env, gooberId, user.id) : false;
+      change = p => {
+        if (creator) econ.recordCreation(p, gooberId);
+        return econ.craftCard(p, id, catalog);
+      };
+      break;
+    }
+    case "creator-check": {
+      // Uploads made before creators were recorded on accounts: the image itself remembers its uploader.
+      const catalog = await loadCatalog(env);
+      const gooberId = catalog[cleanText(body.id, 80)]?.gooberId;
+      const creator = gooberId ? await uploadedBy(env, gooberId, user.id) : false;
+      change = p => {
+        if (creator) econ.recordCreation(p, gooberId);
+        return { ok: true, creator };
+      };
       break;
     }
     case "recycle": { const catalog = await loadCatalog(env); change = p => econ.recycleExtras(p, catalog); break; }

@@ -45,15 +45,18 @@
 <script>
   const $ = id => document.getElementById(id);
   let code = sessionStorage.getItem("gooberAdminCode") || "";
+  // Admin accounts (logged in to Goober Cards on this site) don't need the code.
+  const session = (() => { try { return localStorage.getItem("gooberCardsSession") || ""; } catch { return ""; } })();
+  const authHeaders = () => ({ ...(code ? { "x-goober-admin-code": code } : {}), ...(session ? { authorization: `Bearer ${session}` } : {}) });
   $("code").value = code;
   const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
   async function load() {
     $("status").textContent = "Loading…";
-    const res = await fetch("/api/goobers/pending", { headers: { "x-goober-admin-code": code }, cache: "no-store" });
+    const res = await fetch("/api/goobers/pending", { headers: authHeaders(), cache: "no-store" });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) { $("status").textContent = data.error || "Couldn't load the queue."; $("grid").innerHTML = ""; return; }
-    sessionStorage.setItem("gooberAdminCode", code);
+    if (code) sessionStorage.setItem("gooberAdminCode", code);
     $("status").textContent = data.length ? `${data.length} Goober${data.length === 1 ? "" : "s"} waiting.` : "Queue is empty. Nice.";
     $("grid").innerHTML = data.map(g => `
       <article class="item" data-id="${esc(g.id)}">
@@ -76,14 +79,14 @@
     const approve = btn.dataset.act === "approve";
     if (!approve && !confirm("Delete this Goober for good?")) return;
     item.querySelectorAll("button").forEach(b => (b.disabled = true));
-    const res = await fetch(approve ? `/api/goobers/${id}/approve` : `/api/goobers/${id}`, { method: approve ? "POST" : "DELETE", headers: { "x-goober-admin-code": code } });
+    const res = await fetch(approve ? `/api/goobers/${id}/approve` : `/api/goobers/${id}`, { method: approve ? "POST" : "DELETE", headers: authHeaders() });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) { alert(data.error || "That didn't work."); item.querySelectorAll("button").forEach(b => (b.disabled = false)); return; }
     item.remove();
     const left = document.querySelectorAll(".item").length;
     $("status").textContent = left ? `${left} left.` : "Queue is empty. Nice.";
   });
-  if (code) load();
+  if (code || session) load();
 </script>
 </body>
 </html>
