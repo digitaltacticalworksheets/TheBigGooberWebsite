@@ -210,10 +210,10 @@ function setFeaturedGoober(goober) {
 
   if (!goober || !goober.imageUrl) {
     featuredGooberImage.src = "/assets/original-goober.jpg";
-    featuredGooberImage.alt = "Original Goober, a hand-drawn cartoon dog";
+    featuredGooberImage.alt = "Original Goober, a hand-drawn loaf-shaped cartoon dog with no legs";
     featuredGooberTitle.textContent = "Original Goober";
     featuredGooberDescription.textContent =
-      "The classic Goober. No gimmicks. No nonsense. Just pure goober geometry.";
+      "The classic Goober. One loaf, zero legs, big snoot, pure goober geometry.";
     return;
   }
 
