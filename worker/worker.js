@@ -871,6 +871,19 @@ async function putProfile(request, env) {
 
 // --- Server-side economy -----------------------------------------------------------
 let catalogCache = { at: 0, catalog: null };
+// Whether this account uploaded a Goober, from the uploader stored with its image.
+async function uploadedBy(env, gooberId, userId) {
+  try {
+    const row = await env.DB.prepare(`SELECT image_key FROM goobers WHERE id = ?`).bind(gooberId).first();
+    if (!row?.image_key) return false;
+    const object = await env.GOOBER_IMAGES.head(row.image_key);
+    return Boolean(object?.customMetadata?.uploaderId && object.customMetadata.uploaderId === String(userId));
+  } catch (error) {
+    console.error("Uploader lookup failed", error);
+    return false;
+  }
+}
+
 async function loadCatalog(env, { fresh = false } = {}) {
   if (!fresh && catalogCache.catalog && Date.now() - catalogCache.at < 60_000) return catalogCache.catalog;
   let goobers = [];
@@ -921,7 +934,23 @@ async function econAction(request, env, url) {
       // A Goober approved in the last minute may not be in this worker's cached catalog yet.
       let catalog = await loadCatalog(env);
       if (!catalog[id]) catalog = await loadCatalog(env, { fresh: true });
-      change = p => econ.craftCard(p, id, catalog);
+      const gooberId = catalog[id]?.gooberId;
+      const creator = gooberId ? await uploadedBy(env, gooberId, user.id) : false;
+      change = p => {
+        if (creator) econ.recordCreation(p, gooberId);
+        return econ.craftCard(p, id, catalog);
+      };
+      break;
+    }
+    case "creator-check": {
+      // Uploads made before creators were recorded on accounts: the image itself remembers its uploader.
+      const catalog = await loadCatalog(env);
+      const gooberId = catalog[cleanText(body.id, 80)]?.gooberId;
+      const creator = gooberId ? await uploadedBy(env, gooberId, user.id) : false;
+      change = p => {
+        if (creator) econ.recordCreation(p, gooberId);
+        return { ok: true, creator };
+      };
       break;
     }
     case "recycle": { const catalog = await loadCatalog(env); change = p => econ.recycleExtras(p, catalog); break; }

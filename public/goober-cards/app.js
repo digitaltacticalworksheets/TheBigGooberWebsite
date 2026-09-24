@@ -9,6 +9,7 @@ import { RANK_TIERS, RANK_POINTS, tierFor, nextTier, craftCostFor, isCreator, CR
 import * as account from "./account.js";
 import { $, $$, esc, sleep, cardHTML, cardBackHTML, toast, modal, confirmDialog, keywordGlossary, onLongPress } from "./ui.js";
 import { sfx, setSoundEnabled, buzz } from "./sound.js";
+import { prepareDrawing } from "./image.js";
 
 const app = document.getElementById("app");
 const GOOBER_CACHE_KEY = "gooberCardsGoobers";
@@ -182,26 +183,6 @@ function accountChipHTML() {
 // ------------------------------------------------------------------ draw a goober
 // Upload right here (not on the main site), so it works inside the installed app too,
 // which keeps its own login separate from the browser's.
-async function shrinkImage(file, maxSide = 1600) {
-  try {
-    if (file.type === "image/gif" || typeof createImageBitmap !== "function") return file;
-    const bitmap = await createImageBitmap(file);
-    const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
-    if (scale === 1 && file.size < 1.5 * 1024 * 1024) return file;
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.round(bitmap.width * scale);
-    canvas.height = Math.round(bitmap.height * scale);
-    const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", 0.88));
-    return blob ? new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" }) : file;
-  } catch {
-    return file;
-  }
-}
-
 function renderDraw() {
   const user = account.currentUser();
   if (!user) {
@@ -230,11 +211,18 @@ function renderDraw() {
     <div data-draw-result></div>
   </div>`;
   const form = $("[data-draw]", app), status = $("[data-draw-status]", app), preview = $("[data-preview]", app);
-  form.image.addEventListener("change", () => {
+  // Trim the drawing as soon as it's picked, and preview exactly what gets uploaded.
+  let prepared = null;
+  form.image.addEventListener("change", async () => {
     const file = form.image.files[0];
+    prepared = null;
     if (!file) { preview.textContent = "Your drawing shows up here"; return; }
-    const url = URL.createObjectURL(file);
-    preview.innerHTML = `<img src="${url}" alt="Your drawing">`;
+    preview.textContent = "Getting your drawing ready…";
+    const ready = prepareDrawing(file);
+    prepared = ready;
+    const out = await ready;
+    if (prepared !== ready) return;
+    preview.innerHTML = `<img src="${URL.createObjectURL(out)}" alt="Your drawing">`;
   });
   form.addEventListener("submit", async e => {
     e.preventDefault();
@@ -249,7 +237,7 @@ function renderDraw() {
     body.append("name", name);
     body.append("category", form.category.value);
     body.append("description", description);
-    body.append("image", await shrinkImage(file));
+    body.append("image", await (prepared || prepareDrawing(file)));
     status.textContent = "Uploading… the auto-mod is taking a look.";
     let res, result;
     try {
@@ -272,6 +260,7 @@ function renderDraw() {
       return;
     }
     form.reset();
+    prepared = null;
     preview.textContent = "Your drawing shows up here";
     status.textContent = "";
     await account.econ.refresh?.();
@@ -1060,14 +1049,26 @@ function renderCollection() {
   });
 }
 
+// Cards whose creator we've already asked the server about this visit.
+const creatorChecked = new Set();
+
 function showCardDetail(id, refresh) {
   const card = catalog[id];
+  if (card?.gooberId && account.currentUser() && !isCreator(profile(), card) && !creatorChecked.has(id)) {
+    creatorChecked.add(id);
+    account.econ.checkCreator(id).then(res => {
+      if (!res.ok || !res.creator) return;
+      toast("✏️ That's your Goober! Creator price unlocked.", "good");
+      const open = document.querySelector(".modal [data-card-detail]");
+      if (open?.dataset.cardDetail === id) { open.closest(".modal")?.remove(); showCardDetail(id, refresh); }
+    });
+  }
   const n = store.owned(id), s = store.ownedShiny(id);
   store.markSeen(id);
   const canCraft = n < MAX_COPIES[card.rarity];
   const cost = craftCostFor(profile(), card);
   const mine = isCreator(profile(), card);
-  const m = modal(`<div class="inspect">${cardHTML(card, { shiny: s > 0 })}
+  const m = modal(`<div class="inspect" data-card-detail="${esc(id)}">${cardHTML(card, { shiny: s > 0 })}
     <div class="details">
       ${mine ? `<p class="creator-note">✏️ <b>You drew this Goober.</b> Creator price: ${Math.round(CREATOR_DISCOUNT * 100)}% off crafting.</p>` : ""}
       <p><b>${RARITY_LABEL[card.rarity]}</b> · ${card.type === "spell" ? "Spell" : `${CATEGORY_STYLE[card.category]?.icon || ""} ${esc(card.category)} Goober`} · You own <b>${n}</b>${s ? ` (✨${s} shiny)` : ""}</p>
@@ -1237,6 +1238,16 @@ function boot() {
   route();
   refreshCatalog();
   account.resume().then(user => { if (user && !match && !online) route(); });
+  // An installed app can sit in the background for days without reloading: when it comes
+  // back, pull the latest save and cards (new uploads, creator prices, coins from elsewhere).
+  let hiddenAt = 0;
+  document.addEventListener("visibilitychange", async () => {
+    if (document.hidden) { hiddenAt = Date.now(); return; }
+    if (!hiddenAt || Date.now() - hiddenAt < 30_000) return;
+    hiddenAt = 0;
+    await Promise.all([account.econ.refresh(), refreshCatalog({ rerender: false })]);
+    if (!match && !online && !document.querySelector(".modal")) route();
+  });
 }
 
 boot();

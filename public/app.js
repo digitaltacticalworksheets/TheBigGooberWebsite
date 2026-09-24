@@ -395,6 +395,17 @@ if (gooberImageInput) {
 }
 
 // Downscale big photos before upload so they stay under the auto-mod's size limit.
+// Trim the empty paper around the drawing (shared with Goober Cards' upload screen);
+// falls back to a plain shrink if that module can't load.
+async function prepareUpload(file) {
+  try {
+    const { prepareDrawing } = await import("/goober-cards/image.js");
+    return await prepareDrawing(file);
+  } catch {
+    return shrinkImage(file);
+  }
+}
+
 async function shrinkImage(file, maxSide = 1600) {
   try {
     if (file.type === "image/gif" || typeof createImageBitmap !== "function") return file;
@@ -579,7 +590,7 @@ if (uploadForm) {
     formData.append("category", category);
     formData.append("description", description);
     uploadStatus.textContent = "Getting your Goober ready...";
-    formData.append("image", await shrinkImage(file));
+    formData.append("image", await prepareUpload(file));
 
     uploadStatus.textContent = "Uploading Goober... the auto-mod is taking a look.";
 
