@@ -665,6 +665,8 @@ body.in-battle { overflow: hidden; position: fixed; inset: 0; }
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.75), transparent);
   transform: skewX(-20deg); animation: sheen 4.5s ease-in-out infinite;
 }
+/* Tiles clip for the sheen, so their count badges sit inside the corner instead of poking out. */
+.tile .badge { top: 10px; right: 10px; z-index: 1; }
 .tile:nth-child(2)::after { animation-delay: 0.6s; } .tile:nth-child(3)::after { animation-delay: 1.2s; }
 .tile:nth-child(4)::after { animation-delay: 1.8s; } .tile:nth-child(5)::after { animation-delay: 2.4s; } .tile:nth-child(6)::after { animation-delay: 3s; }
 @keyframes sheen { 0%, 60% { left: -60%; } 85%, 100% { left: 130%; } }
