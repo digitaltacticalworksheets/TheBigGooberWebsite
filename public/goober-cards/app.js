@@ -686,6 +686,10 @@ function startSolo(level) {
   const { deck, entries } = store.playableDeck(catalog);
   const oppDeck = aiDeck(level).map(id => ({ id, shiny: level === "biggoober" && Math.random() < 0.15 }));
   const state = createGame({ decks: [entries, oppDeck], names: [profile().name || "You", AI_LEVELS[level].name], seed: (Math.random() * 2 ** 32) >>> 0 });
+  // Some opponents start ahead: extra cards in hand and/or Drip (armor).
+  const opp = state.players[1];
+  for (let i = 0; i < (AI_LEVELS[level].startCards || 0) && opp.deck.length; i++) opp.hand.push(opp.deck.shift());
+  if (AI_LEVELS[level].startArmor) opp.hero.armor = AI_LEVELS[level].startArmor;
   history.pushState(null, "", "#battle");
   setPresence("solo");
   // Logged-in players get a server ticket so the win can be paid out.
