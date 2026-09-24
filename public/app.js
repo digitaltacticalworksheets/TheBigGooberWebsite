@@ -689,3 +689,10 @@ if (reloadCloudGoobersButton) {
 ensureLoadMoreButton();
 initializeExistingGalleryCards();
 loadCloudGoobers({ bustCache: true });
+
+// Pick up new releases without a hard refresh: reload when you come back to the tab,
+// unless you're viewing a Goober, logging in, or partway through an upload.
+import("/goober-cards/updates.js").then(({ watchForUpdates }) => watchForUpdates({
+  canReload: () => (!gooberViewer || gooberViewer.hidden) && !document.querySelector(".account-modal") &&
+    !(gooberNameInput?.value || gooberDescriptionInput?.value || gooberImageInput?.files?.length)
+})).catch(() => {});
