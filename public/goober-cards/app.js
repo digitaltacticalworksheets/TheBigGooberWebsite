@@ -5,6 +5,7 @@ import { AI_LEVELS } from "./ai.js";
 import { SoloMatch } from "./battle.js";
 import { OnlineMatch, createRoom, findMatch } from "./online.js";
 import * as store from "./collection.js";
+import { RANK_TIERS, RANK_POINTS, tierFor, nextTier } from "./economy.js";
 import * as account from "./account.js";
 import { $, $$, esc, sleep, cardHTML, cardBackHTML, toast, modal, confirmDialog, keywordGlossary, onLongPress } from "./ui.js";
 import { sfx, setSoundEnabled, buzz } from "./sound.js";
@@ -99,7 +100,7 @@ function renderHome() {
     <section class="home-hero">
       <div>
         <h2>Lock in, ${esc(p.name || "Goober Fan")}.</h2>
-        <p>${p.stats.wins} wins · ${p.stats.losses} losses${p.stats.streak > 1 ? ` · 🔥 ${p.stats.streak} win streak. You're cooking.` : ""}</p>
+        <p>${p.stats.wins} wins · ${p.stats.losses} losses${account.currentUser() && p.rank?.wins + p.rank?.losses > 0 ? ` · ${rankLabel(p.rank.rp)}` : ""}${p.stats.streak > 1 ? ` · 🔥 ${p.stats.streak} win streak. You're cooking.` : ""}</p>
         <div class="row"><a class="btn big primary" href="#solo">▶ Play</a><a class="btn blue" href="#online">🌐 Online</a></div>
       </div>
       <div class="fan">${showcase.map(c => cardHTML(c)).join("")}</div>
@@ -301,6 +302,8 @@ export function showRules() {
     <h3>✨ Keywords</h3>
     <ul>${Object.values(KEYWORDS).map(k => `<li>${k.icon} <b>${k.label}:</b> ${k.text}</li>`).join("")}
     <li>📣 <b>Entrance:</b> Happens when you play it.</li><li>☠️ <b>Last Words:</b> Happens when it gets knocked out.</li>${Object.values(STATUS).map(s => `<li>${s.icon} <b>${s.label}:</b> ${s.text}</li>`).join("")}</ul>
+    <h3>🏆 Ranked</h3>
+    <ul><li>Find a Match is ranked when both players are logged in. Friend rooms and rematches aren't.</li><li>Win: +${RANK_POINTS.win} Rank Points, plus a streak bonus from your 3rd win in a row. Loss: -${RANK_POINTS.loss}.</li><li>Climb ${RANK_TIERS.map(t => `${t.icon} ${t.name}`).join(" → ")}. Once you reach a tier you can't drop out of it.</li></ul>
     <h3>🎁 Collecting</h3>
     <ul><li>Win games to earn coins. Rip packs. Pull rare and ✨shiny✨ Goobers.</li><li>Every Goober uploaded to the site becomes a card with its own stats and rarity.</li><li>Decks have exactly ${DECK_SIZE} cards: max 2 copies of a card (1 for Legendaries).</li><li>Press and hold any card to read it up close.</li></ul>
     <div class="actions"><button class="btn primary" data-close>Bet</button></div></div>`);
@@ -414,13 +417,16 @@ function confetti(count = 90) {
   }
 }
 
-function showResult({ won, draw, coins, firstWin, capped, again, onlineRoom }) {
+function showResult({ won, draw, coins, firstWin, capped, again, onlineRoom, rank }) {
   if (won) { sfx.win(); buzz([60, 40, 60]); confetti(); } else sfx.lose();
   const title = draw ? "Draw??" : won ? "W" : "L";
   const m = modal(`<div class="result ${won ? "win" : "lose"}">
       <h2>${title}</h2>
       <div class="portrait" style="background-image:url('${esc(heroArt(profile().hero))}')"></div>
       ${coins ? `<div class="reward">🪙 +${coins}</div>` : ""}
+      ${rank ? `<div class="reward rank-reward">${rankLabel(rank.after)} · ${rank.delta >= 0 ? "+" : ""}${rank.delta} RP</div>` : ""}
+      ${rank?.promoted ? `<p><b>Promoted to ${esc(tierFor(rank.after).name)}! ${tierFor(rank.after).icon}</b></p>` : ""}
+      ${rank && !won && !draw && rank.delta === 0 ? `<p class="muted">Tier protected. You can't drop out of ${esc(tierFor(rank.after).name)}.</p>` : ""}
       ${firstWin ? `<p><b>First win of the day bonus included!</b></p>` : ""}
       ${capped ? `<p class="muted">You hit today's coin limit for this mode. More tomorrow!</p>` : ""}
       <p>${won ? pick(["+1000 aura.", "Absolutely cooked them.", "Built different.", "They're gonna need a minute."]) : draw ? "Nobody wins. Awkward." : pick(["Skill issue.", "-500 aura.", "You got cooked.", "It's giving… defeat."])}</p>
@@ -445,8 +451,9 @@ function renderOnline(code) {
     <span class="field-label">Your deck</span>
     ${deckPickerHTML(p.activeDeck)}
     <div class="online-card" data-quick>
+      ${rankCardHTML()}
       <button class="btn big primary" data-find>🔎 Find a Match</button>
-      <div class="muted" style="text-align:center;font-weight:800">Plays a random opponent who's searching right now.</div>
+      <div class="muted" style="text-align:center;font-weight:800">${account.currentUser() ? "Ranked when your opponent is logged in too. Rematches don't count." : "Plays a random opponent who's searching right now. Log in to play ranked."}</div>
     </div>
     <div class="online-card">
       <button class="btn big pink" data-create>✨ Create Room</button>
@@ -472,6 +479,20 @@ function renderOnline(code) {
   if (code && code.length >= 4) joinOnline(code.toUpperCase());
 }
 
+const rankLabel = rp => { const t = tierFor(rp); return `${t.icon} ${t.name}`; };
+
+function rankCardHTML() {
+  if (!account.currentUser()) return "";
+  const r = profile().rank || { rp: 0, wins: 0, losses: 0 };
+  const tier = tierFor(r.rp), next = nextTier(r.rp);
+  const pct = next ? Math.round(((r.rp - tier.min) / (next.min - tier.min)) * 100) : 100;
+  return `<div class="rank-card">
+    <span class="rank-icon">${tier.icon}</span>
+    <div><b>${esc(tier.name)}</b><small>${r.rp} RP${next ? ` · ${next.min - r.rp} to ${esc(next.name)}` : " · Top tier"} · ${r.wins}W ${r.losses}L</small>
+    <div class="rank-bar"><i style="width:${pct}%"></i></div></div>
+  </div>`;
+}
+
 function startSearching() {
   stopSearching();
   if (online) { online.close(); online = null; }
@@ -492,17 +513,17 @@ function startSearching() {
   const timer = setInterval(tick, 1000);
   const ticket = findMatch({
     onQueue: n => { count = n; tick(); },
-    onMatched: roomCode => {
+    onMatched: (roomCode, ranked) => {
       stopSearching();
       sfx.turn();
       buzz([40, 30, 40]);
-      toast("Opponent found!", "good");
+      toast(ranked ? "Opponent found! Ranked match." : "Opponent found!", "good");
       renderOnline();
       $("[data-quick]", app).innerHTML = `<div class="row" style="justify-content:center"><div class="spinner"></div><b>Opponent found! Joining room ${esc(roomCode)}…</b></div>`;
       joinOnline(roomCode);
     },
     onError: message => { stopSearching(); toast(message, "bad"); if (box.isConnected) renderOnline(); }
-  });
+  }, account.sessionToken());
   searching = { cancel: () => { clearInterval(timer); ticket.cancel(); } };
   $("[data-cancel]", box).onclick = () => { stopSearching(); renderOnline(); };
 }
@@ -534,10 +555,10 @@ function joinOnline(code) {
       }
       if (!lobby.isConnected) return;
       lobby.innerHTML = `<div class="online-card" style="border-style:solid">
-        <div style="text-align:center;font-weight:800">Room code</div>
+        <div style="text-align:center;font-weight:800">${room.ranked ? "🏆 Ranked match · " : ""}Room code</div>
         <div class="code-box">${esc(room.code)}</div>
         <div class="row" style="justify-content:center"><button class="btn small" data-share>📤 Share invite</button><button class="btn small" data-copy>📋 Copy link</button></div>
-        <div class="seat-list">${[0, 1].map(i => { const s = room.seats[i]; return `<div class="seat"><span class="dot ${s?.connected ? "on" : ""}"></span>${s ? esc(s.name) : "Waiting for someone brave…"}${i === seat ? " (you)" : ""}${s?.ready ? " ✅" : ""}</div>`; }).join("")}</div>
+        <div class="seat-list">${[0, 1].map(i => { const s = room.seats[i]; return `<div class="seat"><span class="dot ${s?.connected ? "on" : ""}"></span>${s?.tier ? `${RANK_TIERS.find(t => t.id === s.tier)?.icon || ""} ` : ""}${s ? esc(s.name) : "Waiting for someone brave…"}${i === seat ? " (you)" : ""}${s?.ready ? " ✅" : ""}</div>`; }).join("")}</div>
         <div class="row" style="justify-content:center"><div class="spinner"></div><span class="muted">Starts when both players join.</span></div>
       </div>`;
       $("[data-share]", lobby).onclick = async () => {
@@ -557,7 +578,7 @@ function joinOnline(code) {
         result = store.recordResult({ won, reward: won ? 100 : 30 });
       }
       showResult({
-        won, draw, coins: result.coins, firstWin: result.firstWin, capped: result.capped, onlineRoom: true,
+        won, draw, coins: result.coins, firstWin: result.firstWin, capped: result.capped, onlineRoom: true, rank: result.rank,
         again: () => { const { entries: fresh } = store.playableDeck(catalog); online?.rematch(fresh); renderRematchWait(code); }
       });
     }

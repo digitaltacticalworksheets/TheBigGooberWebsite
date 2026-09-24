@@ -24,9 +24,11 @@ export async function createRoom() {
 
 // Quick match: wait in the global queue until someone else is searching too.
 // handlers: { onQueue(searching), onMatched(roomCode), onError(message) }. Returns { cancel }.
-export function findMatch(handlers) {
+export function findMatch(handlers, auth = "") {
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
-  const ws = new WebSocket(`${proto}//${location.host}/api/card-battle/matchmaking?${new URLSearchParams({ token: tokenFor("matchmaking") })}`);
+  const params = new URLSearchParams({ token: tokenFor("matchmaking") });
+  if (auth) params.set("auth", auth);
+  const ws = new WebSocket(`${proto}//${location.host}/api/card-battle/matchmaking?${params}`);
   let done = false;
   const finish = () => { done = true; clearInterval(ping); try { ws.close(); } catch { /* already closed */ } };
   const ping = setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "ping" })); }, 25000);
@@ -34,7 +36,7 @@ export function findMatch(handlers) {
     let msg;
     try { msg = JSON.parse(event.data); } catch { return; }
     if (msg.type === "queue") handlers.onQueue?.(msg.searching);
-    else if (msg.type === "matched") { finish(); handlers.onMatched?.(msg.roomCode); }
+    else if (msg.type === "matched") { finish(); handlers.onMatched?.(msg.roomCode, Boolean(msg.ranked)); }
     else if (msg.type === "error") { finish(); handlers.onError?.(msg.message); }
   });
   ws.addEventListener("close", () => { if (!done) { finish(); handlers.onError?.("Lost connection to matchmaking."); } });

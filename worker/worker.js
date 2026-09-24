@@ -57,6 +57,14 @@ export class CardBattleRoom {
     const code = getRoomCodeFromPath(url.pathname);
     if (!code) return jsonResponse({ error: "Room code is required." }, 400, NO_STORE_HEADERS);
     await this.loadRoom(code);
+    if (request.method === "POST" && url.pathname.endsWith("/ranked")) {
+      const body = await request.json().catch(() => ({}));
+      if (this.room.phase === "lobby" && !this.room.game && !this.room.seats.some(Boolean) && body.ranks && typeof body.ranks === "object") {
+        this.room.ranked = { ranks: body.ranks, users: Object.keys(body.ranks), gameId: null };
+        await this.saveRoom();
+      }
+      return jsonResponse({ ok: true }, 200, NO_STORE_HEADERS);
+    }
     if (request.headers.get("upgrade") !== "websocket") {
       return jsonResponse({ code, phase: this.room.phase, players: this.room.seats.map(s => (s ? { name: s.name, connected: s.connected } : null)) }, 200, NO_STORE_HEADERS);
     }
@@ -170,6 +178,9 @@ export class CardBattleRoom {
     this.room.lastEvents = [];
     this.room.gameId = crypto.randomUUID();
     this.room.paid = [false, false];
+    // Only the first game between the two matched accounts is ranked; rematches aren't.
+    const ranked = this.room.ranked;
+    if (ranked && !ranked.gameId && [a.userId, b.userId].every(id => ranked.users.includes(id)) && a.userId !== b.userId) ranked.gameId = this.room.gameId;
     this.setTurnDeadline();
   }
 
@@ -203,17 +214,20 @@ export class CardBattleRoom {
         const won = game.winner === seat;
         const gameId = this.room.gameId;
         try {
+          const isRanked = this.room.ranked?.gameId === gameId;
           const out = await applyEconomy(this.env, userId, this.room.seats[seat].name, p => {
             if (p.paidGames.includes(gameId)) return { ok: true, coins: 0, already: true };
             p.paidGames = [...p.paidGames, gameId].slice(-30);
-            return econ.recordResult(p, { won, reward: won ? econ.ONLINE_REWARD.win : econ.ONLINE_REWARD.loss, day, kind: "online", cap: econ.DAILY_REWARD_CAP.online });
+            const result = econ.recordResult(p, { won, reward: won ? econ.ONLINE_REWARD.win : econ.ONLINE_REWARD.loss, day, kind: "online", cap: econ.DAILY_REWARD_CAP.online });
+            if (isRanked) result.rank = econ.recordRanked(p, { won, draw: game.winner === "draw" });
+            return result;
           });
           if (!out.ok) continue;
           this.room.paid[seat] = true;
           await this.saveRoom();
           if (!out.result.already) {
             for (const [socket, session] of this.sessions.entries()) {
-              if (session.seat === seat) this.send(socket, { type: "reward", coins: out.result.coins, firstWin: out.result.firstWin, capped: out.result.capped });
+              if (session.seat === seat) this.send(socket, { type: "reward", coins: out.result.coins, firstWin: out.result.firstWin, capped: out.result.capped, rank: out.result.rank || null });
             }
           }
         } catch (error) {
@@ -261,7 +275,12 @@ export class CardBattleRoom {
       phase: this.room.phase,
       deadline: this.room.deadline,
       rematch: this.room.rematch,
-      seats: this.room.seats.map(s => (s ? { name: s.name, hero: s.hero || "", connected: s.connected, ready: Boolean(s.deck) } : null))
+      ranked: Boolean(this.room.ranked) && (!this.room.game || this.room.ranked.gameId === this.room.gameId),
+      seats: this.room.seats.map(s => {
+        if (!s) return null;
+        const rp = s.userId && this.room.ranked ? this.room.ranked.ranks[s.userId] : undefined;
+        return { name: s.name, hero: s.hero || "", connected: s.connected, ready: Boolean(s.deck), ...(rp !== undefined && rp !== null ? { tier: econ.tierFor(rp).id } : {}) };
+      })
     };
   }
 
@@ -285,13 +304,18 @@ export class CardBattleRoom {
   }
 }
 
-// Quick match: one global queue. Players wait on a WebSocket; as soon as two are
-// waiting, both get the same fresh room code and join it like a friend's room.
+// Quick match: one global queue. Players wait on a WebSocket; the matchmaker pairs
+// them and both join the same fresh room like a friend's room. Logged-in players are
+// paired by Rank Points, with the allowed gap widening the longer they wait. When both
+// players are logged in the room is told the match is ranked before anyone joins.
+const RANK_WINDOW = { base: 100, perSecond: 12 };
+
 export class Matchmaker {
   constructor(state, env) {
     this.state = state;
     this.env = env;
     this.waiting = [];
+    this.timer = null;
   }
 
   async fetch(request) {
@@ -300,34 +324,76 @@ export class Matchmaker {
     }
     const url = new URL(request.url);
     const token = cleanText(url.searchParams.get("token"), 64) || crypto.randomUUID();
+    const account = await userFromToken(this.env, url.searchParams.get("auth"));
+    const rp = account ? await rankPointsFor(this.env, account.id) : null;
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
     server.accept();
 
     // Same player searching from a second tab: drop the old ticket so they can't match themselves.
-    for (const old of this.waiting.filter(w => w.token === token)) this.drop(old.socket, "Searching in another tab.");
-    const entry = { socket: server, token, joined: Date.now() };
+    for (const old of this.waiting.filter(w => w.token === token || (account && w.userId === account.id))) this.drop(old.socket, "Searching in another tab.");
+    const entry = { socket: server, token, userId: account?.id || null, rp, joined: Date.now() };
     this.waiting.push(entry);
 
-    const leave = () => { this.waiting = this.waiting.filter(w => w !== entry); this.announce(); };
+    const leave = () => { this.waiting = this.waiting.filter(w => w !== entry); this.announce(); this.schedule(); };
     server.addEventListener("close", leave);
     server.addEventListener("error", leave);
     server.addEventListener("message", () => this.send(server, { type: "pong" }));
 
-    this.pairUp();
+    await this.pairUp();
     this.announce();
+    this.schedule();
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  pairUp() {
-    while (this.waiting.length >= 2) {
-      const [a, b] = this.waiting.splice(0, 2);
-      const roomCode = createRoomCode();
-      for (const w of [a, b]) {
-        this.send(w.socket, { type: "matched", roomCode });
-        try { w.socket.close(1000, "Matched"); } catch { /* already closed */ }
+  // Re-check every few seconds while two or more are waiting, since rank windows widen over time.
+  schedule() {
+    if (this.waiting.length >= 2 && !this.timer) this.timer = setInterval(() => this.pairUp().then(() => this.announce()).catch(console.error), 3000);
+    if (this.waiting.length < 2 && this.timer) { clearInterval(this.timer); this.timer = null; }
+  }
+
+  compatible(a, b, now) {
+    if (a.rp === null || b.rp === null) return true;
+    const window = w => RANK_WINDOW.base + RANK_WINDOW.perSecond * ((now - w.joined) / 1000);
+    return Math.abs(a.rp - b.rp) <= Math.max(window(a), window(b));
+  }
+
+  async pairUp() {
+    if (this.pairing) return;
+    this.pairing = true;
+    try {
+      const now = Date.now();
+      // Longest waiter first; pair them with the closest-ranked compatible player.
+      for (let i = 0; i < this.waiting.length; i++) {
+        const a = this.waiting[i];
+        let best = null;
+        for (const b of this.waiting.slice(i + 1)) {
+          if (!this.compatible(a, b, now)) continue;
+          const gap = a.rp === null || b.rp === null ? 0 : Math.abs(a.rp - b.rp);
+          if (!best || gap < best.gap) best = { b, gap };
+        }
+        if (!best) continue;
+        const b = best.b;
+        this.waiting = this.waiting.filter(w => w !== a && w !== b);
+        i -= 1;
+        const roomCode = createRoomCode();
+        const ranked = Boolean(a.userId && b.userId && a.userId !== b.userId);
+        if (ranked) await this.markRanked(roomCode, { [a.userId]: a.rp, [b.userId]: b.rp });
+        for (const w of [a, b]) {
+          this.send(w.socket, { type: "matched", roomCode, ranked });
+          try { w.socket.close(1000, "Matched"); } catch { /* already closed */ }
+        }
       }
+    } finally {
+      this.pairing = false;
+      this.schedule();
     }
+  }
+
+  // Internal call only: the public worker route never forwards POSTs to rooms.
+  async markRanked(roomCode, ranks) {
+    const stub = this.env.CARD_BATTLE_ROOMS.get(this.env.CARD_BATTLE_ROOMS.idFromName(roomCode));
+    await stub.fetch(new Request(`https://rooms.internal/api/card-battle/${roomCode}/ranked`, { method: "POST", body: JSON.stringify({ ranks }) }));
   }
 
   announce() {
@@ -343,6 +409,11 @@ export class Matchmaker {
   send(socket, payload) {
     try { socket.send(JSON.stringify(payload)); } catch { /* socket gone */ }
   }
+}
+
+async function rankPointsFor(env, userId) {
+  const row = await env.DB.prepare(`SELECT data FROM profiles WHERE user_id = ?`).bind(userId).first();
+  return econ.normalizeProfile(row ? JSON.parse(row.data) : null).rank.rp;
 }
 
 function sanitizeAction(action) {
@@ -376,7 +447,7 @@ const ALLOWED_CATEGORIES = new Set(["classic", "costume", "chaos", "funny", "spo
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const NO_STORE_HEADERS = { "cache-control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0", "pragma": "no-cache", "expires": "0", "surrogate-control": "no-store", "cdn-cache-control": "no-store", "cloudflare-cdn-cache-control": "no-store" };
 function createRoomCode() { const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let code = ""; const bytes = new Uint8Array(6); crypto.getRandomValues(bytes); for (const byte of bytes) code += alphabet[byte % alphabet.length]; return code; }
-function getRoomCodeFromPath(pathname) { const match = pathname.match(/^\/api\/card-battle\/([A-Z0-9]{4,12})(?:\/socket)?$/i); return match ? match[1].toUpperCase() : ""; }
+function getRoomCodeFromPath(pathname) { const match = pathname.match(/^\/api\/card-battle\/([A-Z0-9]{4,12})(?:\/socket|\/ranked)?$/i); return match ? match[1].toUpperCase() : ""; }
 async function listGoobers(env) { const result = await env.DB.prepare(`SELECT id, name, category, description, image_key, image_type, created_at FROM goobers WHERE approved = 1 ORDER BY created_at DESC`).all(); return jsonResponse((result.results || []).map(row => ({ id: row.id, name: row.name, category: row.category, description: row.description, imageUrl: `/api/goober-image/${row.image_key}`, createdAt: row.created_at })), 200, NO_STORE_HEADERS); }
 async function uploadGoober(request, env) {
   const formData = await request.formData();
