@@ -507,8 +507,10 @@ async function listGoobers(env) { const result = await env.DB.prepare(`SELECT id
 async function uploadGoober(request, env) {
   const formData = await request.formData();
   const name = cleanText(formData.get("name"), 80), category = cleanText(formData.get("category"), 30), description = cleanText(formData.get("description"), 280), image = formData.get("image");
-  // No upload code anymore: the auto-mod checks every upload, and each network
-  // gets a daily cap so nobody can flood the gallery.
+  // Uploads need a Goober Cards account. The auto-mod checks every upload, and each
+  // account and each network gets a daily cap so nobody can flood the gallery.
+  const user = await requireUser(request, env);
+  if (!user) return jsonResponse({ error: "Log in to your Goober Cards account to add a Goober.", needsLogin: true }, 401, NO_STORE_HEADERS);
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
   const day = new Date().toISOString().slice(0, 10);
   if (!name) return jsonResponse({ error: "Goober name is required." }, 400, NO_STORE_HEADERS);
@@ -519,6 +521,7 @@ async function uploadGoober(request, env) {
 
   // Reserve a slot atomically (so parallel requests can't sneak past the cap).
   // Blocked uploads still use up a slot.
+  if (await bumpDailyCount(env, "upload_counts", `user:${user.id}`, day) > MAX_UPLOADS_PER_ACCOUNT) return jsonResponse({ error: `That's ${MAX_UPLOADS_PER_ACCOUNT} uploads today on your account. Come back tomorrow!` }, 429, NO_STORE_HEADERS);
   if (await bumpDailyCount(env, "upload_counts", ip, day) > MAX_UPLOADS_PER_DAY) return jsonResponse({ error: `That's ${MAX_UPLOADS_PER_DAY} uploads today from here. Come back tomorrow!` }, 429, NO_STORE_HEADERS);
 
   // Trust the file's bytes, not its claimed type: only plain raster images (no SVG/HTML).
@@ -527,13 +530,13 @@ async function uploadGoober(request, env) {
   if (!kind) return jsonResponse({ error: "Only JPG, PNG, WebP, or GIF images, please." }, 400, NO_STORE_HEADERS);
   const moderation = await moderateUpload(env, { name, description, category, bytes, type: kind.type });
   if (moderation.verdict === "block") {
-    console.log("Upload blocked by auto-mod", { name, reason: moderation.reason });
+    console.log("Upload blocked by auto-mod", { name, uploader: user.username, reason: moderation.reason });
     return jsonResponse({ error: `Auto-mod blocked this Goober: ${moderation.reason}`, moderation: "blocked", reason: moderation.reason }, 422, NO_STORE_HEADERS);
   }
 
   const approved = moderation.verdict === "allow" ? 1 : PENDING_REVIEW;
   const id = crypto.randomUUID(), extension = kind.ext, imageKey = `goobers/${id}.${extension}`;
-  await env.GOOBER_IMAGES.put(imageKey, bytes, { httpMetadata: { contentType: kind.type }, customMetadata: { originalName: image.name || "goober-upload", gooberName: name, moderation: moderation.verdict, moderationReason: moderation.reason.slice(0, 200) } });
+  await env.GOOBER_IMAGES.put(imageKey, bytes, { httpMetadata: { contentType: kind.type }, customMetadata: { originalName: image.name || "goober-upload", gooberName: name, uploaderId: String(user.id), uploader: user.username, moderation: moderation.verdict, moderationReason: moderation.reason.slice(0, 200) } });
   await env.DB.prepare(`INSERT INTO goobers (id, name, category, description, image_key, image_type, approved, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`).bind(id, name, category, description, imageKey, kind.type, approved).run();
   const body = { id, name, category, description, imageUrl: `/api/goober-image/${imageKey}`, moderation: approved === 1 ? "approved" : "pending", reason: moderation.reason };
   return jsonResponse(body, approved === 1 ? 201 : 202, NO_STORE_HEADERS);
@@ -561,6 +564,7 @@ async function bumpDailyCount(env, table, ip, day) {
   return Number(row?.count) || 1;
 }
 const MAX_UPLOADS_PER_DAY = 8;
+const MAX_UPLOADS_PER_ACCOUNT = 5;
 const MODERATION_IMAGE_LIMIT = 3.5 * 1024 * 1024;
 const VISION_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct";
 const TEXT_GUARD_MODEL = "@cf/meta/llama-guard-3-8b";

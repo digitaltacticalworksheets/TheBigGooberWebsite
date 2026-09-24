@@ -36,6 +36,9 @@ let loadMoreGoobersButton = document.getElementById("loadMoreGoobers");
 const filePreview = document.getElementById("filePreview");
 const uploadStatus = document.getElementById("uploadStatus");
 const reloadCloudGoobersButton = document.getElementById("reloadCloudGoobers");
+const uploadGate = document.getElementById("uploadGate");
+const uploadGateMessage = document.getElementById("uploadGateMessage");
+const uploadAs = document.getElementById("uploadAs");
 const featuredGooberCard = document.querySelector(".feature-card");
 const featuredGooberImage = featuredGooberCard?.querySelector("img");
 const featuredGooberTitle = featuredGooberCard?.querySelector("h2");
@@ -413,9 +416,55 @@ async function shrinkImage(file, maxSide = 1600) {
   }
 }
 
+// Uploading needs a Goober Cards account. Goober Cards (same site) keeps the login in localStorage.
+const GOOBER_CARDS_SESSION = "gooberCardsSession";
+const GOOBER_CARDS_USER = "gooberCardsUser";
+
+function gooberCardsLogin() {
+  try {
+    const token = localStorage.getItem(GOOBER_CARDS_SESSION);
+    const user = JSON.parse(localStorage.getItem(GOOBER_CARDS_USER) || "null");
+    return token && user?.username ? { token, username: user.username } : null;
+  } catch {
+    return null;
+  }
+}
+
+function forgetGooberCardsLogin() {
+  try {
+    localStorage.removeItem(GOOBER_CARDS_SESSION);
+    localStorage.removeItem(GOOBER_CARDS_USER);
+  } catch { /* storage blocked */ }
+}
+
+function renderUploadGate(message = "") {
+  if (!uploadForm || !uploadGate) return;
+  const login = gooberCardsLogin();
+  uploadGate.hidden = Boolean(login);
+  uploadForm.hidden = !login;
+  if (message && uploadGateMessage) uploadGateMessage.textContent = message;
+  if (login && uploadAs) {
+    uploadAs.hidden = false;
+    uploadAs.textContent = `Uploading as ${login.username}`;
+  }
+}
+
+renderUploadGate();
+// Pick up a login from another tab, or from coming back after logging in.
+window.addEventListener("storage", event => {
+  if (event.key === GOOBER_CARDS_SESSION || event.key === GOOBER_CARDS_USER) renderUploadGate();
+});
+window.addEventListener("pageshow", () => renderUploadGate());
+
 if (uploadForm) {
   uploadForm.addEventListener("submit", async (event) => {
     event.preventDefault();
+
+    const login = gooberCardsLogin();
+    if (!login) {
+      renderUploadGate();
+      return;
+    }
 
     const file = gooberImageInput.files[0];
     if (!file) {
@@ -449,11 +498,19 @@ if (uploadForm) {
     try {
       const response = await fetch(`${API_BASE}/api/goobers`, {
         method: "POST",
+        headers: { authorization: `Bearer ${login.token}` },
         body: formData,
         cache: "no-store"
       });
 
       const result = await response.json().catch(() => ({}));
+
+      if (response.status === 401) {
+        forgetGooberCardsLogin();
+        uploadStatus.textContent = "";
+        renderUploadGate("Your login expired. Log in again to add your Goober (you'll need to pick the image again).");
+        return;
+      }
 
       if (!response.ok) {
         if (result.moderation === "blocked") {
