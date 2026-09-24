@@ -3,7 +3,7 @@ import { buildCatalog, collectibleIds, MAX_COPIES, DECK_SIZE, RARITIES, RARITY_L
 import { createGame, STARTING_HP, BOARD_LIMIT } from "./engine.js";
 import { AI_LEVELS } from "./ai.js";
 import { SoloMatch } from "./battle.js";
-import { OnlineMatch, createRoom } from "./online.js";
+import { OnlineMatch, createRoom, findMatch } from "./online.js";
 import * as store from "./collection.js";
 import * as account from "./account.js";
 import { $, $$, esc, sleep, cardHTML, cardBackHTML, toast, modal, confirmDialog, keywordGlossary, onLongPress } from "./ui.js";
@@ -14,6 +14,7 @@ const GOOBER_CACHE_KEY = "gooberCardsGoobers";
 let catalog = buildCatalog(readCachedGoobers());
 let match = null;
 let online = null;
+let searching = null;
 const view = { collection: { rarity: "all", owned: "all", category: "all", search: "" }, builderTab: "deck", solo: { level: "goodboy" } };
 
 const profile = () => store.loadProfile();
@@ -52,6 +53,7 @@ window.addEventListener("hashchange", () => route());
 
 function route() {
   if (match || online?.battle) return;
+  stopSearching();
   const [name, arg] = location.hash.replace(/^#/, "").split("/");
   document.body.classList.remove("in-battle");
   document.querySelectorAll(".modal, .opening").forEach(el => el.remove());
@@ -439,28 +441,75 @@ function renderOnline(code) {
   const p = profile();
   app.innerHTML = `<div class="screen">
     ${topbar("Online Battle")}
-    <p class="muted">Humble a friend on another phone or tablet. Make a room and send them the code.</p>
+    <p class="muted">Get matched with a random Goober fan, or make a room and send a friend the code.</p>
     <span class="field-label">Your deck</span>
     ${deckPickerHTML(p.activeDeck)}
+    <div class="online-card" data-quick>
+      <button class="btn big primary" data-find>🔎 Find a Match</button>
+      <div class="muted" style="text-align:center;font-weight:800">Plays a random opponent who's searching right now.</div>
+    </div>
     <div class="online-card">
-      <button class="btn big primary" data-create>✨ Create Room</button>
+      <button class="btn big pink" data-create>✨ Create Room</button>
       <div class="muted" style="text-align:center;font-weight:800">or join a friend</div>
       <div class="row"><input data-code maxlength="8" placeholder="CODE" value="${esc(code || "")}" autocomplete="off" autocapitalize="characters" style="flex:1;min-width:140px"><button class="btn blue" data-join>Join</button></div>
     </div>
     <div data-lobby></div>
   </div>`;
-  bindDeckPicker(app.firstElementChild, () => renderOnline($("[data-code]", app).value));
+  bindDeckPicker(app.firstElementChild, () => { stopSearching(); renderOnline($("[data-code]", app).value); });
+  $("[data-find]", app).onclick = () => startSearching();
   $("[data-create]", app).onclick = async e => {
+    stopSearching();
     e.target.disabled = true;
     try { const { roomCode } = await createRoom(); joinOnline(roomCode); }
     catch (error) { toast(error.message, "bad"); e.target.disabled = false; }
   };
   $("[data-join]", app).onclick = () => {
+    stopSearching();
     const c = $("[data-code]", app).value.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
     if (c.length < 4) { toast("Enter the room code from your friend.", "bad"); return; }
     joinOnline(c);
   };
   if (code && code.length >= 4) joinOnline(code.toUpperCase());
+}
+
+function startSearching() {
+  stopSearching();
+  if (online) { online.close(); online = null; }
+  const box = $("[data-quick]", app);
+  const started = Date.now();
+  let count = 1;
+  box.innerHTML = `<div class="row" style="justify-content:center"><div class="spinner"></div><b data-search-status>Looking for an opponent…</b></div>
+    <div class="muted" style="text-align:center;font-weight:800" data-search-info>0:00</div>
+    <button class="btn" data-cancel>Cancel</button>`;
+  const info = $("[data-search-info]", box);
+  const tick = () => {
+    if (!info.isConnected) { stopSearching(); return; }
+    const secs = Math.floor((Date.now() - started) / 1000);
+    const time = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
+    const others = count > 1 ? ` · ${count - 1} other${count > 2 ? "s" : ""} searching` : "";
+    info.textContent = secs >= 45 && count < 2 ? `${time} · Quiet right now. Keep waiting, or battle a bot in Solo.` : time + others;
+  };
+  const timer = setInterval(tick, 1000);
+  const ticket = findMatch({
+    onQueue: n => { count = n; tick(); },
+    onMatched: roomCode => {
+      stopSearching();
+      sfx.turn();
+      buzz([40, 30, 40]);
+      toast("Opponent found!", "good");
+      renderOnline();
+      $("[data-quick]", app).innerHTML = `<div class="row" style="justify-content:center"><div class="spinner"></div><b>Opponent found! Joining room ${esc(roomCode)}…</b></div>`;
+      joinOnline(roomCode);
+    },
+    onError: message => { stopSearching(); toast(message, "bad"); if (box.isConnected) renderOnline(); }
+  });
+  searching = { cancel: () => { clearInterval(timer); ticket.cancel(); } };
+  $("[data-cancel]", box).onclick = () => { stopSearching(); renderOnline(); };
+}
+
+function stopSearching() {
+  searching?.cancel();
+  searching = null;
 }
 
 function joinOnline(code) {

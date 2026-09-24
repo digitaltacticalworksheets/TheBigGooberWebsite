@@ -22,6 +22,25 @@ export async function createRoom() {
   return res.json();
 }
 
+// Quick match: wait in the global queue until someone else is searching too.
+// handlers: { onQueue(searching), onMatched(roomCode), onError(message) }. Returns { cancel }.
+export function findMatch(handlers) {
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  const ws = new WebSocket(`${proto}//${location.host}/api/card-battle/matchmaking?${new URLSearchParams({ token: tokenFor("matchmaking") })}`);
+  let done = false;
+  const finish = () => { done = true; clearInterval(ping); try { ws.close(); } catch { /* already closed */ } };
+  const ping = setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "ping" })); }, 25000);
+  ws.addEventListener("message", event => {
+    let msg;
+    try { msg = JSON.parse(event.data); } catch { return; }
+    if (msg.type === "queue") handlers.onQueue?.(msg.searching);
+    else if (msg.type === "matched") { finish(); handlers.onMatched?.(msg.roomCode); }
+    else if (msg.type === "error") { finish(); handlers.onError?.(msg.message); }
+  });
+  ws.addEventListener("close", () => { if (!done) { finish(); handlers.onError?.("Lost connection to matchmaking."); } });
+  return { cancel: finish };
+}
+
 export class OnlineMatch {
   // opts: { code, name, heroId, deck (entries), catalog, heroArtFor(id), onLobby(room, seat), onEnd(result), onExit, showRules, toggleSound, soundOn }
   constructor(opts) {

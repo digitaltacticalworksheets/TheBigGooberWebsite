@@ -11,6 +11,7 @@ export default {
       if (url.pathname === "/api/goobers" && request.method === "POST") return await uploadGoober(request, env);
       if (url.pathname.startsWith("/api/auth/") || url.pathname === "/api/profile" || url.pathname.startsWith("/api/econ/")) return await routeAccounts(request, env, url);
       if (url.pathname === "/api/card-battle/create" && request.method === "POST") return await createCardBattleRoom();
+      if (url.pathname === "/api/card-battle/matchmaking" && request.method === "GET") return await routeMatchmaking(request, env);
       if (url.pathname.startsWith("/api/card-battle/") && request.method === "GET") return await routeCardBattleRoom(request, env);
       if (url.pathname === "/api/goobers/pending" && request.method === "GET") return await listPendingGoobers(request, env);
       if (/^\/api\/goobers\/[^/]+\/approve$/.test(url.pathname) && request.method === "POST") return await approveGoober(request, env);
@@ -284,6 +285,66 @@ export class CardBattleRoom {
   }
 }
 
+// Quick match: one global queue. Players wait on a WebSocket; as soon as two are
+// waiting, both get the same fresh room code and join it like a friend's room.
+export class Matchmaker {
+  constructor(state, env) {
+    this.state = state;
+    this.env = env;
+    this.waiting = [];
+  }
+
+  async fetch(request) {
+    if (request.headers.get("upgrade") !== "websocket") {
+      return jsonResponse({ searching: this.waiting.length }, 200, NO_STORE_HEADERS);
+    }
+    const url = new URL(request.url);
+    const token = cleanText(url.searchParams.get("token"), 64) || crypto.randomUUID();
+    const pair = new WebSocketPair();
+    const [client, server] = Object.values(pair);
+    server.accept();
+
+    // Same player searching from a second tab: drop the old ticket so they can't match themselves.
+    for (const old of this.waiting.filter(w => w.token === token)) this.drop(old.socket, "Searching in another tab.");
+    const entry = { socket: server, token, joined: Date.now() };
+    this.waiting.push(entry);
+
+    const leave = () => { this.waiting = this.waiting.filter(w => w !== entry); this.announce(); };
+    server.addEventListener("close", leave);
+    server.addEventListener("error", leave);
+    server.addEventListener("message", () => this.send(server, { type: "pong" }));
+
+    this.pairUp();
+    this.announce();
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  pairUp() {
+    while (this.waiting.length >= 2) {
+      const [a, b] = this.waiting.splice(0, 2);
+      const roomCode = createRoomCode();
+      for (const w of [a, b]) {
+        this.send(w.socket, { type: "matched", roomCode });
+        try { w.socket.close(1000, "Matched"); } catch { /* already closed */ }
+      }
+    }
+  }
+
+  announce() {
+    for (const w of this.waiting) this.send(w.socket, { type: "queue", searching: this.waiting.length });
+  }
+
+  drop(socket, reason) {
+    this.waiting = this.waiting.filter(w => w.socket !== socket);
+    this.send(socket, { type: "error", message: reason });
+    try { socket.close(1000, reason); } catch { /* already closed */ }
+  }
+
+  send(socket, payload) {
+    try { socket.send(JSON.stringify(payload)); } catch { /* socket gone */ }
+  }
+}
+
 function sanitizeAction(action) {
   if (!action || typeof action !== "object") return null;
   const out = { type: cleanText(action.type, 12) };
@@ -304,6 +365,11 @@ async function routeCardBattleRoom(request, env) {
   const roomCode = getRoomCodeFromPath(new URL(request.url).pathname);
   if (!roomCode) return jsonResponse({ error: "Room code is required." }, 400, NO_STORE_HEADERS);
   return env.CARD_BATTLE_ROOMS.get(env.CARD_BATTLE_ROOMS.idFromName(roomCode)).fetch(request);
+}
+
+async function routeMatchmaking(request, env) {
+  if (!env.MATCHMAKER) return jsonResponse({ error: "Matchmaking is not configured." }, 500, NO_STORE_HEADERS);
+  return env.MATCHMAKER.get(env.MATCHMAKER.idFromName("global")).fetch(request);
 }
 
 const ALLOWED_CATEGORIES = new Set(["classic", "costume", "chaos", "funny", "spooky", "animal", "food", "sports", "holiday", "fancy", "superhero", "random"]);
