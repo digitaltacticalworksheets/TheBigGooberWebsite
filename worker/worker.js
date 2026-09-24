@@ -1,5 +1,6 @@
 import { buildCatalog, validateDeck } from "../public/goober-cards/cards.js";
 import { createGame, applyAction, viewFor, eventsFor } from "../public/goober-cards/engine.js";
+import * as econ from "../public/goober-cards/economy.js";
 
 export default {
   async fetch(request, env) {
@@ -8,7 +9,7 @@ export default {
       if (request.method === "OPTIONS") return corsResponse(null, 204);
       if (url.pathname === "/api/goobers" && request.method === "GET") return await listGoobers(env);
       if (url.pathname === "/api/goobers" && request.method === "POST") return await uploadGoober(request, env);
-      if (url.pathname.startsWith("/api/auth/") || url.pathname === "/api/profile") return await routeAccounts(request, env, url);
+      if (url.pathname.startsWith("/api/auth/") || url.pathname === "/api/profile" || url.pathname.startsWith("/api/econ/")) return await routeAccounts(request, env, url);
       if (url.pathname === "/api/card-battle/create" && request.method === "POST") return await createCardBattleRoom();
       if (url.pathname.startsWith("/api/card-battle/") && request.method === "GET") return await routeCardBattleRoom(request, env);
       if (url.pathname === "/api/goobers/pending" && request.method === "GET") return await listPendingGoobers(request, env);
@@ -35,8 +36,6 @@ export class CardBattleRoom {
     this.env = env;
     this.sessions = new Map();
     this.room = null;
-    this.catalog = null;
-    this.catalogLoadedAt = 0;
   }
 
   emptyRoom(code) {
@@ -50,17 +49,7 @@ export class CardBattleRoom {
 
   async saveRoom() { await this.state.storage.put("room2", this.room); }
 
-  async getCatalog() {
-    if (this.catalog && Date.now() - this.catalogLoadedAt < 60_000) return this.catalog;
-    let goobers = [];
-    try {
-      const result = await this.env.DB.prepare(`SELECT id, name, category, description, image_key FROM goobers WHERE approved = 1`).all();
-      goobers = (result.results || []).map(row => ({ id: row.id, name: row.name, category: row.category, description: row.description, imageUrl: `/api/goober-image/${row.image_key}` }));
-    } catch (error) { console.error("Catalog load failed", error); }
-    this.catalog = buildCatalog(goobers);
-    this.catalogLoadedAt = Date.now();
-    return this.catalog;
-  }
+  async getCatalog() { return loadCatalog(this.env); }
 
   async fetch(request) {
     const url = new URL(request.url);
@@ -74,12 +63,15 @@ export class CardBattleRoom {
     const token = cleanText(url.searchParams.get("token"), 64);
     const name = cleanText(url.searchParams.get("name"), 24) || "Goober Fan";
     const hero = cleanText(url.searchParams.get("hero"), 80);
+    // Logged-in players get rewards paid by the room, and their decks are checked against their collection.
+    const account = await userFromToken(this.env, url.searchParams.get("auth"));
     let seat = this.room.seats.findIndex(s => s && token && s.token === token);
     if (seat < 0 && token) seat = this.room.seats.findIndex(s => !s);
     if (seat >= 0) {
       const prev = this.room.seats[seat];
-      this.room.seats[seat] = { ...(prev || { deck: null }), token, name, hero, connected: true };
-      if (this.room.game) this.room.game.players[seat].name = name;
+      const displayName = account ? account.username : name;
+      this.room.seats[seat] = { ...(prev || { deck: null }), token, name: displayName, hero, connected: true, userId: account?.id || prev?.userId || null };
+      if (this.room.game) this.room.game.players[seat].name = displayName;
     }
 
     const pair = new WebSocketPair();
@@ -108,6 +100,7 @@ export class CardBattleRoom {
     await this.saveRoom();
     this.send(server, { type: "catalog", cards: await this.getCatalog() });
     this.broadcast();
+    this.retryRewards();
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -119,7 +112,7 @@ export class CardBattleRoom {
     const seat = session.seat;
     const isPlayer = seat === 0 || seat === 1;
 
-    if (message.type === "ping") return this.send(socket, { type: "pong" });
+    if (message.type === "ping") { this.retryRewards(); return this.send(socket, { type: "pong" }); }
 
     if (message.type === "emote") {
       if (!isPlayer || !EMOTES.has(message.key)) return;
@@ -138,6 +131,7 @@ export class CardBattleRoom {
       const entries = Array.isArray(message.deck) ? message.deck.slice(0, 40).map(e => ({ id: cleanText(e?.id, 80), shiny: Boolean(e?.shiny) })) : [];
       const check = validateDeck(catalog, entries.map(e => e.id));
       if (!check.ok) throw new Error(check.error);
+      await this.checkOwnership(seat, entries);
       this.room.seats[seat].deck = entries;
       this.maybeStart();
     } else if (message.type === "action") {
@@ -156,7 +150,7 @@ export class CardBattleRoom {
       if (Array.isArray(message.deck)) {
         const catalog = await this.getCatalog();
         const entries = message.deck.slice(0, 40).map(e => ({ id: cleanText(e?.id, 80), shiny: Boolean(e?.shiny) }));
-        if (validateDeck(catalog, entries.map(e => e.id)).ok) this.room.seats[seat].deck = entries;
+        if (validateDeck(catalog, entries.map(e => e.id)).ok && await this.checkOwnership(seat, entries).then(() => true, () => false)) this.room.seats[seat].deck = entries;
       }
       if (this.room.rematch[0] && this.room.rematch[1]) { this.room.phase = "lobby"; this.room.game = null; this.maybeStart(); }
     }
@@ -173,12 +167,69 @@ export class CardBattleRoom {
     this.room.rematch = [false, false];
     this.room.timeouts = [0, 0];
     this.room.lastEvents = [];
+    this.room.gameId = crypto.randomUUID();
+    this.room.paid = [false, false];
     this.setTurnDeadline();
+  }
+
+  // Logged-in players can only bring cards they own (shiny flags too).
+  async checkOwnership(seat, entries) {
+    const userId = this.room.seats[seat]?.userId;
+    if (!userId) return;
+    const row = await this.env.DB.prepare(`SELECT data FROM profiles WHERE user_id = ?`).bind(userId).first();
+    const profile = econ.normalizeProfile(row ? JSON.parse(row.data) : null);
+    const need = {}, shiny = {};
+    for (const e of entries) { need[e.id] = (need[e.id] || 0) + 1; if (e.shiny) shiny[e.id] = (shiny[e.id] || 0) + 1; }
+    for (const [id, n] of Object.entries(need)) {
+      if (econ.ownedCount(profile, id) < n) throw new Error("Your deck has cards you don't own. Fix it in My Decks.");
+      if ((shiny[id] || 0) > (profile.cards[id]?.s || 0)) throw new Error("Your deck claims shinies you don't own.");
+    }
+  }
+
+  // Pay match rewards to logged-in players. Each seat is marked paid only after its
+  // payout succeeds (so a failure can be retried later), and the game id is recorded
+  // in the player's profile so a retry can never pay twice.
+  async payRewards() {
+    if (this.paying) return this.paying;
+    this.paying = (async () => {
+      const game = this.room.game;
+      if (!game?.over || !this.room.gameId) return;
+      this.room.paid = this.room.paid || [false, false];
+      const day = econ.utcDay();
+      for (const seat of [0, 1]) {
+        const userId = this.room.seats[seat]?.userId;
+        if (!userId || this.room.paid[seat]) continue;
+        const won = game.winner === seat;
+        const gameId = this.room.gameId;
+        try {
+          const out = await applyEconomy(this.env, userId, this.room.seats[seat].name, p => {
+            if (p.paidGames.includes(gameId)) return { ok: true, coins: 0, already: true };
+            p.paidGames = [...p.paidGames, gameId].slice(-30);
+            return econ.recordResult(p, { won, reward: won ? econ.ONLINE_REWARD.win : econ.ONLINE_REWARD.loss, day, kind: "online", cap: econ.DAILY_REWARD_CAP.online });
+          });
+          if (!out.ok) continue;
+          this.room.paid[seat] = true;
+          await this.saveRoom();
+          if (!out.result.already) {
+            for (const [socket, session] of this.sessions.entries()) {
+              if (session.seat === seat) this.send(socket, { type: "reward", coins: out.result.coins, firstWin: out.result.firstWin, capped: out.result.capped });
+            }
+          }
+        } catch (error) {
+          console.error("Reward payout failed; will retry", error);
+        }
+      }
+    })().finally(() => { this.paying = null; });
+    return this.paying;
+  }
+
+  retryRewards() {
+    if (this.room.phase === "over" && this.room.paid && this.room.paid.includes(false)) this.payRewards().catch(() => {});
   }
 
   afterAction(events, turnBefore) {
     const game = this.room.game;
-    if (game.over) { this.room.phase = "over"; this.room.deadline = 0; this.state.storage.deleteAlarm(); }
+    if (game.over) { this.room.phase = "over"; this.room.deadline = 0; this.state.storage.deleteAlarm(); this.payRewards().catch(error => console.error("Reward payout failed", error)); }
     else if (game.turn !== turnBefore) this.setTurnDeadline();
     this.broadcast(events);
   }
@@ -450,6 +501,7 @@ async function handleAccounts(request, env, url) {
   }
   if (path === "/api/profile" && method === "GET") return getProfile(request, env);
   if (path === "/api/profile" && method === "PUT") return putProfile(request, env);
+  if (path.startsWith("/api/econ/") && method === "POST") return econAction(request, env, url);
   return jsonResponse({ error: "Not found" }, 404, NO_STORE_HEADERS);
 }
 
@@ -542,10 +594,11 @@ async function signup(request, env) {
     return jsonResponse({ error: "That username is taken." }, 409, NO_STORE_HEADERS);
   }
   // Start the account with the player's current device progress, if sent.
-  if (body.profile && typeof body.profile === "object") {
-    const data = JSON.stringify(body.profile);
-    if (data.length <= MAX_PROFILE_BYTES) await env.DB.prepare(`INSERT INTO profiles (user_id, data, version) VALUES (?, ?, 1)`).bind(id, data).run();
-  }
+  const start = body.profile && typeof body.profile === "object" && JSON.stringify(body.profile).length <= MAX_PROFILE_BYTES
+    ? econ.importGuestProfile(body.profile, await loadCatalog(env))
+    : econ.freshProfile();
+  start.name = creds.username;
+  await env.DB.prepare(`INSERT INTO profiles (user_id, data, version) VALUES (?, ?, 1)`).bind(id, JSON.stringify(start)).run();
   const token = await createSession(env, id);
   return jsonResponse({ token, user: { id, username: creds.username } }, 201, NO_STORE_HEADERS);
 }
@@ -593,25 +646,110 @@ async function getProfile(request, env) {
   return jsonResponse({ data: JSON.parse(row.data), version: row.version, updatedAt: row.updated_at }, 200, NO_STORE_HEADERS);
 }
 
-// Saves are versioned so an old device can't silently overwrite newer progress.
+// A device can only change its decks, settings, and similar; coins, cards, and
+// packs only change through the server's economy actions below.
 async function putProfile(request, env) {
   const user = await requireUser(request, env);
   if (!user) return unauthorized();
   const body = await readJson(request);
   if (!body.data || typeof body.data !== "object" || Array.isArray(body.data)) return jsonResponse({ error: "Invalid save data." }, 400, NO_STORE_HEADERS);
-  const data = JSON.stringify(body.data);
-  if (data.length > MAX_PROFILE_BYTES) return jsonResponse({ error: "Save data is too big." }, 413, NO_STORE_HEADERS);
-  const baseVersion = Number(body.version) || 0;
-  const current = await env.DB.prepare(`SELECT version FROM profiles WHERE user_id = ?`).bind(user.id).first();
-  if (!current) {
-    await env.DB.prepare(`INSERT INTO profiles (user_id, data, version) VALUES (?, ?, 1)`).bind(user.id, data).run();
-    return jsonResponse({ ok: true, version: 1 }, 200, NO_STORE_HEADERS);
+  // `editsRev` counts deck/settings saves. A device saving on top of an older count
+  // (say, a tab left open on another phone) is refused and gets the newer edits instead.
+  const baseRev = body.editsRev === undefined ? null : Number(body.editsRev);
+  const out = await applyEconomy(env, user.id, user.username, p => {
+    if (baseRev !== null && baseRev !== p.editsRev) return { ok: false, conflict: true, error: "Your decks were changed on another device." };
+    const merged = econ.mergeClientEdits(p, body.data, { username: user.username });
+    for (const key of Object.keys(p)) delete p[key];
+    Object.assign(p, merged, { editsRev: merged.editsRev + 1 });
+    return { ok: true };
+  });
+  if (!out.ok) return jsonResponse({ error: out.result?.error, conflict: Boolean(out.result?.conflict), profile: out.profile, version: out.version }, 409, NO_STORE_HEADERS);
+  return jsonResponse({ ok: true, version: out.version, profile: out.profile }, 200, NO_STORE_HEADERS);
+}
+
+// --- Server-side economy -----------------------------------------------------------
+let catalogCache = { at: 0, catalog: null };
+async function loadCatalog(env) {
+  if (catalogCache.catalog && Date.now() - catalogCache.at < 60_000) return catalogCache.catalog;
+  let goobers = [];
+  try {
+    const result = await env.DB.prepare(`SELECT id, name, category, description, image_key FROM goobers WHERE approved = 1`).all();
+    goobers = (result.results || []).map(row => ({ id: row.id, name: row.name, category: row.category, description: row.description, imageUrl: `/api/goober-image/${row.image_key}` }));
+  } catch (error) { console.error("Catalog load failed", error); }
+  catalogCache = { at: Date.now(), catalog: buildCatalog(goobers) };
+  return catalogCache.catalog;
+}
+
+// Read-modify-write a player's profile with optimistic locking (retries on a race).
+async function applyEconomy(env, userId, username, change) {
+  for (let attempt = 0; attempt < 15; attempt++) {
+    if (attempt) await new Promise(resolve => setTimeout(resolve, 5 + Math.random() * 25 * Math.min(attempt, 6)));
+    const row = await env.DB.prepare(`SELECT data, version FROM profiles WHERE user_id = ?`).bind(userId).first();
+    const profile = econ.normalizeProfile(row ? JSON.parse(row.data) : null);
+    if (!row) profile.name = username;
+    const result = await change(profile);
+    if (!result?.ok) return { ok: false, result, profile, version: row?.version || 0 };
+    const data = JSON.stringify(profile);
+    if (data.length > MAX_PROFILE_BYTES) return { ok: false, result: { ok: false, error: "Save data is too big." }, profile, version: row?.version || 0 };
+    if (!row) {
+      const ins = await env.DB.prepare(`INSERT INTO profiles (user_id, data, version) VALUES (?, ?, 1) ON CONFLICT(user_id) DO NOTHING`).bind(userId, data).run();
+      if (ins.meta?.changes) return { ok: true, result, profile, version: 1 };
+      continue;
+    }
+    const upd = await env.DB.prepare(`UPDATE profiles SET data = ?, version = version + 1, updated_at = datetime('now') WHERE user_id = ? AND version = ?`).bind(data, userId, row.version).run();
+    if (upd.meta?.changes) return { ok: true, result, profile, version: row.version + 1 };
   }
-  if (baseVersion !== current.version) {
-    const latest = await env.DB.prepare(`SELECT data, version FROM profiles WHERE user_id = ?`).bind(user.id).first();
-    return jsonResponse({ error: "Your account was updated on another device.", conflict: true, data: JSON.parse(latest.data), version: latest.version }, 409, NO_STORE_HEADERS);
+  throw new Error("Your account is busy. Try again.");
+}
+
+async function econAction(request, env, url) {
+  const user = await requireUser(request, env);
+  if (!user) return unauthorized();
+  const body = request.method === "POST" ? await readJson(request) : {};
+  const action = url.pathname.replace("/api/econ/", "");
+  const day = econ.utcDay();
+  const rng = () => crypto.getRandomValues(new Uint32Array(1))[0] / 4294967296;
+  let change;
+  switch (action) {
+    case "daily": change = p => econ.claimDaily(p, day); break;
+    case "buy": change = p => econ.buyPack(p, cleanText(body.type, 20)); break;
+    case "open": { const catalog = await loadCatalog(env); change = p => econ.openPack(p, cleanText(body.type, 20), catalog, rng); break; }
+    case "craft": { const catalog = await loadCatalog(env); change = p => econ.craftCard(p, cleanText(body.id, 80), catalog); break; }
+    case "recycle": { const catalog = await loadCatalog(env); change = p => econ.recycleExtras(p, catalog); break; }
+    case "solo-start": {
+      const level = cleanText(body.level, 20);
+      if (!econ.SOLO_REWARD[level]) return jsonResponse({ error: "Unknown opponent." }, 400, NO_STORE_HEADERS);
+      const ticket = crypto.randomUUID();
+      change = p => { p.openMatch = { id: ticket, level, started: Date.now() }; return { ok: true, ticket }; };
+      break;
+    }
+    case "solo-finish": {
+      const ticket = cleanText(body.ticket, 64), won = body.won === true, draw = body.draw === true;
+      change = p => {
+        const match = p.openMatch;
+        if (!match || match.id !== ticket) return { ok: false, error: "No match to finish." };
+        p.openMatch = null;
+        // Too-quick "wins" still count as played, but pay nothing.
+        const legit = Date.now() - match.started >= econ.MIN_SOLO_MATCH_MS;
+        const reward = !legit ? 0 : won ? econ.SOLO_REWARD[match.level] : draw ? 20 : 15;
+        return econ.recordResult(p, { won: won && legit, reward, day, kind: "solo", cap: econ.DAILY_REWARD_CAP.solo });
+      };
+      break;
+    }
+    default: return jsonResponse({ error: "Not found" }, 404, NO_STORE_HEADERS);
   }
-  const result = await env.DB.prepare(`UPDATE profiles SET data = ?, version = version + 1, updated_at = datetime('now') WHERE user_id = ? AND version = ?`).bind(data, user.id, baseVersion).run();
-  if (!result.meta?.changes) return jsonResponse({ error: "Your account was updated on another device.", conflict: true }, 409, NO_STORE_HEADERS);
-  return jsonResponse({ ok: true, version: baseVersion + 1 }, 200, NO_STORE_HEADERS);
+  let out;
+  try { out = await applyEconomy(env, user.id, user.username, change); }
+  catch { return jsonResponse({ error: "Your account is busy. Try again." }, 503, NO_STORE_HEADERS); }
+  if (!out.ok) return jsonResponse({ error: out.result?.error || "That didn't work.", profile: out.profile, version: out.version }, 400, NO_STORE_HEADERS);
+  return jsonResponse({ ok: true, result: out.result, profile: out.profile, version: out.version }, 200, NO_STORE_HEADERS);
+}
+
+async function userFromToken(env, token) {
+  token = typeof token === "string" ? token.trim() : "";
+  if (!/^[0-9a-f]{64}$/.test(token)) return null;
+  try {
+    const row = await env.DB.prepare(`SELECT u.id, u.username, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?`).bind(await sha256Hex(token)).first();
+    return row && Date.parse(row.expires_at) >= Date.now() ? row : null;
+  } catch { return null; }
 }

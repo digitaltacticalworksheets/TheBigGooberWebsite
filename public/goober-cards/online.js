@@ -43,6 +43,7 @@ export class OnlineMatch {
   connect() {
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
     const params = new URLSearchParams({ token: this.token, name: this.opts.name || "Goober Fan", hero: this.opts.heroId || "" });
+    if (this.opts.auth) params.set("auth", this.opts.auth);
     const ws = new WebSocket(`${proto}//${location.host}/api/card-battle/${this.code}/socket?${params}`);
     this.ws = ws;
     ws.addEventListener("open", () => { this.retries = 0; });
@@ -71,6 +72,7 @@ export class OnlineMatch {
     if (msg.type === "catalog") { Object.assign(this.catalog, msg.cards || {}); return; }
     if (msg.type === "error") { toast(msg.message, "bad"); this.pendingResolve?.({ ok: true }); this.pendingResolve = null; return; }
     if (msg.type === "emote") { this.battle?.showEmote(msg.seat, msg.key); return; }
+    if (msg.type === "reward") { this.lastReward = msg; return; }
     if (msg.type !== "state") return;
 
     this.seat = msg.seat;
@@ -127,6 +129,7 @@ export class OnlineMatch {
   }
 
   rematch(deck) {
+    this.lastReward = null;
     this.deckSent = true;
     this.waitingRematch = true;
     this.battle?.destroy();
