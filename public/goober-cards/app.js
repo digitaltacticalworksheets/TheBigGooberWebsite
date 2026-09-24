@@ -645,14 +645,14 @@ function bindDeckPicker(root, onPick) {
 }
 
 // ------------------------------------------------------------------ solo
-const AI_ART = { pup: "/assets/Party Goober.jpg", goodboy: "/assets/cowboy-goober.jpg", biggoober: "/assets/spider-goober.jpg" };
+const AI_ART = { sleepy: "/assets/lil-goober.jpg", pup: "/assets/Party Goober.jpg", goodboy: "/assets/cowboy-goober.jpg", biggoober: "/assets/spider-goober.jpg" };
 
 function renderSolo() {
   const level = view.solo.level;
   app.innerHTML = `<div class="screen">
     ${topbar("Solo Battle")}
     <span class="field-label">Pick your opponent</span>
-    <div class="choice-list three">${Object.entries(AI_LEVELS).map(([key, l]) => `
+    <div class="choice-list four">${Object.entries(AI_LEVELS).map(([key, l]) => `
       <button class="choice ${key === level ? "selected" : ""}" data-level="${key}"><img src="${AI_ART[key]}" alt=""><div><b>${l.name}</b><small>${l.blurb}</small><br><small>${COIN}Win: +${l.reward}</small></div></button>`).join("")}
     </div>
     <span class="field-label">Your deck</span>
@@ -666,7 +666,14 @@ function renderSolo() {
 
 function aiDeck(level) {
   if (level === "biggoober") return autoDeck(catalog, null, () => Math.random() * 0.5 + 0.5);
-  if (level === "pup") {
+  // Sleepy only brings cheap commons.
+  if (level === "sleepy") {
+    const counts = {};
+    for (const id of collectibleIds(catalog)) counts[id] = catalog[id].rarity === "common" && catalog[id].cost <= 4 ? 2 : 0;
+    const deck = autoDeck(catalog, counts);
+    if (deck.length === DECK_SIZE) return deck;
+  }
+  if (level === "pup" || level === "sleepy") {
     const counts = {};
     for (const id of collectibleIds(catalog)) counts[id] = catalog[id].rarity === "common" || catalog[id].rarity === "rare" ? 2 : 0;
     const deck = autoDeck(catalog, counts);
