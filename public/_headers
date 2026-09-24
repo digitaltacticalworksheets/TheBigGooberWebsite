@@ -1,0 +1,14 @@
+# Cloudflare Pages response headers.
+# Code and pages: always check with the server before reusing a saved copy, so
+# players get updates on their next load (unchanged files still come back as a
+# quick "304 not modified").
+/*
+  Cache-Control: no-cache
+
+# Pictures and sounds rarely change: keep them for a day.
+/assets/*
+  ! Cache-Control
+  Cache-Control: public, max-age=86400
+/goober-cards/sounds/*
+  ! Cache-Control
+  Cache-Control: public, max-age=86400

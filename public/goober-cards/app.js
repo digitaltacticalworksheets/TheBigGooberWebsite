@@ -11,6 +11,7 @@ import { $, $$, esc, sleep, cardHTML, cardBackHTML, toast, modal, confirmDialog,
 import { sfx, setSoundEnabled, buzz } from "./sound.js";
 import { prepareDrawing } from "./image.js";
 import { friendsApi, startPresence, stopPresence, setPresence, STATUS_LABEL } from "./friends.js";
+import { watchForUpdates } from "./updates.js";
 
 const app = document.getElementById("app");
 const GOOBER_CACHE_KEY = "gooberCardsGoobers";
@@ -62,6 +63,8 @@ function route() {
   document.body.classList.remove("in-battle");
   document.querySelectorAll(".modal, .opening").forEach(el => el.remove());
   document.body.style.overflow = "";
+  // A new version came out while this was open: moving between screens is a safe moment.
+  if (name !== "draw") updates?.maybeReload();
   window.scrollTo(0, 0);
   switch (name) {
     case "solo": return renderSolo();
@@ -1402,7 +1405,13 @@ function renderBuilder(id) {
 }
 
 // ------------------------------------------------------------------ boot
+// Reload into a new release when it's safe: not in a match, a search, a room, a pop-up,
+// or halfway through uploading a drawing.
+let updates = null;
+const safeToReload = () => !match && !online && !searching && !document.querySelector(".modal, .opening") && location.hash.replace(/^#/, "").split("/")[0] !== "draw";
+
 function boot() {
+  updates = watchForUpdates({ canReload: safeToReload });
   const params = new URLSearchParams(location.search);
   const room = params.get("room");
   if (room) { history.replaceState(null, "", `${location.pathname}#challenge/${room.toUpperCase()}`); }
