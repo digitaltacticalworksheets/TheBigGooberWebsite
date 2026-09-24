@@ -79,6 +79,7 @@ img { -webkit-user-drag: none; user-select: none; }
   background: rgba(0, 0, 0, 0.35); border: 2px solid rgba(255, 255, 255, 0.25);
   font-family: var(--display); font-size: 1.05rem;
 }
+.coin-icon { width: 1.25em; height: 1.25em; vertical-align: -0.28em; margin-right: 0.3em; border-radius: 50%; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45)); }
 .coins-pill { background: #2b2140; border-color: var(--yellow); color: var(--yellow); }
 .badge {
   position: absolute; top: -8px; right: -8px; min-width: 26px; height: 26px; padding: 0 7px;
@@ -282,7 +283,7 @@ h1, h2, h3 { font-family: var(--display); font-weight: 400; letter-spacing: 0.01
   background: var(--paper); color: var(--ink);
 }
 .choice.selected { background-color: var(--yellow); }
-.choice img { width: 76px; height: 76px; border-radius: 50%; object-fit: cover; border: 3px solid var(--ink); }
+.choice > img { width: 76px; height: 76px; border-radius: 50%; object-fit: cover; border: 3px solid var(--ink); }
 .choice b { font-family: var(--display); font-weight: 400; font-size: 1.35rem; display: block; }
 .choice small { font-weight: 800; color: #5a5160; }
 .field-label { font-family: var(--display); font-size: 1.15rem; margin: 18px 0 8px; display: block; }
@@ -841,7 +842,7 @@ body::after {
 .pack-tile { border: 0; }
 .pack-tile p, .choice small, .deck-chip small, .deck-tile small { color: var(--muted); }
 .choice.selected, .deck-chip.selected, .deck-tile.active { box-shadow: 0 0 0 3px var(--yellow), 0 0 26px rgba(255, 211, 77, 0.55); }
-.choice img { box-shadow: 0 0 0 3px var(--yellow); background: #fff; object-fit: contain; }
+.choice > img { box-shadow: 0 0 0 3px var(--yellow); background: #fff; object-fit: contain; }
 .online-card { position: relative; isolation: isolate; border: 0; background: rgba(28, 22, 44, 0.6); }
 /* The rim is a border-box background (not a ::before) so it stays put when a long sheet scrolls. */
 .modal .sheet {

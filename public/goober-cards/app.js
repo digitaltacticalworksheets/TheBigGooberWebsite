@@ -74,8 +74,11 @@ function route() {
   }
 }
 
+// The Goober coin, used wherever coins are shown.
+const COIN = `<img class="coin-icon" src="/assets/goober-coin.png" alt="coins" draggable="false">`;
+
 function topbar(title, back = "#home", right = "") {
-  return `<div class="topbar"><a class="icon-btn" href="${back}" aria-label="Back">←</a><h2>${esc(title)}</h2>${right}<span class="pill coins-pill">🪙 ${profile().coins}</span></div>`;
+  return `<div class="topbar"><a class="icon-btn" href="${back}" aria-label="Back">←</a><h2>${esc(title)}</h2>${right}<span class="pill coins-pill">${COIN}${profile().coins}</span></div>`;
 }
 
 // ------------------------------------------------------------------ home
@@ -92,7 +95,7 @@ function renderHome() {
       <a class="icon-btn" href="/" aria-label="Back to The Big Goober Website">🏠</a>
       <div class="spacer"></div>
       ${accountChipHTML()}
-      <span class="pill coins-pill">🪙 ${p.coins}</span>
+      <span class="pill coins-pill">${COIN}${p.coins}</span>
       <button class="icon-btn" data-settings aria-label="Settings">⚙️</button>
     </div>
     <div class="logo">
@@ -365,7 +368,7 @@ function renderSolo() {
     ${topbar("Solo Battle")}
     <span class="field-label">Pick your opponent</span>
     <div class="choice-list three">${Object.entries(AI_LEVELS).map(([key, l]) => `
-      <button class="choice ${key === level ? "selected" : ""}" data-level="${key}"><img src="${AI_ART[key]}" alt=""><div><b>${l.name}</b><small>${l.blurb}</small><br><small>🪙 Win: +${l.reward}</small></div></button>`).join("")}
+      <button class="choice ${key === level ? "selected" : ""}" data-level="${key}"><img src="${AI_ART[key]}" alt=""><div><b>${l.name}</b><small>${l.blurb}</small><br><small>${COIN}Win: +${l.reward}</small></div></button>`).join("")}
     </div>
     <span class="field-label">Your deck</span>
     ${deckPickerHTML(profile().activeDeck)}
@@ -448,7 +451,7 @@ function showResult({ won, draw, coins, firstWin, capped, again, onlineRoom, ran
   const m = modal(`<div class="result ${won ? "win" : "lose"}">
       <h2>${title}</h2>
       <div class="portrait" style="background-image:url('${esc(heroArt(profile().hero))}')"></div>
-      ${coins ? `<div class="reward">🪙 +${coins}</div>` : ""}
+      ${coins ? `<div class="reward">${COIN}+${coins}</div>` : ""}
       ${rank ? `<div class="reward rank-reward">${rankLabel(rank.after)} · ${rank.delta >= 0 ? "+" : ""}${rank.delta} RP</div>` : ""}
       ${rank?.promoted ? `<p><b>Promoted to ${esc(tierFor(rank.after).name)}! ${tierFor(rank.after).icon}</b></p>` : ""}
       ${rank && !won && !draw && rank.delta === 0 ? `<p class="muted">Tier protected. You can't drop out of ${esc(tierFor(rank.after).name)}.</p>` : ""}
@@ -727,7 +730,7 @@ function joinOnline(code, { watch = false, challenge = false } = {}) {
 function renderRematchWait(code) {
   history.replaceState(null, "", "#home");
   app.innerHTML = `<div class="screen">
-    <div class="topbar"><h2>Rematch</h2><span class="pill coins-pill">🪙 ${profile().coins}</span></div>
+    <div class="topbar"><h2>Rematch</h2><span class="pill coins-pill">${COIN}${profile().coins}</span></div>
     <div class="online-card" style="border-style:solid;text-align:center">
       <div class="code-box">${esc(code)}</div>
       <div class="row" style="justify-content:center"><div class="spinner"></div><span class="muted" data-status>Waiting for your opponent to say yes…</span></div>
@@ -755,7 +758,7 @@ function renderPacks() {
         <div><h3>${esc(pack.name)}</h3><p>${esc(pack.blurb)}</p>
           <div class="row">
             <button class="btn ${n ? "primary" : ""}" data-open="${pack.id}" ${n && !locked ? "" : "disabled"}>Open${n ? ` (${n})` : ""}</button>
-            <button class="btn small" data-buy="${pack.id}" ${locked ? "disabled" : ""}>🪙 ${pack.price}</button>
+            <button class="btn small" data-buy="${pack.id}" ${locked ? "disabled" : ""}>${COIN}${pack.price}</button>
           </div>
           ${locked ? `<p>Needs more uploaded Goobers first!</p>` : ""}
         </div></div>`;
@@ -897,7 +900,7 @@ function renderCollection() {
     const newCards = profile().newCards;
     $("[data-grid]", app).innerHTML = cards.length ? cards.map(card => {
       const n = store.owned(card.id), s = store.ownedShiny(card.id);
-      return `<button class="grid-cell" data-card="${esc(card.id)}">${cardHTML(card, { shiny: s > 0, extraClass: n ? "" : "locked" })}${n ? `<span class="count">×${n}${s ? ` ✨${s}` : ""}</span>` : `<span class="count">🪙 ${store.CRAFT_COST[card.rarity]}</span>`}${newCards[card.id] ? `<span class="new">NEW</span>` : ""}</button>`;
+      return `<button class="grid-cell" data-card="${esc(card.id)}">${cardHTML(card, { shiny: s > 0, extraClass: n ? "" : "locked" })}${n ? `<span class="count">×${n}${s ? ` ✨${s}` : ""}</span>` : `<span class="count">${COIN}${store.CRAFT_COST[card.rarity]}</span>`}${newCards[card.id] ? `<span class="new">NEW</span>` : ""}</button>`;
     }).join("") : `<div class="empty-note">No cards match those filters.</div>`;
   };
   fillGrid();
@@ -932,7 +935,7 @@ function showCardDetail(id, refresh) {
       ${card.flavor ? `<p><i>${esc(card.flavor)}</i></p>` : ""}
       ${keywordGlossary(card.keywords, card)}
       <div class="row" style="margin-top:10px">
-        ${canCraft ? `<button class="btn small primary" data-craft>🔨 Craft (🪙 ${cost})</button>` : ""}
+        ${canCraft ? `<button class="btn small primary" data-craft>🔨 Craft (${COIN}${cost})</button>` : ""}
         ${card.type === "minion" && card.art?.image && n ? `<button class="btn small" data-portrait>🖼️ Use as portrait</button>` : ""}
       </div>
     </div>
