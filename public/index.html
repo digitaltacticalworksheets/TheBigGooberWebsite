@@ -183,7 +183,17 @@
         </p>
       </div>
 
+      <div class="upload-gate" id="uploadGate" hidden>
+        <h3>🔒 Log in to add a Goober</h3>
+        <p id="uploadGateMessage">Adding Goobers uses your free Goober Cards account. No email needed.</p>
+        <div class="upload-actions">
+          <a class="upload-button primary" href="/goober-cards/#login/upload">Log in</a>
+          <a class="upload-button" href="/goober-cards/#signup/upload">Make an account</a>
+        </div>
+      </div>
+
       <form class="upload-form" id="gooberUploadForm">
+        <p class="upload-as" id="uploadAs" hidden></p>
         <div class="form-row">
           <label for="gooberName">Goober name</label>
           <input id="gooberName" type="text" placeholder="Example: Wizard Goober" required />

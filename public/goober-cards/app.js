@@ -65,6 +65,7 @@ function route() {
     case "online": return renderOnline(arg);
     case "watch": return renderOnline("", arg);
     case "challenge": return renderChallenge(arg);
+    case "login": case "signup": return renderAuthLink(name, arg);
     case "packs": return renderPacks();
     case "collection": return renderCollection();
     case "decks": return renderDecks();
@@ -112,7 +113,7 @@ function renderHome() {
       <a class="tile yellow" href="#collection"><span class="ico">📚</span><b>Collection</b><span>${discovered}/${ids.length} found</span>${newCount ? `<em class="badge">${newCount}</em>` : ""}</a>
       <a class="tile green" href="#decks"><span class="ico">🃏</span><b>My Decks</b><span>${p.decks.length} deck${p.decks.length === 1 ? "" : "s"}</span></a>
       <button class="tile blue" data-rules><span class="ico">📖</span><b>How to Play</b><span>Read this or get cooked</span></button>
-      <a class="tile orange" href="/#upload"><span class="ico">✏️</span><b>Draw a Goober</b><span>Your drawing becomes a card</span></a>
+      <a class="tile orange" href="${account.currentUser() ? "/#upload" : "#login/upload"}"><span class="ico">✏️</span><b>Draw a Goober</b><span>${account.currentUser() ? "Your drawing becomes a card" : "Log in to upload yours"}</span></a>
       <button class="tile white" data-hero><span class="ico">🖼️</span><b>My Portrait</b><span>Pick your main</span></button>
     </div>
     <div class="home-foot">
@@ -174,6 +175,27 @@ function accountChipHTML() {
 }
 
 // Log in / sign up / account screen.
+// Links from the main site (#login/upload, #signup/upload): log in here, then go back.
+function renderAuthLink(mode, next) {
+  const back = next === "upload" ? "/#upload" : null;
+  const leave = () => { if (back) location.href = back; else { history.replaceState(null, "", "#home"); route(); } };
+  if (account.currentUser()) { leave(); return; }
+  app.innerHTML = `<div class="screen">${topbar(mode === "signup" ? "Sign up" : "Log in")}
+    <div class="online-card" style="text-align:center">
+      <b>${back ? "✏️ Adding Goobers to the site needs a free Goober Cards account." : "Log in to save your cards on any device."}</b>
+      <p class="muted">No email needed. Your uploads become cards you can collect and play.</p>
+      <div class="row" style="justify-content:center"><button class="btn primary" data-open-auth>${mode === "signup" ? "Make an account" : "Log in"}</button>${back ? `<a class="btn" href="${back}">Back to the site</a>` : ""}</div>
+    </div></div>`;
+  const open = () => showAccount(mode, {
+    onDone: () => {
+      if (!profile().name) { profile().name = account.currentUser()?.username || "Goober Fan"; store.saveProfile(); }
+      leave();
+    }
+  });
+  $("[data-open-auth]", app).onclick = open;
+  open();
+}
+
 function showAccount(mode = "login", { onDone, onCancel } = {}) {
   const user = account.currentUser();
   if (user) {
