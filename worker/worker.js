@@ -11,7 +11,7 @@ export default {
       if (url.pathname === "/api/goobers" && request.method === "POST") return await uploadGoober(request, env);
       if (url.pathname.startsWith("/api/auth/") || url.pathname === "/api/profile" || url.pathname.startsWith("/api/econ/")) return await routeAccounts(request, env, url);
       if (url.pathname === "/api/card-battle/create" && request.method === "POST") return await createCardBattleRoom();
-      if (url.pathname === "/api/card-battle/matchmaking" && request.method === "GET") return await routeMatchmaking(request, env);
+      if ((url.pathname === "/api/card-battle/matchmaking" || url.pathname === "/api/card-battle/live") && request.method === "GET") return await routeMatchmaking(request, env);
       if (url.pathname.startsWith("/api/card-battle/") && request.method === "GET") return await routeCardBattleRoom(request, env);
       if (url.pathname === "/api/goobers/pending" && request.method === "GET") return await listPendingGoobers(request, env);
       if (/^\/api\/goobers\/[^/]+\/approve$/.test(url.pathname) && request.method === "POST") return await approveGoober(request, env);
@@ -28,6 +28,8 @@ export default {
 const TURN_SECONDS = 90;
 const MAX_TIMEOUTS = 3;
 const EMOTES = new Set(["woof", "wow", "oops", "thanks", "gg", "hello"]);
+const MAX_WATCHERS = 50;
+const LIVE_TTL_MS = 30 * 60 * 1000;
 
 // One online Goober Cards match. The room is authoritative: clients send actions,
 // the shared engine validates and applies them, and each seat gets its own view.
@@ -57,10 +59,13 @@ export class CardBattleRoom {
     const code = getRoomCodeFromPath(url.pathname);
     if (!code) return jsonResponse({ error: "Room code is required." }, 400, NO_STORE_HEADERS);
     await this.loadRoom(code);
-    if (request.method === "POST" && url.pathname.endsWith("/ranked")) {
+    // Internal call from the matchmaker (the public route never forwards POSTs to rooms):
+    // matchmade rooms show up in the live list, and some are ranked.
+    if (request.method === "POST" && url.pathname.endsWith("/setup")) {
       const body = await request.json().catch(() => ({}));
-      if (this.room.phase === "lobby" && !this.room.game && !this.room.seats.some(Boolean) && body.ranks && typeof body.ranks === "object") {
-        this.room.ranked = { ranks: body.ranks, users: Object.keys(body.ranks), gameId: null };
+      if (this.room.phase === "lobby" && !this.room.game && !this.room.seats.some(Boolean)) {
+        this.room.public = true;
+        if (body.ranks && typeof body.ranks === "object") this.room.ranked = { ranks: body.ranks, users: Object.keys(body.ranks), gameId: null };
         await this.saveRoom();
       }
       return jsonResponse({ ok: true }, 200, NO_STORE_HEADERS);
@@ -74,8 +79,11 @@ export class CardBattleRoom {
     const hero = cleanText(url.searchParams.get("hero"), 80);
     // Logged-in players get rewards paid by the room, and their decks are checked against their collection.
     const account = await userFromToken(this.env, url.searchParams.get("auth"));
-    let seat = this.room.seats.findIndex(s => s && token && s.token === token);
-    if (seat < 0 && token) seat = this.room.seats.findIndex(s => !s);
+    // Watchers (?watch=1, or anyone once both seats are taken) get seat -1 and a view with both hands hidden.
+    const watching = url.searchParams.get("watch") === "1";
+    let seat = watching ? -1 : this.room.seats.findIndex(s => s && token && s.token === token);
+    if (seat < 0 && token && !watching) seat = this.room.seats.findIndex(s => !s);
+    if (seat < 0 && this.watcherCount() >= MAX_WATCHERS) return jsonResponse({ error: "Too many people are watching this match." }, 429, NO_STORE_HEADERS);
     if (seat >= 0) {
       const prev = this.room.seats[seat];
       const displayName = account ? account.username : name;
@@ -100,6 +108,8 @@ export class CardBattleRoom {
         const stillHere = [...this.sessions.values()].some(s => s.seat === session.seat);
         if (!stillHere) this.room.seats[session.seat].connected = false;
         await this.saveRoom();
+        this.broadcast();
+      } else if (session) {
         this.broadcast();
       }
     };
@@ -167,6 +177,20 @@ export class CardBattleRoom {
     this.broadcast();
   }
 
+  watcherCount() { return [...this.sessions.values()].filter(s => s.seat < 0).length; }
+
+  // Tell the matchmaker's live list about matchmade games (fire and forget).
+  reportLive(status) {
+    if (!this.room.public || !this.env.MATCHMAKER) return;
+    const players = this.room.seats.map(s => {
+      const rp = s?.userId && this.room.ranked ? this.room.ranked.ranks[s.userId] : undefined;
+      return { name: s?.name || "?", ...(rp !== undefined && rp !== null ? { tier: econ.tierFor(rp).id } : {}) };
+    });
+    const body = JSON.stringify({ code: this.room.code, status, players, ranked: Boolean(this.room.ranked && this.room.ranked.gameId === this.room.gameId) });
+    const stub = this.env.MATCHMAKER.get(this.env.MATCHMAKER.idFromName("global"));
+    stub.fetch(new Request("https://matchmaker.internal/api/card-battle/matchmaking/live", { method: "POST", body })).catch(error => console.error("Live list update failed", error));
+  }
+
   maybeStart() {
     const [a, b] = this.room.seats;
     if (!a?.deck || !b?.deck || this.room.phase === "playing") return;
@@ -181,6 +205,7 @@ export class CardBattleRoom {
     // Only the first game between the two matched accounts is ranked; rematches aren't.
     const ranked = this.room.ranked;
     if (ranked && !ranked.gameId && [a.userId, b.userId].every(id => ranked.users.includes(id)) && a.userId !== b.userId) ranked.gameId = this.room.gameId;
+    this.reportLive("playing");
     this.setTurnDeadline();
   }
 
@@ -244,7 +269,7 @@ export class CardBattleRoom {
 
   afterAction(events, turnBefore) {
     const game = this.room.game;
-    if (game.over) { this.room.phase = "over"; this.room.deadline = 0; this.state.storage.deleteAlarm(); this.payRewards().catch(error => console.error("Reward payout failed", error)); }
+    if (game.over) { this.room.phase = "over"; this.room.deadline = 0; this.state.storage.deleteAlarm(); this.payRewards().catch(error => console.error("Reward payout failed", error)); this.reportLive("over"); }
     else if (game.turn !== turnBefore) this.setTurnDeadline();
     this.broadcast(events);
   }
@@ -276,6 +301,7 @@ export class CardBattleRoom {
       deadline: this.room.deadline,
       rematch: this.room.rematch,
       ranked: Boolean(this.room.ranked) && (!this.room.game || this.room.ranked.gameId === this.room.gameId),
+      watchers: this.watcherCount(),
       seats: this.room.seats.map(s => {
         if (!s) return null;
         const rp = s.userId && this.room.ranked ? this.room.ranked.ranks[s.userId] : undefined;
@@ -319,6 +345,12 @@ export class Matchmaker {
   }
 
   async fetch(request) {
+    const path = new URL(request.url).pathname;
+    if (path === "/api/card-battle/matchmaking/live" && request.method === "POST") return this.updateLive(request);
+    if (path === "/api/card-battle/live") {
+      const games = Object.values(await this.liveGames()).sort((a, b) => b.started - a.started).slice(0, 20);
+      return jsonResponse({ searching: this.waiting.length, games }, 200, NO_STORE_HEADERS);
+    }
     if (request.headers.get("upgrade") !== "websocket") {
       return jsonResponse({ searching: this.waiting.length }, 200, NO_STORE_HEADERS);
     }
@@ -378,7 +410,7 @@ export class Matchmaker {
         i -= 1;
         const roomCode = createRoomCode();
         const ranked = Boolean(a.userId && b.userId && a.userId !== b.userId);
-        if (ranked) await this.markRanked(roomCode, { [a.userId]: a.rp, [b.userId]: b.rp });
+        await this.setupRoom(roomCode, ranked ? { [a.userId]: a.rp, [b.userId]: b.rp } : null);
         for (const w of [a, b]) {
           this.send(w.socket, { type: "matched", roomCode, ranked });
           try { w.socket.close(1000, "Matched"); } catch { /* already closed */ }
@@ -391,9 +423,32 @@ export class Matchmaker {
   }
 
   // Internal call only: the public worker route never forwards POSTs to rooms.
-  async markRanked(roomCode, ranks) {
+  async setupRoom(roomCode, ranks) {
     const stub = this.env.CARD_BATTLE_ROOMS.get(this.env.CARD_BATTLE_ROOMS.idFromName(roomCode));
-    await stub.fetch(new Request(`https://rooms.internal/api/card-battle/${roomCode}/ranked`, { method: "POST", body: JSON.stringify({ ranks }) }));
+    await stub.fetch(new Request(`https://rooms.internal/api/card-battle/${roomCode}/setup`, { method: "POST", body: JSON.stringify({ ranks }) }));
+  }
+
+  // Live matchmade games, kept in storage so the list survives the matchmaker going idle.
+  async liveGames() {
+    const live = (await this.state.storage.get("live")) || {};
+    const now = Date.now();
+    for (const [code, game] of Object.entries(live)) if (now - game.updated > LIVE_TTL_MS) delete live[code];
+    return live;
+  }
+
+  async updateLive(request) {
+    const body = await request.json().catch(() => ({}));
+    const code = getRoomCodeFromPath(`/api/card-battle/${cleanText(body.code, 12)}`);
+    if (!code) return jsonResponse({ ok: false }, 400, NO_STORE_HEADERS);
+    const live = await this.liveGames();
+    if (body.status === "playing") {
+      const players = Array.isArray(body.players) ? body.players.slice(0, 2).map(p => ({ name: cleanText(p?.name, 24) || "?", ...(p?.tier ? { tier: cleanText(p.tier, 20) } : {}) })) : [];
+      live[code] = { code, players, ranked: Boolean(body.ranked), started: live[code]?.started || Date.now(), updated: Date.now() };
+    } else {
+      delete live[code];
+    }
+    await this.state.storage.put("live", live);
+    return jsonResponse({ ok: true }, 200, NO_STORE_HEADERS);
   }
 
   announce() {
@@ -447,7 +502,7 @@ const ALLOWED_CATEGORIES = new Set(["classic", "costume", "chaos", "funny", "spo
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const NO_STORE_HEADERS = { "cache-control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0", "pragma": "no-cache", "expires": "0", "surrogate-control": "no-store", "cdn-cache-control": "no-store", "cloudflare-cdn-cache-control": "no-store" };
 function createRoomCode() { const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let code = ""; const bytes = new Uint8Array(6); crypto.getRandomValues(bytes); for (const byte of bytes) code += alphabet[byte % alphabet.length]; return code; }
-function getRoomCodeFromPath(pathname) { const match = pathname.match(/^\/api\/card-battle\/([A-Z0-9]{4,12})(?:\/socket|\/ranked)?$/i); return match ? match[1].toUpperCase() : ""; }
+function getRoomCodeFromPath(pathname) { const match = pathname.match(/^\/api\/card-battle\/([A-Z0-9]{4,12})(?:\/socket|\/setup)?$/i); return match ? match[1].toUpperCase() : ""; }
 async function listGoobers(env) { const result = await env.DB.prepare(`SELECT id, name, category, description, image_key, image_type, created_at FROM goobers WHERE approved = 1 ORDER BY created_at DESC`).all(); return jsonResponse((result.results || []).map(row => ({ id: row.id, name: row.name, category: row.category, description: row.description, imageUrl: `/api/goober-image/${row.image_key}`, createdAt: row.created_at })), 200, NO_STORE_HEADERS); }
 async function uploadGoober(request, env) {
   const formData = await request.formData();

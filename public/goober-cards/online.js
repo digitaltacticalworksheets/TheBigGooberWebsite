@@ -43,8 +43,16 @@ export function findMatch(handlers, auth = "") {
   return { cancel: finish };
 }
 
+// Matchmade games happening right now, for the Watch Live list.
+export async function liveGames() {
+  const res = await fetch("/api/card-battle/live", { cache: "no-store" });
+  if (!res.ok) throw new Error("Couldn't load live matches.");
+  return res.json();
+}
+
 export class OnlineMatch {
-  // opts: { code, name, heroId, deck (entries), catalog, heroArtFor(id), onLobby(room, seat), onEnd(result), onExit, showRules, toggleSound, soundOn }
+  // opts: { code, name, heroId, deck (entries), catalog, heroArtFor(id), onLobby(room, seat), onEnd(result), onExit, showRules, toggleSound, soundOn,
+  //         watch (join as a spectator), onWatchEnd(room, game) }
   constructor(opts) {
     this.opts = opts;
     this.code = opts.code;
@@ -58,6 +66,7 @@ export class OnlineMatch {
     this.deckSent = false;
     this.endSignaled = false;
     this.waitingRematch = false;
+    this.spectating = Boolean(opts.watch);
     this.connect();
   }
 
@@ -65,6 +74,7 @@ export class OnlineMatch {
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
     const params = new URLSearchParams({ token: this.token, name: this.opts.name || "Goober Fan", hero: this.opts.heroId || "" });
     if (this.opts.auth) params.set("auth", this.opts.auth);
+    if (this.opts.watch) params.set("watch", "1");
     const ws = new WebSocket(`${proto}//${location.host}/api/card-battle/${this.code}/socket?${params}`);
     this.ws = ws;
     ws.addEventListener("open", () => { this.retries = 0; });
@@ -97,8 +107,13 @@ export class OnlineMatch {
     if (msg.type !== "state") return;
 
     this.seat = msg.seat;
+    const prevPhase = this.room?.phase;
     this.room = msg.room;
-    if (this.seat < 0) { toast("This room is full.", "bad"); this.opts.onLobby?.(this.room, this.seat, "full"); return; }
+    if (this.seat < 0) {
+      // Both seats taken: watch instead of bouncing.
+      if (!this.spectating) { this.spectating = true; toast("This room is full, so you're watching.", "good"); }
+      return this.onSpectatorState(msg, prevPhase);
+    }
     const mine = this.room.seats[this.seat];
     if (this.room.phase !== "playing" && mine && !mine.ready && !this.deckSent) {
       this.deckSent = true;
@@ -110,7 +125,7 @@ export class OnlineMatch {
     if (msg.game) {
       if (!this.battle || this.battle.destroyed) this.startBattle(msg.game);
       const events = msg.events || [];
-      this.battle.update(msg.game, events, { deadline: this.room.phase === "playing" ? this.room.deadline : 0 });
+      this.battle.update(msg.game, events, { deadline: this.room.phase === "playing" ? this.room.deadline : 0, watchers: this.room.watchers || 0 });
       this.pendingResolve?.({ ok: true });
       this.pendingResolve = null;
       if (msg.game.over && !this.endSignaled) {
@@ -123,7 +138,39 @@ export class OnlineMatch {
     else if (this.room.phase === "over") this.opts.onLobby?.(this.room, this.seat, "over");
   }
 
+  onSpectatorState(msg, prevPhase) {
+    if (!msg.game || this.room.phase === "lobby") {
+      if (this.battle) { this.battle.destroy(); this.battle = null; }
+      this.opts.onLobby?.(this.room, -1, "watching");
+      return;
+    }
+    // A rematch started: begin a fresh board.
+    if (this.battle && prevPhase && prevPhase !== "playing" && this.room.phase === "playing") { this.battle.destroy(); this.battle = null; }
+    // Joining a game that already ended shouldn't announce a winner.
+    if (!this.battle || this.battle.destroyed) { this.startBattle(); this.endSignaled = Boolean(msg.game.over); }
+    this.battle.update(msg.game, msg.events || [], { deadline: this.room.phase === "playing" ? this.room.deadline : 0, watchers: this.room.watchers || 0 });
+    if (!msg.game.over) this.endSignaled = false;
+    else if (!this.endSignaled) {
+      this.endSignaled = true;
+      setTimeout(() => this.opts.onWatchEnd?.(this.room, msg.game), 1100);
+    }
+  }
+
   startBattle() {
+    if (this.spectating) {
+      this.battle = new Battle({
+        catalog: this.catalog,
+        me: 0,
+        spectator: true,
+        heroArt: [this.opts.heroArtFor(this.room.seats[0]?.hero), this.opts.heroArtFor(this.room.seats[1]?.hero)],
+        onAction: async () => ({ ok: false, error: "You're watching." }),
+        onExit: () => this.opts.onExit?.(),
+        showRules: this.opts.showRules,
+        toggleSound: this.opts.toggleSound,
+        soundOn: this.opts.soundOn
+      });
+      return;
+    }
     const oppSeat = this.seat === 0 ? 1 : 0;
     const heroArt = [this.opts.heroArtFor(this.room.seats[this.seat]?.hero), this.opts.heroArtFor(this.room.seats[oppSeat]?.hero)];
     this.battle = new Battle({

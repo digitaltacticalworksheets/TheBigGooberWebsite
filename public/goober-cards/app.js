@@ -3,7 +3,7 @@ import { buildCatalog, collectibleIds, MAX_COPIES, DECK_SIZE, RARITIES, RARITY_L
 import { createGame, STARTING_HP, BOARD_LIMIT } from "./engine.js";
 import { AI_LEVELS } from "./ai.js";
 import { SoloMatch } from "./battle.js";
-import { OnlineMatch, createRoom, findMatch } from "./online.js";
+import { OnlineMatch, createRoom, findMatch, liveGames } from "./online.js";
 import * as store from "./collection.js";
 import { RANK_TIERS, RANK_POINTS, tierFor, nextTier } from "./economy.js";
 import * as account from "./account.js";
@@ -63,6 +63,7 @@ function route() {
   switch (name) {
     case "solo": return renderSolo();
     case "online": return renderOnline(arg);
+    case "watch": return renderOnline("", arg);
     case "packs": return renderPacks();
     case "collection": return renderCollection();
     case "decks": return renderDecks();
@@ -393,7 +394,7 @@ function exitMatch(goHome = true) {
 window.addEventListener("popstate", async () => {
   if (!match && !online?.battle) return;
   const state = match?.state || null;
-  if (state && state.over) { exitMatch(); return; }
+  if ((state && state.over) || online?.spectating) { exitMatch(); return; }
   history.pushState(null, "", "#battle");
   if (await confirmDialog("Leave the battle?", "Leaving now counts as giving up.", { yes: "Leave", danger: true })) {
     if (match) await match.act({ type: "concede" });
@@ -443,7 +444,7 @@ function showResult({ won, draw, coins, firstWin, capped, again, onlineRoom, ran
 }
 
 // ------------------------------------------------------------------ online
-function renderOnline(code) {
+function renderOnline(code, watchCode = "") {
   const p = profile();
   app.innerHTML = `<div class="screen">
     ${topbar("Online Battle")}
@@ -458,10 +459,15 @@ function renderOnline(code) {
     <div class="online-card">
       <button class="btn big pink" data-create>✨ Create Room</button>
       <div class="muted" style="text-align:center;font-weight:800">or join a friend</div>
-      <div class="row"><input data-code maxlength="8" placeholder="CODE" value="${esc(code || "")}" autocomplete="off" autocapitalize="characters" style="flex:1;min-width:140px"><button class="btn blue" data-join>Join</button></div>
+      <div class="row"><input data-code maxlength="8" placeholder="CODE" value="${esc(code || "")}" autocomplete="off" autocapitalize="characters" style="flex:1;min-width:140px"><button class="btn blue" data-join>Join</button><button class="btn" data-watch-code>👀 Watch</button></div>
     </div>
     <div data-lobby></div>
+    <div class="online-card live-card">
+      <div class="live-head"><b>👀 Watch live</b><span class="muted" data-live-note></span></div>
+      <div class="live-list" data-live><div class="muted">Loading…</div></div>
+    </div>
   </div>`;
+  watchLiveList();
   bindDeckPicker(app.firstElementChild, () => { stopSearching(); renderOnline($("[data-code]", app).value); });
   $("[data-find]", app).onclick = () => startSearching();
   $("[data-create]", app).onclick = async e => {
@@ -470,13 +476,49 @@ function renderOnline(code) {
     try { const { roomCode } = await createRoom(); joinOnline(roomCode); }
     catch (error) { toast(error.message, "bad"); e.target.disabled = false; }
   };
+  const typedCode = () => $("[data-code]", app).value.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
   $("[data-join]", app).onclick = () => {
     stopSearching();
-    const c = $("[data-code]", app).value.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const c = typedCode();
     if (c.length < 4) { toast("Enter the room code from your friend.", "bad"); return; }
     joinOnline(c);
   };
-  if (code && code.length >= 4) joinOnline(code.toUpperCase());
+  $("[data-watch-code]", app).onclick = () => {
+    stopSearching();
+    const c = typedCode();
+    if (c.length < 4) { toast("Enter the room code of the match you want to watch.", "bad"); return; }
+    joinOnline(c, { watch: true });
+  };
+  $("[data-live]", app).addEventListener("click", e => {
+    const c = e.target.closest("[data-watch]")?.dataset.watch;
+    if (c) { stopSearching(); joinOnline(c, { watch: true }); }
+  });
+  if (watchCode && watchCode.length >= 4) joinOnline(watchCode.toUpperCase(), { watch: true });
+  else if (code && code.length >= 4) joinOnline(code.toUpperCase());
+}
+
+// Refresh the Watch Live list every 10 seconds while the Online screen is up.
+let liveTimer = null;
+function watchLiveList() {
+  clearInterval(liveTimer);
+  const load = async () => {
+    const list = $("[data-live]", app);
+    if (!list) { clearInterval(liveTimer); return; }
+    try {
+      const { games, searching } = await liveGames();
+      if (!list.isConnected) return;
+      const note = $("[data-live-note]", app);
+      if (note) note.textContent = searching ? `${searching} searching now` : "";
+      const tierIcon = t => (t ? `${RANK_TIERS.find(x => x.id === t)?.icon || ""} ` : "");
+      list.innerHTML = games.length
+        ? games.map(g => `<div class="live-row"><div><b>${tierIcon(g.players[0]?.tier)}${esc(g.players[0]?.name || "?")} <span class="muted">vs</span> ${tierIcon(g.players[1]?.tier)}${esc(g.players[1]?.name || "?")}</b><small>${g.ranked ? "🏆 Ranked · " : ""}${Math.max(1, Math.round((Date.now() - g.started) / 60000))} min in</small></div><button class="btn small blue" data-watch="${esc(g.code)}">Watch</button></div>`).join("")
+        : `<div class="muted">No Find a Match games right now. Friend rooms aren't listed, but you can watch one with its code.</div>`;
+    } catch {
+      if (list.isConnected) list.innerHTML = `<div class="muted">Couldn't load live matches.</div>`;
+    }
+  };
+  load();
+  liveTimer = setInterval(load, 10000);
 }
 
 const rankLabel = rp => { const t = tierFor(rp); return `${t.icon} ${t.name}`; };
@@ -533,17 +575,36 @@ function stopSearching() {
   searching = null;
 }
 
-function joinOnline(code) {
+function joinOnline(code, { watch = false } = {}) {
   if (online) online.close();
   const { entries } = store.playableDeck(catalog);
-  history.replaceState(null, "", `#online/${code}`);
+  history.replaceState(null, "", `#${watch ? "watch" : "online"}/${code}`);
   const lobby = $("[data-lobby]", app);
   const link = `${location.origin}/goober-cards/#online/${code}`;
+  const watchLink = `${location.origin}/goober-cards/#watch/${code}`;
   online = new OnlineMatch({
     code, name: profile().name || "Goober Fan", auth: account.sessionToken(), heroId: profile().hero || "original-goober", deck: entries, catalog,
-    heroArtFor: heroArt, showRules, toggleSound, soundOn: () => profile().settings.sound,
+    heroArtFor: heroArt, showRules, toggleSound, soundOn: () => profile().settings.sound, watch,
     onExit: () => exitMatch(),
+    onWatchEnd: (room, game) => {
+      const winner = game.winner === "draw" ? null : room.seats[game.winner]?.name || game.players[game.winner]?.name;
+      sfx.win();
+      const m = modal(`<div class="result win"><h2>${winner ? "GG" : "Draw"}</h2><p><b>${winner ? `${esc(winner)} wins.` : "Nobody wins. Awkward."}</b></p><p class="muted">Stick around in case they run it back.</p>
+        <div class="actions" style="justify-content:center"><button class="btn" data-leave>Stop watching</button><button class="btn primary" data-close>Keep watching</button></div></div>`, { className: "result win" });
+      $("[data-leave]", m.el).onclick = () => { m.close(); exitMatch(); };
+    },
     onLobby: (room, seat, status) => {
+      if (status === "watching") {
+        if (!lobby.isConnected) return;
+        lobby.innerHTML = `<div class="online-card" style="border-style:solid;text-align:center">
+          <div style="font-weight:800">👀 Watching${room.ranked ? " a ranked match" : ""} · Room ${esc(room.code)}</div>
+          <div class="seat-list">${[0, 1].map(i => { const s = room.seats[i]; return `<div class="seat"><span class="dot ${s?.connected ? "on" : ""}"></span>${s?.tier ? `${RANK_TIERS.find(t => t.id === s.tier)?.icon || ""} ` : ""}${s ? esc(s.name) : "Empty seat"}${s?.ready ? " ✅" : ""}</div>`; }).join("")}</div>
+          <div class="row" style="justify-content:center"><div class="spinner"></div><span class="muted">${room.phase === "over" ? "Match over. Waiting to see if they rematch." : "The match starts when both players are ready."}</span></div>
+          <button class="btn" data-leave-watch>Stop watching</button>
+        </div>`;
+        $("[data-leave-watch]", lobby).onclick = () => { online?.close(); online = null; history.replaceState(null, "", "#online"); renderOnline(); };
+        return;
+      }
       if (status === "over") { if (room.rematch?.[seat === 0 ? 1 : 0] && !room.rematch?.[seat]) toast(`${room.seats[seat === 0 ? 1 : 0]?.name || "Your opponent"} wants a rematch!`, "good"); return; }
       if (online?.battle && status !== "rematch") return;
       if (status === "full" || status === "disconnected") { online?.close(); online = null; if (lobby.isConnected) lobby.innerHTML = `<p class="muted">${status === "full" ? "That room already has two players." : "Couldn't reach the room."}</p>`; return; }
@@ -557,7 +618,7 @@ function joinOnline(code) {
       lobby.innerHTML = `<div class="online-card" style="border-style:solid">
         <div style="text-align:center;font-weight:800">${room.ranked ? "🏆 Ranked match · " : ""}Room code</div>
         <div class="code-box">${esc(room.code)}</div>
-        <div class="row" style="justify-content:center"><button class="btn small" data-share>📤 Share invite</button><button class="btn small" data-copy>📋 Copy link</button></div>
+        <div class="row" style="justify-content:center"><button class="btn small" data-share>📤 Share invite</button><button class="btn small" data-copy>📋 Copy link</button><button class="btn small" data-copy-watch>👀 Watch link</button></div>
         <div class="seat-list">${[0, 1].map(i => { const s = room.seats[i]; return `<div class="seat"><span class="dot ${s?.connected ? "on" : ""}"></span>${s?.tier ? `${RANK_TIERS.find(t => t.id === s.tier)?.icon || ""} ` : ""}${s ? esc(s.name) : "Waiting for someone brave…"}${i === seat ? " (you)" : ""}${s?.ready ? " ✅" : ""}</div>`; }).join("")}</div>
         <div class="row" style="justify-content:center"><div class="spinner"></div><span class="muted">Starts when both players join.</span></div>
       </div>`;
@@ -566,6 +627,7 @@ function joinOnline(code) {
         else { await copyText(link); }
       };
       $("[data-copy]", lobby).onclick = () => copyText(link);
+      $("[data-copy-watch]", lobby).onclick = () => copyText(watchLink);
     },
     onEnd: async ({ won, draw }) => {
       // Logged in: the game server pays out. Guests: record it on this device.
