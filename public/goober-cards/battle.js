@@ -322,7 +322,7 @@ export class Battle {
     else if (this.sel?.kind === "power") text = `${HERO_POWER.name} 💨: tap an enemy`;
     this.tip.hidden = !text;
     const mid = this.root.querySelector(".midline")?.getBoundingClientRect();
-    if (mid) this.tip.style.top = `${mid.top + mid.height / 2}px`;
+    if (mid) this.tip.style.top = `${mid.bottom + 4}px`;
     this.tip.innerHTML = `<span>${esc(text)}</span>${details ? `<button type="button" data-details>ⓘ Details</button>` : ""}`;
   }
 
