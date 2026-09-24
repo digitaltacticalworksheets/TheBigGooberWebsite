@@ -762,23 +762,41 @@ function validateCredentials(body) {
   return { username, password, key: username.toLowerCase() };
 }
 
-// Keep gamertags clean. Fails open (allows) if the AI is unavailable.
+// Clear-cut bad words, checked after undoing common letter swaps (sh1t, fvck, @ss…).
+// Only words that don't hide inside normal names, so the AI check below can be lenient.
+const BLOCKED_NAME_PARTS = ["fuck", "fuk", "shit", "bitch", "cunt", "nigg", "faggot", "whore", "slut", "porn", "penis", "vagina", "pussy", "dildo", "asshole", "retard", "nazi", "hitler", "cocaine", "boner", "horny"];
+const LEET = { 0: "o", 1: "i", 3: "e", 4: "a", 5: "s", 7: "t", 8: "b", 9: "g", v: "u" };
+function hasBlockedWord(username) {
+  const plain = username.toLowerCase().replace(/_/g, "").replace(/[0-9v]/g, ch => LEET[ch] || ch);
+  const noDigits = username.toLowerCase().replace(/[_0-9]/g, "");
+  return BLOCKED_NAME_PARTS.find(word => plain.includes(word) || noDigits.includes(word)) || null;
+}
+
+// Keep gamertags clean. Fails open (allows) if the AI is unavailable. Every block is
+// logged with its reason so a "why can't I use this name?" report can be checked.
 async function usernameAllowed(env, username) {
+  const reject = (by, reason) => {
+    console.log("Username blocked", { username, by, reason });
+    return { ok: false, reason: "The name filter didn't like that one. Try a different username." };
+  };
   if (RESERVED_NAMES.has(username.toLowerCase())) return { ok: false, reason: "That name is reserved." };
+  const word = hasBlockedWord(username);
+  if (word) return reject("word list", word);
   if (!env.AI) return { ok: true };
   try {
     const guard = await env.AI.run(TEXT_GUARD_MODEL, { messages: [{ role: "user", content: `Gamer tag: ${username}` }] });
-    if (!parseGuard(guard?.response).safe) return { ok: false, reason: "Pick a different username." };
+    const guardResult = parseGuard(guard?.response);
+    if (!guardResult.safe) return reject("llama guard", guardResult.categories.join(",") || "unsafe");
     const result = await env.AI.run(VISION_MODEL, {
       messages: [
-        { role: "system", content: 'You check gamer tags for a game played by middle schoolers. Block swear words (including misspelled, spaced, or leetspeak versions), sexual words, slurs, drug references, and real full names. Silly or meme names are fine. Reply with JSON only: {"ok":true|false}' },
+        { role: "system", content: 'You check gamer tags for a game played by middle schoolers. Block a tag ONLY if it clearly contains a swear word, a sexual word, a slur, or a drug reference (including disguised spellings), or a real person\'s first AND last name together. Everything else is fine: nicknames, first names on their own, slang like bro, dude, broseph or bruh, numbers, letter swaps like 0 for o, and silly or meme names. Examples that are fine: Br0seph87, xXGoober_KingXx, Tyler2012, BigLoaf_99, sk8rdude. If you are not sure, allow it. Reply with JSON only: {"ok":true|false,"reason":"a few words"}' },
         { role: "user", content: username }
       ],
-      response_format: { type: "json_object" }, max_tokens: 20, temperature: 0
+      response_format: { type: "json_object" }, max_tokens: 40, temperature: 0
     });
     let data = result?.response;
     if (typeof data === "string") { const m = data.match(/\{[\s\S]*\}/); data = m ? JSON.parse(m[0]) : {}; }
-    return data && data.ok === false ? { ok: false, reason: "Pick a different username." } : { ok: true };
+    return data && data.ok === false ? reject("ai", String(data.reason || "").slice(0, 80)) : { ok: true };
   } catch (error) {
     console.error("Username check failed", error);
     return { ok: true };
