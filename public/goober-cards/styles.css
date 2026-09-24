@@ -930,3 +930,7 @@ body::after {
 }
 .save-nudge span { margin-left: auto; font-weight: 900; color: var(--yellow); }
 .sheet input[readonly] { opacity: 0.7; }
+
+/* The raised card never blocks taps: they go through to the table and targets behind it. */
+.hand .hcard.selected { pointer-events: none; }
+.hand .hcard.selected.aiming .card { filter: drop-shadow(0 0 0.5em rgba(255, 90, 90, 0.9)); }
