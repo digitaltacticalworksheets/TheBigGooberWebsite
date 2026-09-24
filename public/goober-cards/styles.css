@@ -947,3 +947,6 @@ body::after {
 .mull-card { --cw: min(28vw, 150px, 22vh); }
 .mulligan h2 { font-size: clamp(2rem, 8vw, 3.6rem); }
 .mulligan .actions { position: sticky; bottom: 0; padding-top: 10px; background: linear-gradient(transparent, rgba(8, 6, 14, 0.95) 40%); }
+/* The hint never catches taps meant for the table; only its Details button is tappable. */
+.card-tip { pointer-events: none; }
+.card-tip [data-details] { pointer-events: auto; }

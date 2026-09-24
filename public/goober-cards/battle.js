@@ -557,16 +557,16 @@ export class Battle {
       this.selectHand(hcard.dataset.uid);
       return;
     }
+    // A spell with no target: tapping anywhere on the table plays it (even on a minion).
+    if (sel?.kind === "hand" && !sel.preview && !sel.isMinion && !sel.targets && t.closest(".my-board, .opp-board, .midline")) {
+      this.commit(null);
+      return;
+    }
     const enemyMinion = t.closest(".opp-board .minion");
     if (enemyMinion && !this.currentTargets().length) { this.inspect(enemyMinion); return; }
     if (sel?.kind === "hand" && sel.isMinion && !sel.placed && t.closest(".my-board, .midline")) {
       sel.position = this.boardPosition(clientX);
       if (sel.targets) { sel.placed = true; sfx.tap(); this.render(); return; }
-      this.commit(null);
-      return;
-    }
-    // A spell with no target: tapping the table plays it.
-    if (sel?.kind === "hand" && !sel.preview && !sel.isMinion && !sel.targets && t.closest(".my-board, .opp-board, .midline")) {
       this.commit(null);
       return;
     }
