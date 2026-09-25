@@ -92,19 +92,28 @@ const ORIGINALS = [
 
 // Abilities each category tends to roll, with a "budget" cost in stat points.
 const CATEGORY_ABILITIES = {
-  classic: [["kw", "guard", 1], ["bc-buff-self", 1], ["kw", "tough", 2]],
+  classic: [["kw", "guard", 1], ["bc-buff-self", 1]],
   costume: [["bc-buff-friend", 2], ["kw", "fluffy", 2]],
   chaos: [["bc-dmg-random", 2], ["lb-dmg-random", 2], ["kw", "bitey", 2]],
   funny: [["bc-draw", 3], ["lb-draw", 2]],
   spooky: [["lb-summon-ghost", 2], ["kw", "sneaky", 1], ["lb-dmg-random", 2]],
   animal: [["kw", "zoomies", 2], ["bc-summon-pup", 2]],
-  food: [["kw", "lifesnack", 2], ["bc-heal-hero", 1], ["et-armor", 1]],
+  food: [["kw", "lifesnack", 2], ["bc-heal-hero", 1]],
   sports: [["kw", "zoomies", 2], ["kw", "doubleWag", 3]],
   holiday: [["bc-summon-pup", 2], ["et-buff-random", 2]],
-  fancy: [["kw", "fluffy", 2], ["bc-armor", 1], ["kw", "tough", 2], ["et-armor", 1]],
-  superhero: [["bc-dmg-target", 2], ["kw", "fluffy", 2], ["kw", "guard", 1], ["kw", "tough", 2]],
+  fancy: [["kw", "fluffy", 2], ["bc-armor", 1]],
+  superhero: [["bc-dmg-target", 2], ["kw", "fluffy", 2], ["kw", "guard", 1]],
   random: [["bc-dmg-random", 2], ["bc-draw", 3], ["kw", "zoomies", 2], ["lb-summon-pup", 2]]
 };
+
+// Abilities added after launch. Rolled separately so existing Goobers keep the abilities they already had.
+const BONUS_ABILITIES = {
+  classic: [["kw", "tough", 2]],
+  fancy: [["kw", "tough", 2], ["et-armor", 1]],
+  superhero: [["kw", "tough", 2]],
+  food: [["et-armor", 1]]
+};
+const BONUS_CHANCE = 25;
 
 const RARITY_BONUS = { common: 0, rare: 1, epic: 2, legendary: 3 };
 // Weighted toward cheap cards so every deck has early plays.
@@ -175,6 +184,12 @@ export function cardFromGoober(goober) {
         budget -= option[1];
       }
     }
+  }
+  const bonus = BONUS_ABILITIES[category];
+  if (hasAbility && bonus && hashString(`${goober.id}-bonus`) % 100 < BONUS_CHANCE) {
+    const option = pick(bonus, hashString(`${goober.id}-bonus-pick`));
+    if (option[0] === "kw" && !keywords.includes(option[1]) && keywords.length < 2) { keywords.push(option[1]); budget -= option[2]; }
+    else if (option[0] !== "kw" && !ability) { ability = abilityFromCode(option[0], cost, rarity); budget -= option[1]; }
   }
   budget = Math.max(2, budget);
   // Split the stat budget between attack and health based on the hash.
