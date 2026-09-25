@@ -2,7 +2,7 @@
 // each part of the battle screen. After the script it plays out against the easiest AI.
 import { createGame, applyAction } from "./engine.js";
 import { SoloMatch } from "./battle.js";
-import { HERO_POWER, KEYWORDS } from "./cards.js";
+import { HERO_POWERS, KEYWORDS } from "./cards.js";
 import { $, esc } from "./ui.js";
 import { sfx } from "./sound.js";
 
@@ -112,7 +112,7 @@ function buildSteps(t) {
     info(() => t.minionEl(1, "token-loaf"), `When Goobers fight, each one deals its Attack to the other. The Loaf has 0 Attack, so Cool Goober is fine. The Loaf is down to 2 Health.`),
     doIt(() => t.handEl("treat-bonk"), `Spells are one-time effects. Tap <b>Bonk</b>, then tap the Loaf to finish it.`,
       a => a.type === "play" && a.uid === t.handUid("treat-bonk") && a.target === t.boardUid(1, "token-loaf"), "Bonk the Loaf."),
-    doIt(() => b.power, `This is your hero power, <b>${esc(HERO_POWER.name)}</b>. Once per turn, pay ${HERO_POWER.cost} Aura to deal ${HERO_POWER.damage} damage. Tap it, then blast Lil Goober.`,
+    doIt(() => b.power, `This is your hero power, <b>${esc(HERO_POWERS.classic.name)}</b>. Once per turn, pay ${HERO_POWERS.classic.cost} Aura to deal 1 damage. Tap it, then blast Lil Goober.`,
       a => a.type === "power" && a.target === t.boardUid(1, "token-pup"), "Use BARK FART on Lil Goober."),
     doIt(() => b.end, `Nice. When the <b>End Turn</b> button glows, you have nothing left to do. End your turn.`, a => a.type === "end", "Tap End Turn."),
 

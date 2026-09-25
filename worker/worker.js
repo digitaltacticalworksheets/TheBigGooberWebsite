@@ -1,4 +1,4 @@
-import { buildCatalog, validateDeck, cardFromGoober } from "../public/goober-cards/cards.js";
+import { buildCatalog, validateDeck, cardFromGoober, heroPowerOf } from "../public/goober-cards/cards.js";
 import { createGame, applyAction, viewFor, eventsFor } from "../public/goober-cards/engine.js";
 import * as econ from "../public/goober-cards/economy.js";
 
@@ -153,6 +153,7 @@ export class CardBattleRoom {
       if (!check.ok) throw new Error(check.error);
       await this.checkOwnership(seat, entries);
       this.room.seats[seat].deck = entries;
+      this.room.seats[seat].power = heroPowerOf(message.power).id;
       this.maybeStart();
     } else if (message.type === "action") {
       if (this.room.phase !== "playing" || !this.room.game) throw new Error("The match hasn't started.");
@@ -170,7 +171,10 @@ export class CardBattleRoom {
       if (Array.isArray(message.deck)) {
         const catalog = await this.getCatalog();
         const entries = message.deck.slice(0, 40).map(e => ({ id: cleanText(e?.id, 80), shiny: Boolean(e?.shiny) }));
-        if (validateDeck(catalog, entries.map(e => e.id)).ok && await this.checkOwnership(seat, entries).then(() => true, () => false)) this.room.seats[seat].deck = entries;
+        if (validateDeck(catalog, entries.map(e => e.id)).ok && await this.checkOwnership(seat, entries).then(() => true, () => false)) {
+          this.room.seats[seat].deck = entries;
+          this.room.seats[seat].power = heroPowerOf(message.power).id;
+        }
       }
       if (this.room.rematch[0] && this.room.rematch[1]) { this.room.phase = "lobby"; this.room.game = null; this.maybeStart(); }
     }
@@ -196,7 +200,7 @@ export class CardBattleRoom {
     const [a, b] = this.room.seats;
     if (!a?.deck || !b?.deck || this.room.phase === "playing") return;
     const seed = crypto.getRandomValues(new Uint32Array(1))[0];
-    this.room.game = createGame({ decks: [a.deck, b.deck], names: [a.name, b.name], seed });
+    this.room.game = createGame({ decks: [a.deck, b.deck], names: [a.name, b.name], seed, powers: [a.power, b.power] });
     this.room.phase = "playing";
     this.room.rematch = [false, false];
     this.room.timeouts = [0, 0];

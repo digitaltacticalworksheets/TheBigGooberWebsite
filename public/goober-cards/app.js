@@ -1,5 +1,5 @@
 // Goober Cards app shell: menus, collection, packs, decks, and starting matches.
-import { buildCatalog, collectibleIds, MAX_COPIES, DECK_SIZE, RARITIES, RARITY_LABEL, CATEGORIES, CATEGORY_STYLE, KEYWORDS, STATUS, HERO_POWER, autoDeck, validateDeck } from "./cards.js";
+import { buildCatalog, collectibleIds, MAX_COPIES, DECK_SIZE, RARITIES, RARITY_LABEL, CATEGORIES, CATEGORY_STYLE, KEYWORDS, STATUS, HERO_POWERS, autoDeck, validateDeck } from "./cards.js";
 import { createGame, STARTING_HP, BOARD_LIMIT } from "./engine.js";
 import { AI_LEVELS } from "./ai.js";
 import { SoloMatch } from "./battle.js";
@@ -646,8 +646,8 @@ export function showRules() {
     <ul><li>Tap a card, then tap the table to play it (or drag it up).</li><li>New Goobers need a turn before they can attack (unless they have Speedrun).</li><li>Tap one of your glowing Goobers, then tap an enemy to attack. Or drag an arrow!</li><li>When Goobers fight, both deal their Attack (yellow) to each other's Health (red).</li><li>Up to ${BOARD_LIMIT} Goobers fit on your side of the table.</li></ul>
     <h3>⚡ Spells</h3>
     <ul><li>One-time effects. Some need you to pick a target.</li></ul>
-    <h3>💨 ${HERO_POWER.name}</h3>
-    <ul><li>Once per turn, spend ${HERO_POWER.cost} Aura. Your hero barks, then farts. Deals 1 damage to an enemy. Devastating.</li></ul>
+    <h3>💨 Hero power</h3>
+    <ul><li>Once per turn, tap the button next to your hero to use it. Each deck picks its flavor in My Decks:</li>${Object.values(HERO_POWERS).map(hp => `<li>${hp.icon} <b>${esc(hp.name)}</b> (${hp.cost} Aura, ${hp.role}): ${esc(hp.text)}</li>`).join("")}</ul>
     <h3>✨ Keywords</h3>
     <ul>${Object.values(KEYWORDS).map(k => `<li>${k.icon} <b>${k.label}:</b> ${k.text}</li>`).join("")}
     <li>📣 <b>Entrance:</b> Happens when you play it.</li><li>☠️ <b>Last Words:</b> Happens when it gets knocked out.</li>${Object.values(STATUS).map(s => `<li>${s.icon} <b>${s.label}:</b> ${s.text}</li>`).join("")}</ul>
@@ -723,7 +723,9 @@ function aiDeck(level) {
 function startSolo(level) {
   const { deck, entries } = store.playableDeck(catalog);
   const oppDeck = aiDeck(level).map(id => ({ id, shiny: level === "biggoober" && Math.random() < 0.15 }));
-  const state = createGame({ decks: [entries, oppDeck], names: [profile().name || "You", AI_LEVELS[level].name], seed: (Math.random() * 2 ** 32) >>> 0 });
+  const powerIds = Object.keys(HERO_POWERS);
+  const oppPower = level === "sleepy" ? "classic" : powerIds[Math.floor(Math.random() * powerIds.length)];
+  const state = createGame({ decks: [entries, oppDeck], names: [profile().name || "You", AI_LEVELS[level].name], seed: (Math.random() * 2 ** 32) >>> 0, powers: [deck.power, oppPower] });
   // Some opponents start ahead: extra cards in hand and/or Drip (armor).
   const opp = state.players[1];
   for (let i = 0; i < (AI_LEVELS[level].startCards || 0) && opp.deck.length; i++) opp.hand.push(opp.deck.shift());
@@ -996,13 +998,13 @@ async function renderChallenge(code) {
 function joinOnline(code, { watch = false, challenge = false } = {}) {
   if (online) online.close();
   setPresence(watch ? "watching" : "playing", code);
-  const { entries } = store.playableDeck(catalog);
+  const { entries, deck } = store.playableDeck(catalog);
   history.replaceState(null, "", `#${watch ? "watch" : "online"}/${code}`);
   const lobby = $("[data-lobby]", app);
   const link = challengeLink(code);
   const watchLink = `${location.origin}/goober-cards/#watch/${code}`;
   online = new OnlineMatch({
-    code, name: profile().name || "Goober Fan", auth: account.sessionToken(), heroId: profile().hero || "original-goober", deck: entries, catalog,
+    code, name: profile().name || "Goober Fan", auth: account.sessionToken(), heroId: profile().hero || "original-goober", deck: entries, power: deck.power, catalog,
     heroArtFor: heroArt, showRules, toggleSound, soundOn: () => profile().settings.sound, watch,
     onExit: () => exitMatch(),
     onWatchEnd: (room, game) => {
@@ -1058,7 +1060,7 @@ function joinOnline(code, { watch = false, challenge = false } = {}) {
       }
       showResult({
         won, draw, coins: result.coins, firstWin: result.firstWin, onlineRoom: true, rank: result.rank,
-        again: () => { const { entries: fresh } = store.playableDeck(catalog); online?.rematch(fresh); renderRematchWait(code); }
+        again: () => { const { entries: fresh, deck: freshDeck } = store.playableDeck(catalog); online?.rematch(fresh, freshDeck.power); renderRematchWait(code); }
       });
     }
   });
@@ -1377,6 +1379,8 @@ function renderBuilder(id) {
           <button class="btn small danger" data-delete>🗑️ Delete</button>
           ${problems.length ? `<span class="muted">⚠️ ${esc(problems[0])}</span>` : `<span class="muted">✅ Ready. Go cook.</span>`}
         </div>
+        <div class="power-pick" role="radiogroup" aria-label="Hero power">${Object.values(HERO_POWERS).map(hp => `<button type="button" role="radio" aria-checked="${(deck.power || "classic") === hp.id}" class="${(deck.power || "classic") === hp.id ? "on" : ""}" data-power-pick="${hp.id}" title="${esc(hp.text)}"><span>${hp.icon}</span><b>${esc(hp.name)}</b><small>${hp.cost} Aura · ${hp.role}</small></button>`).join("")}</div>
+        <p class="muted power-text">${(() => { const hp = HERO_POWERS[deck.power] || HERO_POWERS.classic; return `${hp.icon} <b>${esc(hp.name)}:</b> ${esc(hp.text)}`; })()}</p>
         <div class="tabs"><button class="${tab === "deck" ? "on" : ""}" data-tab="deck">In deck (${deck.cards.length})</button><button class="${tab === "add" ? "on" : ""}" data-tab="add">Add cards</button></div>
       </div>
       <div class="pane deck" ${tab === "deck" ? "" : "hidden"}>
@@ -1405,6 +1409,7 @@ function renderBuilder(id) {
   const rerender = () => { const y = window.scrollY; renderBuilder(id); window.scrollTo(0, y); };
   $("[data-name]", app).addEventListener("change", e => { deck.name = e.target.value.trim().slice(0, 24) || deck.name; save(); });
   $$("[data-tab]", app).forEach(b => b.onclick = () => { view.builderTab = b.dataset.tab; rerender(); });
+  $$("[data-power-pick]", app).forEach(b => b.onclick = () => { deck.power = b.dataset.powerPick; save(); sfx.tap(); rerender(); });
   bindFilters($(".pane.add", app), f, keepFocus => (keepFocus ? fillGrid() : rerender()));
   $("[data-auto]", app).onclick = () => {
     const owned = store.ownedCounts();

@@ -129,7 +129,7 @@ export class OnlineMatch {
     const mine = this.room.seats[this.seat];
     if (this.room.phase !== "playing" && mine && !mine.ready && !this.deckSent) {
       this.deckSent = true;
-      this.send({ type: "deck", deck: this.opts.deck });
+      this.send({ type: "deck", deck: this.opts.deck, power: this.opts.power });
     }
 
     if (this.room.phase === "playing") { this.waitingRematch = false; if (!msg.game?.over) this.endSignaled = false; }
@@ -208,13 +208,13 @@ export class OnlineMatch {
     });
   }
 
-  rematch(deck) {
+  rematch(deck, power) {
     this.lastReward = null;
     this.deckSent = true;
     this.waitingRematch = true;
     this.battle?.destroy();
     this.battle = null;
-    this.send({ type: "rematch", deck });
+    this.send({ type: "rematch", deck, power });
   }
 
   close() {

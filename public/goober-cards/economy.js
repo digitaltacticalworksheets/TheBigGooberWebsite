@@ -1,7 +1,7 @@
 // Goober Cards economy rules: packs, coins, crafting, rewards.
 // Pure functions on a profile object, shared by the browser (guest mode) and the
 // worker (logged-in players, where the server is the source of truth).
-import { MAX_COPIES, RARITIES } from "./cards.js";
+import { MAX_COPIES, RARITIES, HERO_POWERS } from "./cards.js";
 
 export const PACKS = {
   goober: { id: "goober", name: "Goober Pack", price: 100, size: 5, blurb: "5 cards from the whole set. At least one Rare or better.", color: "#ffd34d", shinyChance: 0.06, onlyGoobers: false },
@@ -284,7 +284,8 @@ function applyEditableFields(p, c) {
       name: String(d?.name || "Deck").slice(0, 24),
       cards: Array.isArray(d?.cards) ? d.cards.slice(0, 40).map(x => String(x).slice(0, 80)) : [],
       updated: Number(d?.updated) || Date.now(),
-      ...(d?.curve2 ? { curve2: true } : {})
+      ...(d?.curve2 ? { curve2: true } : {}),
+      ...(HERO_POWERS[d?.power] ? { power: d.power } : {})
     })).filter(d => d.id);
   }
   if (typeof c.activeDeck === "string" || c.activeDeck === null) p.activeDeck = c.activeDeck ? c.activeDeck.slice(0, 40) : null;

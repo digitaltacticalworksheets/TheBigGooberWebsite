@@ -46,7 +46,14 @@ export const CATEGORY_STYLE = {
   token: { color: "#e8e1d4", icon: "🐶" }
 };
 
-export const HERO_POWER = { name: "BARK FART", cost: 2, damage: 1, text: "Bark, then fart. Deal 1 damage to an enemy." };
+// Hero power flavors. Each deck picks one; `target` is a validTargetsFor kind, or null for no target.
+export const HERO_POWERS = {
+  classic: { id: "classic", name: "BARK FART", icon: "💨", cost: 2, target: "enemy", text: "Bark, then fart. Deal 1 damage to an enemy.", role: "Offense" },
+  smoke: { id: "smoke", name: "Smoke Screen", icon: "🛡️", cost: 3, target: null, text: "Gain 2 Drip (armor).", role: "Defense" },
+  hype: { id: "hype", name: "Hype Fart", icon: "💪", cost: 2, target: "friendlyMinion", text: "Give a Goober that can attack +2 Attack this turn.", role: "Support" },
+  heal: { id: "heal", name: "Healing Toot", icon: "🩹", cost: 2, target: "friendly", text: "Restore 2 Health to a friendly character.", role: "Sustain" }
+};
+export const heroPowerOf = id => HERO_POWERS[id] || HERO_POWERS.classic;
 
 // Token minions summoned by abilities (not collectible).
 export const TOKENS = {
