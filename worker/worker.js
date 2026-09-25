@@ -244,7 +244,7 @@ export class CardBattleRoom {
           const out = await applyEconomy(this.env, userId, this.room.seats[seat].name, p => {
             if (p.paidGames.includes(gameId)) return { ok: true, coins: 0, already: true };
             p.paidGames = [...p.paidGames, gameId].slice(-30);
-            const result = econ.recordResult(p, { won, reward: won ? econ.ONLINE_REWARD.win : econ.ONLINE_REWARD.loss, day, kind: "online", cap: econ.DAILY_REWARD_CAP.online });
+            const result = econ.recordResult(p, { won, reward: won ? econ.ONLINE_REWARD.win : econ.ONLINE_REWARD.loss, day });
             if (isRanked) result.rank = econ.recordRanked(p, { won, draw: game.winner === "draw" });
             return result;
           });
@@ -253,7 +253,7 @@ export class CardBattleRoom {
           await this.saveRoom();
           if (!out.result.already) {
             for (const [socket, session] of this.sessions.entries()) {
-              if (session.seat === seat) this.send(socket, { type: "reward", coins: out.result.coins, firstWin: out.result.firstWin, capped: out.result.capped, full: out.result.full, rank: out.result.rank || null });
+              if (session.seat === seat) this.send(socket, { type: "reward", coins: out.result.coins, firstWin: out.result.firstWin, rank: out.result.rank || null });
             }
           }
         } catch (error) {
@@ -1211,7 +1211,7 @@ async function econAction(request, env, url) {
         // Too-quick "wins" still count as played, but pay nothing.
         const legit = Date.now() - match.started >= econ.MIN_SOLO_MATCH_MS;
         const reward = !legit ? 0 : won ? econ.SOLO_REWARD[match.level] : draw ? 20 : 15;
-        return econ.recordResult(p, { won: won && legit, reward, day, kind: "solo", cap: econ.DAILY_REWARD_CAP.solo });
+        return econ.recordResult(p, { won: won && legit, reward, day });
       };
       break;
     }

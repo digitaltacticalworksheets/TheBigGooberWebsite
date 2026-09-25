@@ -17,8 +17,7 @@ export const PITY_LIMIT = 10;
 export const SOLO_REWARD = { sleepy: 25, pup: 40, goodboy: 60, biggoober: 90 };
 export const ONLINE_REWARD = { win: 100, loss: 30 };
 export const FIRST_WIN_BONUS = 50;
-// Server-side limits on match rewards (per UTC day), so fake "wins" can't print coins.
-export const DAILY_REWARD_CAP = { solo: 1500, online: 2000 };
+// Solo wins faster than this pay nothing, so fake "wins" can't print coins.
 export const MIN_SOLO_MATCH_MS = 40 * 1000;
 
 const STARTER = [
@@ -258,9 +257,8 @@ export function craftCard(p, id, catalog) {
   return { ok: true };
 }
 
-// Apply a finished match. `kind` is "solo" or "online"; `cap` limits coins per day.
-export function recordResult(p, { won, reward, day, kind = "solo", cap = Infinity }) {
-  if (p.rewardDay.day !== day) p.rewardDay = { day, solo: 0, online: 0 };
+// Apply a finished match: pay the reward (plus the first-win bonus) and update stats.
+export function recordResult(p, { won, reward, day }) {
   let coins = Math.max(0, Math.floor(reward) || 0);
   let firstWin = false;
   if (won) {
@@ -271,12 +269,8 @@ export function recordResult(p, { won, reward, day, kind = "solo", cap = Infinit
     p.stats.losses += 1;
     p.stats.streak = 0;
   }
-  const room = Math.max(0, cap - (p.rewardDay[kind] || 0));
-  const full = coins, capped = coins > room;
-  coins = Math.min(coins, room);
-  p.rewardDay[kind] = (p.rewardDay[kind] || 0) + coins;
   p.coins += coins;
-  return { ok: true, coins, full, firstWin, capped };
+  return { ok: true, coins, firstWin };
 }
 
 // Fields a logged-in player's device may change directly. Everything else
