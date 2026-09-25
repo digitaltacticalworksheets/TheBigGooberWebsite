@@ -1029,3 +1029,9 @@ body::after {
 .coach-bubble .btn { display: block; margin-left: auto; }
 @keyframes coachPulse { 50% { border-color: #fff; transform: scale(1.03); } }
 .coach:not(.blocking) .coach-bubble { pointer-events: none; opacity: 0.94; }
+/* Hint bar: small and see-through; the text fades after a moment, leaving just Details. */
+.card-tip { padding: 3px 3px 3px 10px; gap: 6px; font-size: 0.74rem; background: rgba(10, 8, 18, 0.55); border: 0; box-shadow: none; backdrop-filter: blur(3px); }
+.card-tip button { padding: 3px 9px; font-size: 0.72rem; }
+.card-tip span { max-width: 70vw; animation: tipFade 0.5s ease 2.5s forwards; }
+.card-tip span:only-child { margin-right: 7px; animation: none; }
+@keyframes tipFade { to { opacity: 0; max-width: 0; margin-right: -6px; } }

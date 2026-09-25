@@ -334,17 +334,18 @@ export class Battle {
     let details = false;
     if (this.sel?.kind === "hand") {
       details = true;
-      const def = this.def(this.state.players[this.me].hand.find(c => c.uid === this.sel.uid)?.id);
       if (this.sel.preview) text = `${this.sel.reason || "Can't play this yet"}`;
-      else if (this.sel.isMinion && !this.sel.placed) text = this.sel.targets ? `Tap the table to place ${def?.name}, then pick a target` : `Tap the table to play ${def?.name}`;
-      else if (this.sel.targets) text = `Pick a glowing target for ${def?.name}`;
-      else text = `Tap the table to use ${def?.name}`;
-    } else if (this.sel?.kind === "attack") text = "Tap a glowing enemy to attack";
-    else if (this.sel?.kind === "power") text = `${HERO_POWER.name} 💨: tap an enemy`;
+      else if (this.sel.isMinion && !this.sel.placed) text = this.sel.targets ? "Tap the table, then a target" : "Tap the table to play";
+      else if (this.sel.targets) text = "Pick a glowing target";
+      else text = "Tap the table to cast";
+    } else if (this.sel?.kind === "attack") text = "Tap a glowing enemy";
+    else if (this.sel?.kind === "power") text = `${HERO_POWER.name}: tap an enemy`;
     this.tip.hidden = !text;
     const mid = this.root.querySelector(".midline")?.getBoundingClientRect();
     if (mid) this.tip.style.top = `${mid.bottom + 4}px`;
-    this.tip.innerHTML = `<span>${esc(text)}</span>${details ? `<button type="button" data-details>ⓘ Details</button>` : ""}`;
+    const html = `<span>${esc(text)}</span>${details ? `<button type="button" data-details>ⓘ Details</button>` : ""}`;
+    // Only rebuild on change so the text's fade-out timer isn't restarted by unrelated renders.
+    if (this.tip.dataset.html !== html) { this.tip.dataset.html = html; this.tip.innerHTML = html; }
   }
 
   renderTimer() {
