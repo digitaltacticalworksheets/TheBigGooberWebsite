@@ -732,9 +732,10 @@ async function uploadGoober(request, env) {
   if (image.size > MAX_IMAGE_BYTES) return jsonResponse({ error: "Image is too large. Max size is 5 MB." }, 400, NO_STORE_HEADERS);
 
   // Reserve a slot atomically (so parallel requests can't sneak past the cap).
-  // Blocked uploads still use up a slot.
-  if (await bumpDailyCount(env, "upload_counts", `user:${user.id}`, day) > MAX_UPLOADS_PER_ACCOUNT) return jsonResponse({ error: `That's ${MAX_UPLOADS_PER_ACCOUNT} uploads today on your account. Come back tomorrow!` }, 429, NO_STORE_HEADERS);
-  if (await bumpDailyCount(env, "upload_counts", ip, day) > MAX_UPLOADS_PER_DAY) return jsonResponse({ error: `That's ${MAX_UPLOADS_PER_DAY} uploads today from here. Come back tomorrow!` }, 429, NO_STORE_HEADERS);
+  // Blocked uploads still use up a slot. Admin accounts have no daily limit.
+  const unlimited = isAdminUser(user);
+  if (!unlimited && await bumpDailyCount(env, "upload_counts", `user:${user.id}`, day) > MAX_UPLOADS_PER_ACCOUNT) return jsonResponse({ error: `That's ${MAX_UPLOADS_PER_ACCOUNT} uploads today on your account. Come back tomorrow!` }, 429, NO_STORE_HEADERS);
+  if (!unlimited && await bumpDailyCount(env, "upload_counts", ip, day) > MAX_UPLOADS_PER_DAY) return jsonResponse({ error: `That's ${MAX_UPLOADS_PER_DAY} uploads today from here. Come back tomorrow!` }, 429, NO_STORE_HEADERS);
 
   // Trust the file's bytes, not its claimed type: only plain raster images (no SVG/HTML).
   const bytes = new Uint8Array(await image.arrayBuffer());
@@ -781,8 +782,8 @@ async function bumpDailyCount(env, table, ip, day) {
   const row = await env.DB.prepare(`INSERT INTO ${table} (ip, day, count) VALUES (?, ?, 1) ON CONFLICT(ip, day) DO UPDATE SET count = count + 1 RETURNING count`).bind(ip, day).first();
   return Number(row?.count) || 1;
 }
-const MAX_UPLOADS_PER_DAY = 8;
-const MAX_UPLOADS_PER_ACCOUNT = 5;
+const MAX_UPLOADS_PER_DAY = 10;
+const MAX_UPLOADS_PER_ACCOUNT = 10;
 const MODERATION_IMAGE_LIMIT = 3.5 * 1024 * 1024;
 const VISION_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct";
 const TEXT_GUARD_MODEL = "@cf/meta/llama-guard-3-8b";
@@ -892,8 +893,8 @@ const MAX_SIGNUPS_PER_DAY = 10;
 const MAX_LOGIN_TRIES = 5;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const USERNAME_RE = /^[A-Za-z0-9_]{3,20}$/;
-// Accounts with admin powers (approve and delete Goobers) without needing the admin code.
-const ADMIN_USERNAMES = new Set(["dbr"]);
+// Accounts with admin powers (approve and delete Goobers, unlimited uploads) without needing the admin code.
+const ADMIN_USERNAMES = new Set(["dbr", "bubserino"]);
 const isAdminUser = user => Boolean(user?.username && ADMIN_USERNAMES.has(String(user.username).toLowerCase()));
 
 // Admin actions accept either the admin code or a logged-in admin account.
@@ -1042,7 +1043,7 @@ async function signup(request, env) {
   start.name = creds.username;
   await env.DB.prepare(`INSERT INTO profiles (user_id, data, version) VALUES (?, ?, 1)`).bind(id, JSON.stringify(start)).run();
   const token = await createSession(env, id);
-  return jsonResponse({ token, user: { id, username: creds.username } }, 201, NO_STORE_HEADERS);
+  return jsonResponse({ token, user: publicUser({ id, username: creds.username }) }, 201, NO_STORE_HEADERS);
 }
 
 async function login(request, env) {
