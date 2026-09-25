@@ -3,6 +3,7 @@ import { buildCatalog, collectibleIds, MAX_COPIES, DECK_SIZE, RARITIES, RARITY_L
 import { createGame, STARTING_HP, BOARD_LIMIT } from "./engine.js";
 import { AI_LEVELS } from "./ai.js";
 import { SoloMatch } from "./battle.js";
+import { TutorialMatch, createTutorialState } from "./tutorial.js";
 import { OnlineMatch, createRoom, findMatch, liveGames, roomStatus, hasSeatIn } from "./online.js";
 import * as store from "./collection.js";
 import { RANK_TIERS, RANK_POINTS, tierFor, nextTier, craftCostFor, isCreator, CREATOR_DISCOUNT } from "./economy.js";
@@ -158,7 +159,7 @@ function askName(then) {
     await account.econ.claimDaily();
     toast("4 free packs just dropped. 🎁", "good");
     renderHome();
-    if (!profile().tutorialSeen) showRules();
+    if (!profile().tutorialSeen) offerTutorial();
   };
   $("[data-signup]", m.el).onclick = () => { m.close(); showAccount("signup", { onDone: done, onCancel: () => askName(then) }); };
   $("[data-login]", m.el).onclick = () => { m.close(); showAccount("login", { onDone: () => { if (!profile().name) profile().name = account.currentUser()?.username || "Goober Fan"; if (then) then(); else renderHome(); }, onCancel: () => askName(then) }); };
@@ -598,11 +599,46 @@ function pickPortrait() {
   });
 }
 
+function offerTutorial() {
+  profile().tutorialSeen = true;
+  store.saveProfile();
+  const m = modal(`<h2>New here?</h2><p>Play a quick guided match. It shows you every button and ability in a few turns.</p>
+    <div class="actions"><button class="btn" data-skip>Just the rules</button><button class="btn primary" data-go>▶ Tutorial</button></div>`);
+  $("[data-go]", m.el).onclick = () => { m.close(); startTutorial(); };
+  $("[data-skip]", m.el).onclick = () => { m.close(); showRules(); };
+}
+
+function startTutorial() {
+  document.querySelectorAll(".modal").forEach(el => el.remove());
+  if (match || online) return;
+  history.pushState(null, "", "#battle");
+  setPresence("solo");
+  match = new TutorialMatch({
+    catalog, state: createTutorialState(profile().name),
+    heroArt: [heroArt(profile().hero), "/assets/lil-goober.jpg"],
+    showRules, toggleSound, soundOn: () => profile().settings.sound,
+    onExit: () => exitMatch(),
+    onEnd: ({ won }) => {
+      profile().tutorialDone = true;
+      store.saveProfile();
+      if (won) confetti();
+      const m = modal(`<div class="result ${won ? "win" : "lose"}"><h2>${won ? "Tutorial done! 🎓" : "Close one."}</h2>
+        <p>${won ? "You know the basics. Now go farm some aura." : "That's the tutorial. Try it again, or jump into a real match."}</p>
+        <div class="actions" style="justify-content:center"><button class="btn" data-home>Home</button>${won ? "" : `<button class="btn" data-again>Try again</button>`}<button class="btn primary" data-play>▶ Play for real</button></div></div>`, { dismissable: false });
+      $("[data-home]", m.el).onclick = () => { m.close(); exitMatch(); };
+      const again = $("[data-again]", m.el);
+      if (again) again.onclick = () => { m.close(); exitMatch(false); startTutorial(); };
+      $("[data-play]", m.el).onclick = () => { m.close(); exitMatch(false); history.replaceState(null, "", "#solo"); route(); };
+    }
+  });
+}
+
 export function showRules() {
   profile().tutorialSeen = true;
   store.saveProfile();
-  modal(`<div class="rules">
+  const rules = modal(`<div class="rules">
     <h2>How to Play</h2>
+    ${match || online ? "" : `<button class="btn primary" data-tutorial style="width:100%;margin-bottom:10px">▶ Play the guided tutorial</button>`}
     <p>Take your opponent's hero from <b>${STARTING_HP}</b> Health to 0. Take turns playing cards and bonking with your Goobers. That's it. That's the game.</p>
     <h3>✨ Aura</h3>
     <ul><li>Cards cost Aura (the number in the top-left).</li><li>You get 2 Aura on your first turn, +1 each turn after, up to 10. It refills every turn.</li><li>Whoever goes second gets <b>Bonus Aura</b>: one free extra Aura, once.</li><li>At the start, you can swap up to 4 cards from your starting hand.</li><li>Tap any card to read it, even ones you can\'t afford yet.</li></ul>
@@ -620,6 +656,8 @@ export function showRules() {
     <h3>🎁 Collecting</h3>
     <ul><li>Win games to earn coins. Rip packs. Pull rare and ✨shiny✨ Goobers.</li><li>Every Goober uploaded to the site becomes a card with its own stats and rarity. Upload one and you can craft its card at ${Math.round(CREATOR_DISCOUNT * 100)}% off (or pull it from packs).</li><li>Decks have exactly ${DECK_SIZE} cards: max 2 copies of a card (1 for Legendaries).</li><li>Press and hold any card to read it up close.</li></ul>
     <div class="actions"><button class="btn primary" data-close>Bet</button></div></div>`);
+  const tut = $("[data-tutorial]", rules.el);
+  if (tut) tut.onclick = () => { rules.close(); startTutorial(); };
 }
 
 // ------------------------------------------------------------------ deck picker

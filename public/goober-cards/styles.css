@@ -1017,3 +1017,15 @@ body::after {
 /* The hint never catches taps meant for the table; only its Details button is tappable. */
 .card-tip { pointer-events: none; }
 .card-tip [data-details] { pointer-events: auto; }
+
+/* Tutorial coach */
+.coach { position: fixed; inset: 0; z-index: 140; pointer-events: none; }
+.coach.blocking { pointer-events: auto; }
+.coach-ring { position: fixed; display: none; border: 4px solid var(--yellow, #ffd34d); border-radius: 16px; pointer-events: none; animation: coachPulse 1.2s ease-in-out infinite; }
+.coach.blocking .coach-ring { box-shadow: 0 0 0 200vmax rgba(10, 6, 20, 0.6); }
+.coach-bubble { position: fixed; width: min(320px, calc(100vw - 16px)); padding: 12px 14px; border: 3px solid #1f1f1f; border-radius: 16px; background: #fff8e6; color: #1f1f1f; font-weight: 700; line-height: 1.35; pointer-events: auto; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4); }
+.coach-bubble p { margin: 0 0 8px; }
+.coach-bubble small { display: block; text-align: right; font-weight: 900; color: #9b6bff; }
+.coach-bubble .btn { display: block; margin-left: auto; }
+@keyframes coachPulse { 50% { border-color: #fff; transform: scale(1.03); } }
+.coach:not(.blocking) .coach-bubble { pointer-events: none; opacity: 0.94; }
