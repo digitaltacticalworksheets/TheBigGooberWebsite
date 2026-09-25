@@ -358,14 +358,16 @@ export class Battle {
   // Swap cards out of your opening hand, once, before your first move.
   maybeMulligan() {
     const s = this.state, me = s?.players[this.me];
-    if (this.spectator || !me || s.over || s.active !== this.me || me.mulliganDone || this.mulliganEl) return;
+    // Shown on your first turn, or right away on turn 1 when you go second.
+    if (this.spectator || !me || s.over || me.mulliganDone || this.mulliganEl) return;
+    if (s.active !== this.me && s.turn !== 1) return;
     const picks = new Set();
     const el = document.createElement("div");
     el.className = "mulligan";
     const cards = me.hand.filter(c => c.id !== "token-crumb");
     el.innerHTML = `<div class="mulligan-box">
       <h2>Starting hand</h2>
-      <p>Tap up to 4 cards to swap them for new ones.</p>
+      <p><b>${s.active === this.me ? "You go first." : "You go second, so you get Bonus Aura."}</b> Tap up to 4 cards to swap them for new ones.</p>
       <div class="mulligan-cards">${cards.map(c => `<button class="mull-card" data-mull="${esc(c.uid)}">${cardHTML(this.def(c.id), { shiny: c.shiny })}<span class="swap-x">SWAP</span></button>`).join("")}</div>
       <div class="actions"><button class="btn primary big" data-keep>Keep hand</button></div>
     </div>`;
@@ -912,7 +914,8 @@ export class SoloMatch {
     });
     this.battle.update(state, []);
     setTimeout(() => this.battle.showEmote(1, "hello"), 900);
-    if (state.active === 1) this.runAi();
+    // The computer waits for you to confirm your starting hand, even when it goes first.
+    if (state.active === 1 && state.players[0].mulliganDone) this.runAi();
   }
 
   async act(action) {

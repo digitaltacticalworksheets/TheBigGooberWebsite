@@ -430,7 +430,8 @@ function endTurn(state, catalog) {
 // --- Actions ------------------------------------------------------------------
 // action: {type:"play", uid, target?, position?} | {type:"attack", uid, target} |
 //         {type:"power", target} | {type:"end"} | {type:"concede"} |
-//         {type:"mulligan", uids} (once, before your first move of the game)
+//         {type:"mulligan", uids} (once, before your first move of the game; during the
+//         first turn both players may swap, so whoever goes second can too)
 export function applyAction(state, catalog, idx, action) {
   state.events = [];
   if (!action || typeof action !== "object") return { ok: false, error: "Invalid action." };
@@ -442,7 +443,8 @@ export function applyAction(state, catalog, idx, action) {
     return { ok: true, events: state.events };
   }
   if (state.over) return { ok: false, error: "The game is over." };
-  if (state.active !== idx) return { ok: false, error: "It's not your turn." };
+  const openingSwap = action.type === "mulligan" && state.turn === 1;
+  if (state.active !== idx && !openingSwap) return { ok: false, error: "It's not your turn." };
   const me = state.players[idx];
 
   if (action.type === "mulligan") {
