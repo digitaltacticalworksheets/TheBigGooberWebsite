@@ -4,36 +4,53 @@
 let ctx = null;
 let bus = null;
 let enabled = true;
+// Whether the current AudioContext was made inside a tap. iPhones can leave a context
+// made outside one (say, by a sound when the home screen loads) muted for good, so
+// contexts are only ever made inside a tap, and a stuck one is replaced on the next tap.
+let ctxFromTap = false;
+let stuck = false;
 
 export function setSoundEnabled(on) { enabled = Boolean(on); }
 
+function createContext() {
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+  buildBus(ctx);
+  decodeSamples(ctx);
+}
+
 function audio() {
   if (!enabled) return null;
-  try {
-    if (!ctx) {
-      ctx = new (window.AudioContext || window.webkitAudioContext)();
-      buildBus(ctx);
-      decodeSamples(ctx);
-    }
-    if (ctx.state === "suspended") ctx.resume().catch(() => {});
-    return ctx;
-  } catch { return null; }
+  // No audio until the first tap: it would start muted and might never unmute.
+  if (!ctx) return null;
+  if (ctx.state === "suspended") ctx.resume().catch(() => {});
+  return ctx;
 }
 
 // Browsers (iOS Safari especially) only let audio start inside a tap or key press.
-// Online, most sounds are triggered by server messages with no tap behind them, so an
-// AudioContext first created then stays muted. Wake it on any tap instead, and play a
-// silent sample in that tap, which iOS needs to fully unlock output.
-function unlockAudio() {
-  const a = audio();
-  if (!a || a.state === "running") return;
-  a.resume().catch(() => {});
+// Many sounds come from timers or the server with no tap behind them (the computer's
+// moves, online opponents), so audio is set up and woken on every tap instead, with a
+// silent sample played inside the tap, which iOS needs to fully unlock output.
+// On iPhone a touch's pointerdown doesn't count as a tap (touchend and click do).
+function unlockAudio(event) {
+  if (!enabled) return;
+  if (event?.type === "pointerdown" && event.pointerType && event.pointerType !== "mouse") return;
   try {
-    const src = a.createBufferSource();
-    src.buffer = a.createBuffer(1, 1, 22050);
-    src.connect(a.destination);
+    // Made outside a tap, or still stuck after an earlier tap tried to wake it: start fresh.
+    if (ctx && ctx.state !== "running" && (!ctxFromTap || stuck)) {
+      try { ctx.close(); } catch { /* already closed */ }
+      ctx = null;
+    }
+    if (!ctx) { createContext(); ctxFromTap = true; stuck = false; }
+    if (ctx.state === "running") return;
+    const tried = ctx;
+    ctx.resume().catch(() => {});
+    // Still not playing a moment after a tap tried to wake it: replace it on the next tap.
+    setTimeout(() => { if (ctx === tried && tried.state !== "running") stuck = true; }, 500);
+    const src = ctx.createBufferSource();
+    src.buffer = ctx.createBuffer(1, 1, 22050);
+    src.connect(ctx.destination);
     src.start(0);
-  } catch { /* nothing to unlock */ }
+  } catch { /* no audio on this device */ }
 }
 
 if (typeof window !== "undefined") {
@@ -82,7 +99,9 @@ for (const [name, url] of Object.entries(SAMPLE_URLS)) {
 
 function decodeSamples(a) {
   for (const [name, bytes] of Object.entries(sampleBytes)) {
-    bytes.then(buf => (buf ? a.decodeAudioData(buf) : null))
+    // decodeAudioData uses up the buffer it's given, so decode a copy (a replaced
+    // context needs to decode the same bytes again).
+    bytes.then(buf => (buf ? a.decodeAudioData(buf.slice(0)) : null))
       .then(decoded => { if (decoded) samples[name] = decoded; })
       .catch(() => {});
   }
