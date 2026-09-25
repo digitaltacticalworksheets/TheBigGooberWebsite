@@ -9,11 +9,17 @@ let enabled = true;
 // contexts are only ever made inside a tap, and a stuck one is replaced on the next tap.
 let ctxFromTap = false;
 let stuck = false;
+// Switching apps on iPhone can break audio in a way the page can't see: the context
+// says "running" but plays nothing. So after coming back, the next tap swaps in a
+// fresh context (only a tap is allowed to start one).
+let refreshOnTap = false;
 
 export function setSoundEnabled(on) { enabled = Boolean(on); }
 
 function createContext() {
   ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const made = ctx;
+  made.onstatechange = () => { if (made === ctx && made.state === "interrupted") refreshOnTap = true; };
   buildBus(ctx);
   decodeSamples(ctx);
 }
@@ -35,11 +41,13 @@ function unlockAudio(event) {
   if (!enabled) return;
   if (event?.type === "pointerdown" && event.pointerType && event.pointerType !== "mouse") return;
   try {
-    // Made outside a tap, or still stuck after an earlier tap tried to wake it: start fresh.
-    if (ctx && ctx.state !== "running" && (!ctxFromTap || stuck)) {
+    // Start fresh if: we just came back from another app, it was made outside a tap,
+    // or it's still stuck after an earlier tap tried to wake it.
+    if (ctx && (refreshOnTap || (ctx.state !== "running" && (!ctxFromTap || stuck)))) {
       try { ctx.close(); } catch { /* already closed */ }
       ctx = null;
     }
+    refreshOnTap = false;
     if (!ctx) { createContext(); ctxFromTap = true; stuck = false; }
     if (ctx.state === "running") return;
     const tried = ctx;
@@ -55,8 +63,11 @@ function unlockAudio(event) {
 
 if (typeof window !== "undefined") {
   for (const type of ["pointerdown", "touchend", "mousedown", "keydown", "click"]) window.addEventListener(type, unlockAudio, { capture: true, passive: true });
-  // iOS suspends audio when the app is backgrounded; pick it back up on return (or on the next tap).
-  document.addEventListener("visibilitychange", () => { if (!document.hidden && ctx && ctx.state !== "running") ctx.resume().catch(() => {}); });
+  // Coming back from another app: try to wake the audio now, and replace it on the next tap
+  // in case iOS left it silently broken.
+  const cameBack = () => { if (!ctx) return; refreshOnTap = true; if (ctx.state !== "running") ctx.resume().catch(() => {}); };
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) cameBack(); });
+  window.addEventListener("pageshow", event => { if (event.persisted) cameBack(); });
 }
 
 function buildBus(a) {
