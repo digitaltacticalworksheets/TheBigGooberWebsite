@@ -702,7 +702,7 @@ function startSolo(level) {
     onEnd: async ({ won, draw }) => {
       const reward = won ? AI_LEVELS[level].reward : draw ? 20 : 15;
       const result = await account.econ.finishSolo({ ticket: await ticket, won, draw, reward });
-      showResult({ won, draw, coins: result.coins, firstWin: result.firstWin, capped: result.capped, again: () => { exitMatch(false); startSolo(level); }, deckName: deck.name });
+      showResult({ won, draw, coins: result.coins, firstWin: result.firstWin, again: () => { exitMatch(false); startSolo(level); }, deckName: deck.name });
     }
   });
 }
@@ -742,7 +742,7 @@ function confetti(count = 90) {
   }
 }
 
-function showResult({ won, draw, coins, firstWin, capped, again, onlineRoom, rank }) {
+function showResult({ won, draw, coins, firstWin, again, onlineRoom, rank }) {
   if (won) { sfx.win(); buzz([60, 40, 60]); confetti(); } else sfx.lose();
   const title = draw ? "Draw??" : won ? "W" : "L";
   const m = modal(`<div class="result ${won ? "win" : "lose"}">
@@ -753,7 +753,6 @@ function showResult({ won, draw, coins, firstWin, capped, again, onlineRoom, ran
       ${rank?.promoted ? `<p><b>Promoted to ${esc(tierFor(rank.after).name)}! ${tierFor(rank.after).icon}</b></p>` : ""}
       ${rank && !won && !draw && rank.delta === 0 ? `<p class="muted">Tier protected. You can't drop out of ${esc(tierFor(rank.after).name)}.</p>` : ""}
       ${firstWin ? `<p><b>First win of the day bonus included!</b></p>` : ""}
-      ${capped ? `<p class="muted">You hit today's coin limit for this mode. More tomorrow!</p>` : ""}
       <p>${won ? pick(["+1000 aura.", "Absolutely cooked them.", "Built different.", "They're gonna need a minute."]) : draw ? "Nobody wins. Awkward." : pick(["Skill issue.", "-500 aura.", "You got cooked.", "It's giving… defeat."])}</p>
       <div class="actions" style="justify-content:center">
         <button class="btn" data-home>Home</button>
@@ -1020,7 +1019,7 @@ function joinOnline(code, { watch = false, challenge = false } = {}) {
         result = store.recordResult({ won, reward: won ? 100 : 30 });
       }
       showResult({
-        won, draw, coins: result.coins, firstWin: result.firstWin, capped: result.capped, onlineRoom: true, rank: result.rank,
+        won, draw, coins: result.coins, firstWin: result.firstWin, onlineRoom: true, rank: result.rank,
         again: () => { const { entries: fresh } = store.playableDeck(catalog); online?.rematch(fresh); renderRematchWait(code); }
       });
     }
