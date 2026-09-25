@@ -18,7 +18,7 @@ export const SOLO_REWARD = { sleepy: 25, pup: 40, goodboy: 60, biggoober: 90 };
 export const ONLINE_REWARD = { win: 100, loss: 30 };
 export const FIRST_WIN_BONUS = 50;
 // Server-side limits on match rewards (per UTC day), so fake "wins" can't print coins.
-export const DAILY_REWARD_CAP = { solo: 600, online: 1000 };
+export const DAILY_REWARD_CAP = { solo: 1500, online: 2000 };
 export const MIN_SOLO_MATCH_MS = 40 * 1000;
 
 const STARTER = [
@@ -272,11 +272,11 @@ export function recordResult(p, { won, reward, day, kind = "solo", cap = Infinit
     p.stats.streak = 0;
   }
   const room = Math.max(0, cap - (p.rewardDay[kind] || 0));
-  const capped = coins > room;
+  const full = coins, capped = coins > room;
   coins = Math.min(coins, room);
   p.rewardDay[kind] = (p.rewardDay[kind] || 0) + coins;
   p.coins += coins;
-  return { ok: true, coins, firstWin, capped };
+  return { ok: true, coins, full, firstWin, capped };
 }
 
 // Fields a logged-in player's device may change directly. Everything else

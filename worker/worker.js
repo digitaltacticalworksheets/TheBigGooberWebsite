@@ -253,7 +253,7 @@ export class CardBattleRoom {
           await this.saveRoom();
           if (!out.result.already) {
             for (const [socket, session] of this.sessions.entries()) {
-              if (session.seat === seat) this.send(socket, { type: "reward", coins: out.result.coins, firstWin: out.result.firstWin, capped: out.result.capped, rank: out.result.rank || null });
+              if (session.seat === seat) this.send(socket, { type: "reward", coins: out.result.coins, firstWin: out.result.firstWin, capped: out.result.capped, full: out.result.full, rank: out.result.rank || null });
             }
           }
         } catch (error) {

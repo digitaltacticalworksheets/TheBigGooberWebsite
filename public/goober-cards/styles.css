@@ -676,6 +676,8 @@ body.in-battle { overflow: hidden; position: fixed; inset: 0; }
 .result.lose h2 { color: #ff6b6b; }
 .result .portrait { width: 140px; height: 110px; margin: 8px auto; border-radius: 18px; border: 5px solid var(--ink); background: #fff center / contain no-repeat; }
 .result .reward { display: inline-flex; gap: 8px; align-items: center; font-family: var(--display); font-size: 1.4rem; margin: 6px 0; padding: 6px 16px; border-radius: 99px; background: #2b2140; color: var(--yellow); border: 3px solid var(--ink); }
+.result .capped-note { margin: 8px auto; max-width: 30ch; padding: 8px 12px; border-radius: 12px; background: rgba(255, 159, 69, .16); border: 2px solid #ff9f45; color: #ffd9b3; font-size: .9rem; }
+.coins-left { margin: 4px 0 10px; display: flex; gap: 6px; align-items: center; }
 .result .rank-reward { color: #c9b6ff; }
 .result.sheet { background: linear-gradient(180deg, #fff6d6, #ffe6a0); }
 .result.lose.sheet { background: linear-gradient(180deg, #ece8f4, #cfc8de); }
