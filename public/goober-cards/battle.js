@@ -1,7 +1,7 @@
 // Battle screen: renders a game state, handles touch input, and animates engine events.
 import { playInfo, attackTargets, canAttack, powerTargets, legalActions, applyAction, BOARD_LIMIT, MAX_MANA } from "./engine.js";
 import { chooseAiAction } from "./ai.js";
-import { HERO_POWER, KEYWORDS, STATUS, CATEGORY_STYLE } from "./cards.js";
+import { heroPowerOf, KEYWORDS, STATUS, CATEGORY_STYLE } from "./cards.js";
 import { $, esc, sleep, cardHTML, cardBackHTML, artHTML, modal, confirmDialog, keywordGlossary, onLongPress, toast } from "./ui.js";
 import { sfx, buzz } from "./sound.js";
 
@@ -55,7 +55,7 @@ export class Battle {
         <div class="hero-info"><div class="nm"></div><div class="mana"></div></div>
         <div class="spacer"></div>
         ${this.spectator ? `<div class="opp-hand my-hand-backs"></div>` : ""}
-        <button class="power" data-power aria-label="Hero power: ${esc(HERO_POWER.name)}"><span class="pc">${HERO_POWER.cost}</span>💨</button>
+        <button class="power" data-power aria-label="Hero power"><span class="pc"></span><span class="pi"></span></button>
         <div class="deck-count" title="Cards left in deck"></div>
       </div>
       <div class="hand"></div>`;
@@ -169,6 +169,11 @@ export class Battle {
 
     // Hero power + end turn.
     const pTargets = powerTargets(s, this.me);
+    const myPower = heroPowerOf(me.power);
+    $(".pc", this.el.power).textContent = myPower.cost;
+    $(".pi", this.el.power).textContent = myPower.icon;
+    this.el.power.setAttribute("aria-label", `Hero power: ${myPower.name}`);
+    this.el.power.title = `${myPower.name}: ${myPower.text}`;
     this.el.power.classList.toggle("used", me.powerUsed);
     this.el.power.classList.toggle("ready", this.canInput && pTargets.length > 0 && !this.sel);
     this.el.power.disabled = !this.canInput || !pTargets.length;
@@ -214,7 +219,7 @@ export class Battle {
         el.style.setProperty("--cat", (CATEGORY_STYLE[def.category] || CATEGORY_STYLE.random).color);
       }
       const kws = m.keywords || [];
-      const cls = ["minion", def.rarity, m.shiny ? "shiny" : "", ...kws.filter(k => ["guard", "fluffy", "sneaky"].includes(k)), m.frozen ? "frozen" : "", m.silenced ? "silenced" : ""];
+      const cls = ["minion", def.rarity, m.shiny ? "shiny" : "", ...kws.filter(k => ["guard", "fluffy", "sneaky", "tough"].includes(k)), m.frozen ? "frozen" : "", m.silenced ? "silenced" : ""];
       if (mine && canAttack(this.state, this.me, m.uid) && this.canInput) cls.push("can-attack");
       if (mine && m.sick && !m.frozen && this.myTurn) cls.push("sick");
       if (this.sel?.uid === m.uid) cls.push("selected");
@@ -334,17 +339,21 @@ export class Battle {
     let details = false;
     if (this.sel?.kind === "hand") {
       details = true;
-      const def = this.def(this.state.players[this.me].hand.find(c => c.uid === this.sel.uid)?.id);
       if (this.sel.preview) text = `${this.sel.reason || "Can't play this yet"}`;
-      else if (this.sel.isMinion && !this.sel.placed) text = this.sel.targets ? `Tap the table to place ${def?.name}, then pick a target` : `Tap the table to play ${def?.name}`;
-      else if (this.sel.targets) text = `Pick a glowing target for ${def?.name}`;
-      else text = `Tap the table to use ${def?.name}`;
-    } else if (this.sel?.kind === "attack") text = "Tap a glowing enemy to attack";
-    else if (this.sel?.kind === "power") text = `${HERO_POWER.name} 💨: tap an enemy`;
+      else if (this.sel.isMinion && !this.sel.placed) text = this.sel.targets ? "Tap the table, then a target" : "Tap the table to play";
+      else if (this.sel.targets) text = "Pick a glowing target";
+      else text = "Tap the table to cast";
+    } else if (this.sel?.kind === "attack") text = "Tap a glowing enemy";
+    else if (this.sel?.kind === "power") {
+      const power = heroPowerOf(this.state.players[this.me].power);
+      text = `${power.name}: ${power.target === "enemy" ? "tap an enemy" : power.id === "hype" ? "tap a Goober that can attack" : "tap a friendly target"}`;
+    }
     this.tip.hidden = !text;
     const mid = this.root.querySelector(".midline")?.getBoundingClientRect();
     if (mid) this.tip.style.top = `${mid.bottom + 4}px`;
-    this.tip.innerHTML = `<span>${esc(text)}</span>${details ? `<button type="button" data-details>ⓘ Details</button>` : ""}`;
+    const html = `<span>${esc(text)}</span>${details ? `<button type="button" data-details>ⓘ Details</button>` : ""}`;
+    // Only rebuild on change so the text's fade-out timer isn't restarted by unrelated renders.
+    if (this.tip.dataset.html !== html) { this.tip.dataset.html = html; this.tip.innerHTML = html; }
   }
 
   renderTimer() {
@@ -428,8 +437,14 @@ export class Battle {
     if (!this.canInput) return;
     if (this.sel?.kind === "power") { this.clearSel(); return; }
     const targets = powerTargets(this.state, this.me);
-    if (!targets.length) { toast(this.state.players[this.me].powerUsed ? "BARK FART is once per turn. Pace yourself." : "Not enough Aura.", "bad"); return; }
+    const me = this.state.players[this.me], power = heroPowerOf(me.power);
+    if (!targets.length) {
+      const reason = me.powerUsed ? `${power.name} is once per turn. Pace yourself.` : me.mana < power.cost ? "Not enough Aura." : power.id === "hype" ? "You need a Goober that can attack." : "No targets.";
+      toast(reason, "bad");
+      return;
+    }
     sfx.tap();
+    if (!power.target) { this.send({ type: "power", target: targets[0] }); return; }
     this.sel = { kind: "power", targets };
     this.render();
   }
@@ -633,7 +648,7 @@ export class Battle {
     if (el.classList.contains("hero")) {
       const idx = uid === `h${this.me}` ? this.me : this.opp;
       const p = s.players[idx];
-      modal(`<h2>${esc(p.name)}</h2><p><b>Health:</b> ${p.hero.hp}/${p.hero.maxHp}${p.hero.armor ? ` · <b>Drip:</b> ${p.hero.armor}` : ""}</p><p><b>Cards in hand:</b> ${p.handCount ?? p.hand.length} · <b>Deck:</b> ${p.deckCount ?? p.deck.length}</p><p><b>${HERO_POWER.name}</b> (${HERO_POWER.cost} Aura): ${HERO_POWER.text}</p><div class="actions"><button class="btn primary" data-close>OK</button></div>`);
+      modal(`<h2>${esc(p.name)}</h2><p><b>Health:</b> ${p.hero.hp}/${p.hero.maxHp}${p.hero.armor ? ` · <b>Drip:</b> ${p.hero.armor}` : ""}</p><p><b>Cards in hand:</b> ${p.handCount ?? p.hand.length} · <b>Deck:</b> ${p.deckCount ?? p.deck.length}</p><p><b>${heroPowerOf(p.power).icon} ${esc(heroPowerOf(p.power).name)}</b> (${heroPowerOf(p.power).cost} Aura): ${esc(heroPowerOf(p.power).text)}</p><div class="actions"><button class="btn primary" data-close>OK</button></div>`);
       return;
     }
     if (el.classList.contains("hcard")) {
@@ -727,13 +742,14 @@ export class Battle {
   }
 
   // The hero power: a bark, then immediately a fart.
-  async barkFart(hero) {
+  async barkFart(hero, power = heroPowerOf("classic")) {
+    const classic = power.id === "classic";
     sfx.barkFart();
     const r = hero.getBoundingClientRect();
     const cx = Math.max(90, Math.min(window.innerWidth - 90, r.left + r.width / 2));
     const bark = document.createElement("div");
     bark.className = "float-num info bark-word";
-    bark.textContent = "BARK!";
+    bark.textContent = classic ? "BARK!" : power.name;
     bark.style.left = `${cx}px`;
     bark.style.top = `${r.top}px`;
     document.body.appendChild(bark);
@@ -741,13 +757,13 @@ export class Battle {
     await sleep(300);
     const gas = document.createElement("div");
     gas.className = "fart-cloud";
-    gas.textContent = "💨";
+    gas.textContent = classic ? "💨" : power.icon;
     gas.style.left = `${r.left + r.width * 0.2}px`;
     gas.style.top = `${r.top + r.height * 0.6}px`;
     document.body.appendChild(gas);
     const fart = document.createElement("div");
     fart.className = "float-num fart-word";
-    fart.textContent = "FART";
+    fart.textContent = classic ? "FART" : "";
     fart.style.left = `${cx + 20}px`;
     fart.style.top = `${Math.min(window.innerHeight - 60, r.top + r.height)}px`;
     document.body.appendChild(fart);
@@ -851,7 +867,7 @@ export class Battle {
           if (this.def(e.id)?.rarity === "legendary") { this.banner(`${this.def(e.id).name}!`, "legend"); sfx.shiny(); }
           break;
         case "attack": await this.lunge(e.from, e.to); break;
-        case "power": await this.barkFart(e.player === this.me ? this.el.myHero : this.el.oppHero); break;
+        case "power": await this.barkFart(e.player === this.me ? this.el.myHero : this.el.oppHero, heroPowerOf(e.power)); break;
         case "damage": {
           hits = true;
           const big = e.amount >= 5;

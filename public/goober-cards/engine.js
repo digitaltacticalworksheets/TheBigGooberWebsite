@@ -1,7 +1,7 @@
 // Goober Cards rules engine.
 // Pure and deterministic (seeded RNG stored in state) so the same code runs
 // in the browser for solo games and in the worker for online rooms.
-import { TOKENS, HERO_POWER } from "./cards.js";
+import { TOKENS, heroPowerOf } from "./cards.js";
 
 export const STARTING_HP = 25;
 export const MAX_MANA = 10;
@@ -30,7 +30,7 @@ function shuffleInPlace(state, list) {
 }
 
 // --- Setup -----------------------------------------------------------------
-export function createGame({ decks, names = ["Player 1", "Player 2"], seed = Date.now(), firstPlayer = null }) {
+export function createGame({ decks, names = ["Player 1", "Player 2"], seed = Date.now(), firstPlayer = null, powers = [] }) {
   const state = {
     version: 1,
     rng: seed >>> 0,
@@ -52,6 +52,7 @@ export function createGame({ decks, names = ["Player 1", "Player 2"], seed = Dat
       board: [],
       fatigue: 0,
       mulliganDone: false,
+      power: heroPowerOf(powers[idx]).id,
       powerUsed: false,
       conceded: false
     }))
@@ -170,6 +171,7 @@ function damageCharacter(state, uid, amount, source) {
       emit(state, { t: "shield", uid });
       return 0;
     }
+    if (hasKw(e, "tough")) amount = Math.max(1, amount - 1);
     e.health -= amount;
     dealt = amount;
     if (source && source.kind === "minion" && hasKw(source.entity, "bitey") && e.health > 0) e.health = 0;
@@ -254,10 +256,13 @@ export function canAttack(state, idx, uid) {
   return Boolean(m && m.attack > 0 && !m.sick && !m.frozen && m.attacksLeft > 0);
 }
 
+// Untargeted powers report the user's own hero as their one "target".
 export function powerTargets(state, idx) {
   const p = state.players[idx];
-  if (state.over || state.active !== idx || p.powerUsed || p.mana < HERO_POWER.cost) return [];
-  return validTargetsFor(state, idx, "enemy");
+  const power = heroPowerOf(p.power);
+  if (state.over || state.active !== idx || p.powerUsed || p.mana < power.cost) return [];
+  if (power.id === "hype") return p.board.filter(m => canAttack(state, idx, m.uid)).map(m => m.uid);
+  return power.target ? validTargetsFor(state, idx, power.target) : [p.hero.uid];
 }
 
 // --- Effects ----------------------------------------------------------------
@@ -333,6 +338,7 @@ function resolveEffect(state, catalog, idx, effect, { targetUid = null, source =
     case "mana": me.mana = Math.min(MAX_MANA, me.mana + effect.amount); break;
     default: break;
   }
+  if (effect.armor) { me.hero.armor += effect.armor; emit(state, { t: "armor", player: idx, amount: effect.armor }); }
   if (effect.heal) healCharacter(state, me.hero.uid, effect.heal);
   if (effect.summon) for (let i = 0; i < (effect.summonCount || 1); i++) summonMinion(state, catalog, idx, effect.summon);
   if (effect.draw) for (let i = 0; i < effect.draw; i++) drawCard(state, idx);
@@ -418,6 +424,7 @@ function endTurn(state, catalog) {
     if (ability?.trigger === "endTurn" && m.health > 0) resolveEffect(state, catalog, idx, ability, { selfUid: m.uid, source: { kind: "minion", owner: idx, entity: m } });
   }
   for (const m of p.board) {
+    if (m.hype) { m.attack = Math.max(0, m.attack - m.hype); m.hype = 0; }
     if (m.frozen && m.frozenAt < state.turn) { m.frozen = false; emit(state, { t: "thaw", uid: m.uid }); }
   }
   cleanup(state, catalog);
@@ -523,13 +530,22 @@ export function applyAction(state, catalog, idx, action) {
 
   if (action.type === "power") {
     const targets = powerTargets(state, idx);
-    if (!targets.length) return { ok: false, error: me.powerUsed ? "BARK FART is once per turn. Pace yourself." : "Not enough Aura." };
-    if (!targets.includes(action.target)) return { ok: false, error: "Choose an enemy to BARK FART at." };
-    me.mana -= HERO_POWER.cost;
+    const power = heroPowerOf(me.power);
+    if (!targets.length) return { ok: false, error: me.powerUsed ? `${power.name} is once per turn. Pace yourself.` : "Not enough Aura." };
+    if (!targets.includes(action.target)) return { ok: false, error: `Pick a target for ${power.name}.` };
+    me.mana -= power.cost;
     me.powerUsed = true;
-    emit(state, { t: "power", player: idx, to: action.target });
-    log(state, `${me.name} used BARK FART. 💨`, idx);
-    damageCharacter(state, action.target, HERO_POWER.damage, null);
+    emit(state, { t: "power", player: idx, to: action.target, power: power.id });
+    log(state, `${me.name} used ${power.name}. ${power.icon}`, idx);
+    if (power.id === "classic") damageCharacter(state, action.target, 1, null);
+    else if (power.id === "smoke") { me.hero.armor += 2; emit(state, { t: "armor", player: idx, amount: 2 }); }
+    else if (power.id === "heal") healCharacter(state, action.target, 2);
+    else if (power.id === "hype") {
+      const m = me.board.find(x => x.uid === action.target);
+      m.attack += 2;
+      m.hype = (m.hype || 0) + 2;
+      emit(state, { t: "buff", uid: m.uid, attack: 2, health: 0 });
+    }
     cleanup(state, catalog);
     return { ok: true, events: state.events };
   }
