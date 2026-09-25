@@ -256,7 +256,10 @@ function renderFriends() {
       <small class="muted">Your username is <b>${esc(account.currentUser().username)}</b>. Tell your friends!</small>
     </form>
     <div data-friends-body><div class="online-card"><div class="spinner" style="margin:auto"></div></div></div>
+    ${account.currentUser().admin ? `<div class="online-card admin-players"><b>🛡️ All players <span class="muted" data-admin-count></span></b><input type="search" data-admin-search placeholder="Search usernames" autocomplete="off" autocapitalize="off" spellcheck="false"><div data-admin-list><div class="spinner" style="margin:auto"></div></div></div>` : ""}
   </div>`;
+  const adminSearch = $("[data-admin-search]", app);
+  if (adminSearch) adminSearch.addEventListener("input", renderAdminPlayers);
   const form = $("[data-friend-add]", app);
   form.addEventListener("submit", async e => {
     e.preventDefault();
@@ -271,7 +274,40 @@ function renderFriends() {
   });
   $("[data-friends-body]", app).addEventListener("click", onFriendsClick);
   loadFriends();
-  friendsTimer = setInterval(() => { if ($("[data-friends-body]", app)) loadFriends(); else clearInterval(friendsTimer); }, 10000);
+  loadAdminPlayers();
+  friendsTimer = setInterval(() => { if ($("[data-friends-body]", app)) { loadFriends(); loadAdminPlayers(); } else clearInterval(friendsTimer); }, 10000);
+}
+
+let adminPlayers = null;
+
+async function loadAdminPlayers() {
+  if (!account.currentUser()?.admin || !$("[data-admin-list]", app)) return;
+  const res = await friendsApi.all();
+  if (!$("[data-admin-list]", app)) return;
+  if (!res.ok) { $("[data-admin-list]", app).innerHTML = `<p class="muted">${esc(res.error)}</p>`; return; }
+  adminPlayers = res;
+  renderAdminPlayers();
+}
+
+function timeAgo(when) {
+  const t = Date.parse(String(when).replace(" ", "T") + (String(when).includes("Z") ? "" : "Z"));
+  if (!t) return "never";
+  const mins = Math.max(0, Math.round((Date.now() - t) / 60000));
+  if (mins < 2) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  if (mins < 60 * 48) return `${Math.round(mins / 60)}h ago`;
+  return `${Math.round(mins / 1440)}d ago`;
+}
+
+function renderAdminPlayers() {
+  const list = $("[data-admin-list]", app);
+  if (!list || !adminPlayers) return;
+  const q = ($("[data-admin-search]", app)?.value || "").trim().toLowerCase();
+  const shown = adminPlayers.players.filter(p => !q || p.name.toLowerCase().includes(q));
+  $("[data-admin-count]", app).textContent = `${adminPlayers.onlineCount} online · ${adminPlayers.total} registered`;
+  list.innerHTML = shown.length ? shown.slice(0, 300).map(p => `<div class="friend-row"><span class="dot ${p.online ? "on" : ""}"></span><div><b>${esc(p.name)}</b><small>${p.online ? esc(STATUS_LABEL[p.status] || "Online") : `Last active ${timeAgo(p.lastActive)}`} · joined ${esc(String(p.joined).slice(0, 10))}</small></div></div>`).join("")
+    + (shown.length > 300 ? `<p class="muted">Showing 300 of ${shown.length}. Search to narrow it down.</p>` : "")
+    : `<p class="muted">No players match.</p>`;
 }
 
 let friendsData = null;

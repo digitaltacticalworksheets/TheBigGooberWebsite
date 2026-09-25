@@ -1044,3 +1044,7 @@ body::after {
 .power-pick button small { font-size: 0.62rem; opacity: 0.8; }
 .power-pick button.on { background: var(--yellow); color: var(--ink); box-shadow: 0 0 0 2px var(--yellow); }
 .power-text { margin: 0; font-size: 0.85rem; }
+
+/* Admin: all registered players on the Friends screen */
+.admin-players input[type="search"] { width: 100%; padding: 8px 12px; border-radius: 12px; border: 3px solid var(--ink); font: inherit; text-transform: none; }
+.admin-players [data-admin-list] { display: grid; gap: 6px; max-height: 60vh; overflow-y: auto; }

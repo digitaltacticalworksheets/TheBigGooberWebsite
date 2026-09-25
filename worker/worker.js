@@ -503,6 +503,14 @@ export class Presence {
       for (const id of (Array.isArray(body.ids) ? body.ids : []).slice(0, 200)) out[id] = this.statusOf(String(id));
       return jsonResponse(out, 200, NO_STORE_HEADERS);
     }
+    if (url.pathname === "/online") {
+      const out = {};
+      for (const ws of this.state.getWebSockets()) {
+        const id = ws.deserializeAttachment()?.userId;
+        if (id && !out[id]) { const st = this.statusOf(id); if (st.online) out[id] = st; }
+      }
+      return jsonResponse(out, 200, NO_STORE_HEADERS);
+    }
     if (url.pathname === "/notify") {
       let delivered = 0;
       for (const ws of this.liveSockets(String(body.to || ""))) {
@@ -577,6 +585,7 @@ async function routeFriends(request, env, url) {
   if (!user) return unauthorized();
   const me = { id: String(user.id), name: user.username };
   if (action === "" && request.method === "GET") return listFriends(env, user);
+  if (action === "all" && request.method === "GET") return listAllPlayers(env, user);
   if (request.method !== "POST") return jsonResponse({ error: "Not found" }, 404, NO_STORE_HEADERS);
   const body = await readJson(request);
   const otherId = cleanText(body.id, 64);
@@ -606,6 +615,23 @@ async function listFriends(env, user) {
   const order = s => ["playing", "watching", "searching", "solo", "online"].includes(s.status) ? 0 : 1;
   friends.sort((a, b) => order(a) - order(b) || a.name.localeCompare(b.name));
   return jsonResponse({ friends, incoming: p.friendIn, outgoing: p.friendOut, limit: econ.FRIEND_LIMIT }, 200, NO_STORE_HEADERS);
+}
+
+// Admins only: every account, who's online right now, and when each was last active.
+async function listAllPlayers(env, user) {
+  if (!isAdminUser(user)) return jsonResponse({ error: "Admins only." }, 403, NO_STORE_HEADERS);
+  const { results } = await env.DB.prepare(`
+    SELECT u.id, u.username, u.created_at AS joined,
+      MAX(COALESCE(p.updated_at, ''), COALESCE((SELECT MAX(s.created_at) FROM sessions s WHERE s.user_id = u.id), '')) AS last_active
+    FROM users u LEFT JOIN profiles p ON p.user_id = u.id
+    ORDER BY last_active DESC LIMIT 2000`).all();
+  const online = (await presenceCall(env, "/online", {})) || {};
+  const players = results.map(r => ({
+    id: String(r.id), name: r.username, joined: r.joined, lastActive: r.last_active || r.joined,
+    ...(online[String(r.id)] || { online: false, status: "offline", roomCode: "" })
+  }));
+  players.sort((a, b) => Number(b.online) - Number(a.online) || String(b.lastActive).localeCompare(String(a.lastActive)));
+  return jsonResponse({ players, total: players.length, onlineCount: players.filter(p => p.online).length }, 200, NO_STORE_HEADERS);
 }
 
 async function friendRequest(env, user, me, username) {
