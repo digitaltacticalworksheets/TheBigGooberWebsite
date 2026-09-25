@@ -13,7 +13,7 @@ export const AI_LEVELS = {
   biggoober: { name: "Final Boss", blurb: "No mercy. Stacked deck. Starts with an extra card and 4 Drip.", noise: 0, blunder: 0, startCards: 1, startArmor: 4, reward: 90 }
 };
 
-const KW_VALUE = { guard: 1.2, fluffy: 1.6, lifesnack: 1, doubleWag: 0, bitey: 2.2, sneaky: 0.8, zoomies: 0, leftOnRead: 1 };
+const KW_VALUE = { guard: 1.2, fluffy: 1.6, lifesnack: 1, doubleWag: 0, bitey: 2.2, sneaky: 0.8, zoomies: 0, leftOnRead: 1, tough: 1.5 };
 
 // Last Words and end-of-turn abilities are still to come, so they're worth something (until Shadowbanned).
 const LINGERING = new Set(["lastBark", "endTurn"]);

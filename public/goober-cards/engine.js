@@ -170,6 +170,7 @@ function damageCharacter(state, uid, amount, source) {
       emit(state, { t: "shield", uid });
       return 0;
     }
+    if (hasKw(e, "tough")) amount = Math.max(1, amount - 1);
     e.health -= amount;
     dealt = amount;
     if (source && source.kind === "minion" && hasKw(source.entity, "bitey") && e.health > 0) e.health = 0;
@@ -333,6 +334,7 @@ function resolveEffect(state, catalog, idx, effect, { targetUid = null, source =
     case "mana": me.mana = Math.min(MAX_MANA, me.mana + effect.amount); break;
     default: break;
   }
+  if (effect.armor) { me.hero.armor += effect.armor; emit(state, { t: "armor", player: idx, amount: effect.armor }); }
   if (effect.heal) healCharacter(state, me.hero.uid, effect.heal);
   if (effect.summon) for (let i = 0; i < (effect.summonCount || 1); i++) summonMinion(state, catalog, idx, effect.summon);
   if (effect.draw) for (let i = 0; i < effect.draw; i++) drawCard(state, idx);

@@ -214,7 +214,7 @@ export class Battle {
         el.style.setProperty("--cat", (CATEGORY_STYLE[def.category] || CATEGORY_STYLE.random).color);
       }
       const kws = m.keywords || [];
-      const cls = ["minion", def.rarity, m.shiny ? "shiny" : "", ...kws.filter(k => ["guard", "fluffy", "sneaky"].includes(k)), m.frozen ? "frozen" : "", m.silenced ? "silenced" : ""];
+      const cls = ["minion", def.rarity, m.shiny ? "shiny" : "", ...kws.filter(k => ["guard", "fluffy", "sneaky", "tough"].includes(k)), m.frozen ? "frozen" : "", m.silenced ? "silenced" : ""];
       if (mine && canAttack(this.state, this.me, m.uid) && this.canInput) cls.push("can-attack");
       if (mine && m.sick && !m.frozen && this.myTurn) cls.push("sick");
       if (this.sel?.uid === m.uid) cls.push("selected");
