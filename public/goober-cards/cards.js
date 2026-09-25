@@ -49,7 +49,7 @@ export const CATEGORY_STYLE = {
 // Hero power flavors. Each deck picks one; `target` is a validTargetsFor kind, or null for no target.
 export const HERO_POWERS = {
   classic: { id: "classic", name: "BARK FART", icon: "💨", cost: 2, target: "enemy", text: "Bark, then fart. Deal 1 damage to an enemy.", role: "Offense" },
-  smoke: { id: "smoke", name: "Smoke Screen", icon: "🛡️", cost: 3, target: null, text: "Gain 2 Drip (armor).", role: "Defense" },
+  smoke: { id: "smoke", name: "Smoke Screen", icon: "🛡️", cost: 2, target: null, text: "Gain 2 Drip (armor).", role: "Defense" },
   hype: { id: "hype", name: "Hype Fart", icon: "💪", cost: 2, target: "friendlyMinion", text: "Give a Goober that can attack +2 Attack this turn.", role: "Support" },
   heal: { id: "heal", name: "Healing Toot", icon: "🩹", cost: 2, target: "friendly", text: "Restore 2 Health to a friendly character.", role: "Sustain" }
 };
