@@ -20,6 +20,7 @@ async function call(path, { method = "GET", body } = {}) {
 
 export const friendsApi = {
   list: () => call(""),
+  all: () => call("/all"),
   request: username => call("/request", { method: "POST", body: { username } }),
   accept: id => call("/accept", { method: "POST", body: { id } }),
   decline: id => call("/decline", { method: "POST", body: { id } }),
