@@ -89,6 +89,8 @@ export function confirmDialog(title, body, { yes = "Yes", no = "Cancel", danger 
   });
 }
 
+export const creatorLine = card => (card?.creator ? `<p class="creator">✏️ Created by <b>${esc(card.creator)}</b></p>` : "");
+
 export function keywordGlossary(keywords = [], card = null) {
   const line = k => `<p class="kw-line"><b>${k.icon} ${k.label}</b><span>${k.text}</span></p>`;
   const effect = card?.effect || card?.ability;

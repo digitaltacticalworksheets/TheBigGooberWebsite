@@ -2,7 +2,7 @@
 import { playInfo, attackTargets, canAttack, powerTargets, legalActions, applyAction, BOARD_LIMIT, MAX_MANA } from "./engine.js";
 import { chooseAiAction } from "./ai.js";
 import { heroPowerOf, KEYWORDS, STATUS, CATEGORY_STYLE } from "./cards.js";
-import { $, esc, sleep, cardHTML, cardBackHTML, artHTML, modal, confirmDialog, keywordGlossary, onLongPress, toast } from "./ui.js";
+import { $, esc, sleep, cardHTML, cardBackHTML, artHTML, modal, confirmDialog, keywordGlossary, onLongPress, toast, creatorLine } from "./ui.js";
 import { sfx, buzz } from "./sound.js";
 
 export const EMOTES = { hello: "Sup 👋", wow: "W 🔥", oops: "L 😭", thanks: "💀💀💀", woof: "Skill issue 🤡", gg: "GG 🤝" };
@@ -331,7 +331,7 @@ export class Battle {
     if (!def) return;
     sfx.tap();
     const who = h.player === this.me ? "You played" : `${esc(this.state.players[h.player].name)} played`;
-    modal(`<div class="inspect">${cardHTML(def, { shiny: h.shiny })}<div class="details"><p><b>${who} this.</b></p>${def.flavor ? `<p><i>${esc(def.flavor)}</i></p>` : ""}${keywordGlossary(def.keywords, def)}</div><button class="btn primary" data-close>Close</button></div>`, { bare: true });
+    modal(`<div class="inspect">${cardHTML(def, { shiny: h.shiny })}<div class="details"><p><b>${who} this.</b></p>${def.flavor ? `<p><i>${esc(def.flavor)}</i></p>` : ""}${creatorLine(def)}${keywordGlossary(def.keywords, def)}</div><button class="btn primary" data-close>Close</button></div>`, { bare: true });
   }
 
   renderTip() {
@@ -676,7 +676,7 @@ export class Battle {
     }
     if (!def) return;
     sfx.tap();
-    modal(`<div class="inspect">${cardHTML(def, { shiny, stats })}<div class="details">${def.flavor ? `<p><i>${esc(def.flavor)}</i></p>` : ""}${keywordGlossary(def.keywords, def)}${notes.map(n => `<p>${esc(n)}</p>`).join("")}</div><button class="btn primary" data-close>Close</button></div>`, { bare: true });
+    modal(`<div class="inspect">${cardHTML(def, { shiny, stats })}<div class="details">${def.flavor ? `<p><i>${esc(def.flavor)}</i></p>` : ""}${creatorLine(def)}${keywordGlossary(def.keywords, def)}${notes.map(n => `<p>${esc(n)}</p>`).join("")}</div><button class="btn primary" data-close>Close</button></div>`, { bare: true });
   }
 
   openMenu() {
