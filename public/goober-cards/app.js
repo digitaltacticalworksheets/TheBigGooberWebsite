@@ -13,6 +13,7 @@ import { sfx, setSoundEnabled, buzz } from "./sound.js";
 import { prepareDrawing } from "./image.js";
 import { friendsApi, startPresence, stopPresence, setPresence, STATUS_LABEL } from "./friends.js";
 import { watchForUpdates } from "./updates.js";
+import { trophyProgress, trophySummary, newTrophyTiers, TIER_NAMES, TIER_MEDALS } from "./trophies.js";
 
 const app = document.getElementById("app");
 const GOOBER_CACHE_KEY = "gooberCardsGoobers";
@@ -79,8 +80,48 @@ function route() {
     case "collection": return renderCollection();
     case "decks": return renderDecks();
     case "deck": return renderBuilder(arg);
+    case "trophies": return renderTrophies();
     default: return renderHome();
   }
+}
+
+// Toast any trophy tiers reached since the player last looked. A big batch (e.g. the
+// first time trophies show up for a veteran) becomes one summary toast.
+function announceTrophies() {
+  const fresh = newTrophyTiers(profile(), catalog);
+  if (!fresh.length) return;
+  store.saveProfile();
+  sfx.shiny?.();
+  if (fresh.length > 2) { toast(`🏆 ${fresh.length} trophies unlocked! Check the Trophy Room.`, "good"); return; }
+  for (const t of fresh) toast(`${TIER_MEDALS[t.tier]} Trophy: ${t.name}${t.goals.length > 1 ? ` (${TIER_NAMES[t.tier]})` : ""}`, "good");
+}
+
+// ------------------------------------------------------------------ trophy room
+function renderTrophies() {
+  const list = trophyProgress(profile(), catalog);
+  const sum = trophySummary(list);
+  newTrophyTiers(profile(), catalog);
+  store.saveProfile();
+  app.innerHTML = `<div class="screen">
+    ${topbar("Trophy Room")}
+    <div class="trophy-summary">
+      <div><b>${sum.score}</b><small>/ ${sum.max} trophy points</small></div>
+      <span>🥇 ${sum.gold}</span><span>🥈 ${sum.silver}</span><span>🥉 ${sum.bronze}</span>
+    </div>
+    <div class="trophy-shelf">${list.map(t => {
+      const pct = t.nextGoal === null ? 100 : Math.min(100, Math.round((t.value / t.nextGoal) * 100));
+      const steps = t.goals.length > 1 ? `<div class="trophy-steps">${t.goals.map((g, i) => `<i class="${t.tier > i ? "on" : ""}" title="${TIER_NAMES[i + 1]}: ${esc(t.goal(g))}">${TIER_MEDALS[i + 1]}</i>`).join("")}</div>` : "";
+      return `<div class="trophy tier-${t.tier}">
+        <div class="trophy-icon"><span>${t.icon}</span><em>${TIER_MEDALS[t.tier]}</em></div>
+        <div class="trophy-body">
+          <b>${esc(t.name)}</b>
+          <small>${t.nextGoal === null ? `✅ ${esc(t.goal(t.goals[t.goals.length - 1]))}` : `Next: ${esc(t.text)}`}</small>
+          <div class="trophy-bar"><i style="width:${pct}%"></i><span>${t.nextGoal === null ? "Maxed" : `${t.value} / ${t.nextGoal}`}</span></div>
+          ${steps}
+        </div>
+      </div>`;
+    }).join("")}</div>
+  </div>`;
 }
 
 // The Goober coin, used wherever coins are shown.
@@ -128,6 +169,7 @@ function renderHome() {
       <button class="tile blue" data-rules><span class="ico">📖</span><b>How to Play</b><span>Read this or get cooked</span></button>
       <a class="tile orange" href="#draw"><span class="ico">✏️</span><b>Draw a Goober</b><span>${account.currentUser() ? "Your drawing becomes a card" : "Log in to upload yours"}</span></a>
       <button class="tile white" data-hero><span class="ico">🖼️</span><b>My Portrait</b><span>Pick your main</span></button>
+      <a class="tile gold wide" href="#trophies"><span class="ico">🏆</span><b>Trophy Room</b><span>${(() => { const s = trophySummary(trophyProgress(p, catalog)); return `${s.score}/${s.max} trophy points · 🥇 ${s.gold}`; })()}</span></a>
     </div>
     <div class="home-foot">
       <span class="muted">${account.currentUser() ? "☁️ Your cards are saved to your account." : "Playing as a guest: cards only live on this device."}</span>
@@ -142,7 +184,7 @@ function renderHome() {
   if (nudge) nudge.onclick = () => showAccount("signup");
   $("[data-hero]", app).onclick = pickPortrait;
   if (!p.name) askName();
-  else maybeDaily();
+  else { maybeDaily(); announceTrophies(); }
 }
 
 // First visit: make an account, log in, or play as a guest.
@@ -777,7 +819,7 @@ function startSolo(level) {
     onExit: () => exitMatch(),
     onEnd: async ({ won, draw }) => {
       const reward = won ? AI_LEVELS[level].reward : draw ? 20 : 15;
-      const result = await account.econ.finishSolo({ ticket: await ticket, won, draw, reward });
+      const result = await account.econ.finishSolo({ ticket: await ticket, won, draw, reward, level });
       showResult({ won, draw, coins: result.coins, firstWin: result.firstWin, again: () => { exitMatch(false); startSolo(level); }, deckName: deck.name });
     }
   });
@@ -840,6 +882,7 @@ function showResult({ won, draw, coins, firstWin, again, onlineRoom, rank }) {
   if (packs) packs.onclick = () => { m.close(); exitMatch(false); history.replaceState(null, "", "#packs"); route(); };
   $("[data-again]", m.el).onclick = () => { m.close(); again(); };
   if (coins) sfx.coins();
+  setTimeout(announceTrophies, 1200);
 }
 
 // ------------------------------------------------------------------ online
@@ -1092,7 +1135,7 @@ function joinOnline(code, { watch = false, challenge = false } = {}) {
         result = online?.lastReward || { coins: 0 };
         await account.econ.refresh();
       } else {
-        result = store.recordResult({ won, reward: won ? 100 : 30 });
+        result = store.recordResult({ won, reward: won ? 100 : 30, online: true });
       }
       showResult({
         won, draw, coins: result.coins, firstWin: result.firstWin, onlineRoom: true, rank: result.rank,
