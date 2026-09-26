@@ -43,7 +43,9 @@ export function freshProfile() {
     decks: [],
     activeDeck: null,
     pity: 0,
-    stats: { wins: 0, losses: 0, packsOpened: 0, shinies: 0, streak: 0 },
+    stats: { wins: 0, losses: 0, packsOpened: 0, shinies: 0, streak: 0, bestStreak: 0, bossWins: 0, onlineWins: 0 },
+    trophiesSeen: {},
+    tutorialDone: false,
     lastDaily: "",
     lastWinDay: "",
     rewardDay: { day: "", solo: 0, online: 0 },
@@ -65,6 +67,8 @@ export function normalizeProfile(data) {
   const p = { ...freshProfile(), ...(data && typeof data === "object" ? data : {}) };
   p.settings = { sound: true, haptics: true, ...(p.settings || {}) };
   p.stats = { ...freshProfile().stats, ...(p.stats || {}) };
+  p.stats.bestStreak = Math.max(p.stats.bestStreak || 0, p.stats.streak || 0);
+  p.trophiesSeen = p.trophiesSeen && typeof p.trophiesSeen === "object" ? p.trophiesSeen : {};
   p.packs = { goober: 0, gallery: 0, ...(p.packs || {}) };
   p.cards = p.cards && typeof p.cards === "object" ? p.cards : {};
   p.decks = Array.isArray(p.decks) ? p.decks : [];
@@ -258,12 +262,16 @@ export function craftCard(p, id, catalog) {
 }
 
 // Apply a finished match: pay the reward (plus the first-win bonus) and update stats.
-export function recordResult(p, { won, reward, day }) {
+// `level` is the solo opponent ("biggoober" = Final Boss); `online` marks online matches.
+export function recordResult(p, { won, reward, day, level = null, online = false }) {
   let coins = Math.max(0, Math.floor(reward) || 0);
   let firstWin = false;
   if (won) {
     p.stats.wins += 1;
     p.stats.streak += 1;
+    p.stats.bestStreak = Math.max(p.stats.bestStreak || 0, p.stats.streak);
+    if (level === "biggoober") p.stats.bossWins = (p.stats.bossWins || 0) + 1;
+    if (online) p.stats.onlineWins = (p.stats.onlineWins || 0) + 1;
     if (p.lastWinDay !== day) { p.lastWinDay = day; coins += FIRST_WIN_BONUS; firstWin = true; }
   } else {
     p.stats.losses += 1;
@@ -292,6 +300,11 @@ function applyEditableFields(p, c) {
   if (c.settings && typeof c.settings === "object") p.settings = { sound: c.settings.sound !== false, haptics: c.settings.haptics !== false };
   if (typeof c.hero === "string" && ownedCount(p, c.hero)) p.hero = c.hero;
   if (typeof c.tutorialSeen === "boolean") p.tutorialSeen = c.tutorialSeen;
+  if (typeof c.tutorialDone === "boolean") p.tutorialDone = p.tutorialDone || c.tutorialDone;
+  // Which trophy tiers the player has already been told about (cosmetic, so the device may set it).
+  if (c.trophiesSeen && typeof c.trophiesSeen === "object") {
+    p.trophiesSeen = Object.fromEntries(Object.entries(c.trophiesSeen).slice(0, 60).filter(([k, v]) => /^[a-z-]{1,24}$/.test(k) && Number.isInteger(v) && v >= 0 && v <= 3));
+  }
 }
 
 const seenList = c => (Array.isArray(c?.seenQueue) ? c.seenQueue.slice(0, 500).map(String) : []);

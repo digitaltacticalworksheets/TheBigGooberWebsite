@@ -192,8 +192,8 @@ export function playableDeck(catalog) {
   };
 }
 
-export function recordResult({ won, reward }) {
-  const res = econ.recordResult(loadProfile(), { won, reward, day: today() });
+export function recordResult({ won, reward, level = null, online = false }) {
+  const res = econ.recordResult(loadProfile(), { won, reward, day: today(), level, online });
   saveProfile();
   return res;
 }

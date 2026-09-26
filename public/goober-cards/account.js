@@ -189,8 +189,8 @@ export const econ = {
     const r = await serverEcon("solo-start", { level });
     return r.ok ? r.ticket : null;
   },
-  async finishSolo({ ticket, won, draw, reward }) {
-    if (!loggedIn()) return store.recordResult({ won, reward });
+  async finishSolo({ ticket, won, draw, reward, level }) {
+    if (!loggedIn()) return store.recordResult({ won, reward, level });
     if (!ticket) return { ok: false, coins: 0 };
     const r = await serverEcon("solo-finish", { ticket, won, draw });
     return r.ok ? r : { ...r, coins: 0 };
