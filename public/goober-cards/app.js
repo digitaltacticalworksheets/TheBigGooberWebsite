@@ -8,7 +8,7 @@ import { OnlineMatch, createRoom, findMatch, liveGames, roomStatus, hasSeatIn } 
 import * as store from "./collection.js";
 import { RANK_TIERS, RANK_POINTS, tierFor, nextTier, craftCostFor, isCreator, CREATOR_DISCOUNT } from "./economy.js";
 import * as account from "./account.js";
-import { $, $$, esc, sleep, cardHTML, cardBackHTML, toast, modal, confirmDialog, keywordGlossary, onLongPress } from "./ui.js";
+import { $, $$, esc, sleep, cardHTML, cardBackHTML, toast, modal, confirmDialog, keywordGlossary, onLongPress, creatorLine } from "./ui.js";
 import { sfx, setSoundEnabled, buzz } from "./sound.js";
 import { prepareDrawing } from "./image.js";
 import { friendsApi, startPresence, stopPresence, setPresence, STATUS_LABEL } from "./friends.js";
@@ -1321,7 +1321,7 @@ function showCardDetail(id, refresh) {
     <div class="details">
       ${mine ? `<p class="creator-note">✏️ <b>You drew this Goober.</b> Creator price: ${Math.round(CREATOR_DISCOUNT * 100)}% off crafting.</p>` : ""}
       <p><b>${RARITY_LABEL[card.rarity]}</b> · ${card.type === "spell" ? "Spell" : `${CATEGORY_STYLE[card.category]?.icon || ""} ${esc(card.category)} Goober`} · You own <b>${n}</b>${s ? ` (✨${s} shiny)` : ""}</p>
-      ${card.flavor ? `<p><i>${esc(card.flavor)}</i></p>` : ""}
+      ${card.flavor ? `<p><i>${esc(card.flavor)}</i></p>` : ""}${creatorLine(card)}
       ${keywordGlossary(card.keywords, card)}
       <div class="row" style="margin-top:10px">
         ${canCraft ? `<button class="btn small primary" data-craft>🔨 Craft (${COIN}${cost})</button>` : ""}

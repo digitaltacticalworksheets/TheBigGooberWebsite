@@ -221,7 +221,8 @@ export function cardFromGoober(goober) {
     keywords,
     ability,
     art: { image: goober.imageUrl || "" },
-    flavor: String(goober.description || "").slice(0, 160)
+    flavor: String(goober.description || "").slice(0, 160),
+    ...(goober.creator ? { creator: String(goober.creator).slice(0, 24) } : {})
   };
   card.text = describeMinion(card);
   return card;

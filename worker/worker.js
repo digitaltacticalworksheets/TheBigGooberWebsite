@@ -745,7 +745,53 @@ const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const NO_STORE_HEADERS = { "cache-control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0", "pragma": "no-cache", "expires": "0", "surrogate-control": "no-store", "cdn-cache-control": "no-store", "cloudflare-cdn-cache-control": "no-store" };
 function createRoomCode() { const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let code = ""; const bytes = new Uint8Array(6); crypto.getRandomValues(bytes); for (const byte of bytes) code += alphabet[byte % alphabet.length]; return code; }
 function getRoomCodeFromPath(pathname) { const match = pathname.match(/^\/api\/card-battle\/([A-Z0-9]{4,12})(?:\/socket|\/setup)?$/i); return match ? match[1].toUpperCase() : ""; }
-async function listGoobers(env) { const result = await env.DB.prepare(`SELECT id, name, category, description, image_key, image_type, created_at FROM goobers WHERE approved = 1 ORDER BY created_at DESC`).all(); return jsonResponse((result.results || []).map(row => ({ id: row.id, name: row.name, category: row.category, description: row.description, imageUrl: `/api/goober-image/${row.image_key}`, createdAt: row.created_at })), 200, NO_STORE_HEADERS); }
+async function listGoobers(env) {
+  const result = await env.DB.prepare(`SELECT id, name, category, description, image_key, image_type, created_at FROM goobers WHERE approved = 1 ORDER BY created_at DESC`).all();
+  const rows = result.results || [];
+  const creators = await gooberCreators(env, rows);
+  return jsonResponse(rows.map(row => ({ id: row.id, name: row.name, category: row.category, description: row.description, imageUrl: `/api/goober-image/${row.image_key}`, createdAt: row.created_at, ...(creators[row.id] ? { creator: creators[row.id] } : {}) })), 200, NO_STORE_HEADERS);
+}
+
+// --- "Created by" -------------------------------------------------------------
+// The creators table is created on first use (also in migrations/0003), so a deploy
+// works even before the migration is applied.
+let creatorsTableReady = false;
+async function ensureCreatorsTable(env) {
+  if (creatorsTableReady) return;
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS goober_creators (goober_id TEXT PRIMARY KEY, user_id TEXT NOT NULL)`).run();
+  creatorsTableReady = true;
+}
+
+async function recordGooberCreator(env, gooberId, userId) {
+  await ensureCreatorsTable(env);
+  await env.DB.prepare(`INSERT INTO goober_creators (goober_id, user_id) VALUES (?, ?) ON CONFLICT(goober_id) DO NOTHING`).bind(gooberId, String(userId)).run();
+}
+
+const CREATOR_BACKFILL_PER_REQUEST = 15;
+
+// Goober id -> creator username. Older uploads are filled in a few at a time from the
+// uploader saved with each image; a creator lookup failing never breaks the gallery.
+async function gooberCreators(env, rows) {
+  try {
+    await ensureCreatorsTable(env);
+    const { results } = await env.DB.prepare(`SELECT c.goober_id, c.user_id, u.username FROM goober_creators c LEFT JOIN users u ON u.id = c.user_id`).all();
+    const known = new Map(results.map(r => [r.goober_id, r]));
+    const missing = rows.filter(r => !known.has(r.id)).slice(0, CREATOR_BACKFILL_PER_REQUEST);
+    await Promise.all(missing.map(async row => {
+      const object = await env.GOOBER_IMAGES.head(row.image_key).catch(() => null);
+      const userId = cleanText(object?.customMetadata?.uploaderId, 64);
+      await env.DB.prepare(`INSERT INTO goober_creators (goober_id, user_id) VALUES (?, ?) ON CONFLICT(goober_id) DO NOTHING`).bind(row.id, userId).run();
+      const user = userId ? await env.DB.prepare(`SELECT username FROM users WHERE id = ?`).bind(userId).first() : null;
+      known.set(row.id, { user_id: userId, username: user?.username || null });
+    }));
+    const out = {};
+    for (const [id, r] of known) if (r.username) out[id] = r.username;
+    return out;
+  } catch (error) {
+    console.error("Creator lookup failed", error);
+    return {};
+  }
+}
 async function uploadGoober(request, env) {
   const formData = await request.formData();
   const name = cleanText(formData.get("name"), 80), category = cleanText(formData.get("category"), 30), description = cleanText(formData.get("description"), 280), image = formData.get("image");
@@ -781,6 +827,8 @@ async function uploadGoober(request, env) {
   const id = crypto.randomUUID(), extension = kind.ext, imageKey = `goobers/${id}.${extension}`;
   await env.GOOBER_IMAGES.put(imageKey, bytes, { httpMetadata: { contentType: kind.type }, customMetadata: { originalName: image.name || "goober-upload", gooberName: name, uploaderId: String(user.id), uploader: user.username, moderation: moderation.verdict, moderationReason: moderation.reason.slice(0, 200) } });
   await env.DB.prepare(`INSERT INTO goobers (id, name, category, description, image_key, image_type, approved, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`).bind(id, name, category, description, imageKey, kind.type, approved).run();
+  try { await recordGooberCreator(env, id, user.id); }
+  catch (error) { console.error("Couldn't record the Goober's creator", error); }
   // The uploader doesn't get the card for free: remember it so they can craft it at the creator price.
   const imageUrl = `/api/goober-image/${imageKey}`;
   const card = cardFromGoober({ id, name, category, description, imageUrl });

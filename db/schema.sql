@@ -18,3 +18,7 @@ CREATE TABLE IF NOT EXISTS goobers (
 
 CREATE INDEX IF NOT EXISTS idx_goobers_approved_created
 ON goobers (approved, created_at);
+CREATE TABLE IF NOT EXISTS goober_creators (
+  goober_id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL
+);
