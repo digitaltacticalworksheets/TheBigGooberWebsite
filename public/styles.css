@@ -326,3 +326,10 @@ footer {
 }
 @keyframes logoBob { 50% { transform: rotate(-1deg) translateY(-6px); } }
 @media (prefers-reduced-motion: reduce) { .hero-logo { animation: none; } }
+
+/* Header mark: the Big Goober logo as a small sticker instead of a white box. */
+.logo-mark { width: 60px; height: 63px; padding: 0; border: 0; border-radius: 0; overflow: visible; background: none; box-shadow: none; }
+.logo-mark img {
+  filter: drop-shadow(2px 0 0 #fff8e7) drop-shadow(-2px 0 0 #fff8e7) drop-shadow(0 2px 0 #fff8e7) drop-shadow(0 -2px 0 #fff8e7)
+    drop-shadow(0 0 10px rgba(255, 211, 77, 0.55));
+}
