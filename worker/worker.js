@@ -866,11 +866,14 @@ const MODERATION_IMAGE_LIMIT = 3.5 * 1024 * 1024;
 const VISION_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct";
 const TEXT_GUARD_MODEL = "@cf/meta/llama-guard-3-8b";
 const GUARD_CATEGORIES = { S1: "violent crime", S2: "crime", S3: "sexual crime", S4: "child safety", S5: "defamation", S6: "dangerous advice", S7: "private info", S8: "IP", S9: "weapons", S10: "hate", S11: "self-harm", S12: "sexual content", S13: "elections", S14: "code abuse" };
-const MODERATION_PROMPT = `You moderate uploads for a website where middle schoolers (ages 11-14) share hand-drawn cartoon dogs called "Goobers". Each upload becomes a trading card in a funny meme card game.
+const MODERATION_PROMPT = `You moderate uploads for a website where middle schoolers (ages 11-14) share hand-drawn cartoon characters called "Goobers". Each upload becomes a trading card in a funny meme card game.
 
-ALLOW: silly or chaotic drawings, meme references, cartoon slapstick, cartoon weapons like swords or water guns, mild gross-out humor (farts, burps, boogers), spooky or monster themes, playful trash talk, mild words like "dumb", "butt", "sus".
+Goobers started as loaf-shaped cartoon dogs, but a Goober can be ANY creature or character: cats, frogs, birds, fish, food, monsters, robots, people-shaped doodles, anything. Never block or review an upload because it isn't a dog, doesn't look like the original Goober, or is off-theme. Only safety matters.
+
+ALLOW: any cartoon animal or creature (cat Goobers are welcome), silly or chaotic drawings, meme references, cartoon slapstick, cartoon weapons like swords or water guns, mild gross-out humor (farts, burps, boogers), spooky or monster themes, playful trash talk, mild words like "dumb", "butt", "sus".
 BLOCK anything with: nudity or sexual content or innuendo; slurs, hate speech, or hate symbols; graphic gore or realistic violence; drugs, alcohol, vaping, or smoking; self-harm or suicide; swear words (including censored or misspelled ones); real people's photos or faces; personal info such as full names, addresses, phone numbers, school names, or social handles; bullying aimed at a real person.
-REVIEW if you truly cannot tell, or if the image is not a drawing at all (for example a screenshot or a photo).
+REVIEW if you truly cannot tell whether something breaks the BLOCK rules, or if the image is not a drawing at all (for example a screenshot or a photo).
+If nothing breaks the BLOCK rules, the verdict is "allow".
 
 Judge the image AND the name and description together. Reply with JSON only: {"verdict":"allow"|"review"|"block","reason":"short kid-friendly reason"}`;
 
