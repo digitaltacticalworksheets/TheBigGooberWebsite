@@ -315,3 +315,14 @@ footer {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
+
+/* Big Goober Website logo: a cream "sticker" outline so the black shape reads on the dark page. */
+.hero-logo {
+  display: block; width: clamp(170px, 24vw, 280px); height: auto; margin: 0 0 18px 4px;
+  transform: rotate(-4deg);
+  filter: drop-shadow(3px 0 0 #fff8e7) drop-shadow(-3px 0 0 #fff8e7) drop-shadow(0 3px 0 #fff8e7) drop-shadow(0 -3px 0 #fff8e7)
+    drop-shadow(0 6px 0 #000) drop-shadow(0 0 22px rgba(255, 211, 77, 0.45));
+  animation: logoBob 4s ease-in-out infinite;
+}
+@keyframes logoBob { 50% { transform: rotate(-1deg) translateY(-6px); } }
+@media (prefers-reduced-motion: reduce) { .hero-logo { animation: none; } }
