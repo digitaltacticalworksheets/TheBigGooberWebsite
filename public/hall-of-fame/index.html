@@ -97,6 +97,11 @@
     .spotlight .frame { padding: 20px; animation: glow 4s ease-in-out infinite; }
     @keyframes glow { 50% { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.5), inset 0 0 0 6px var(--gold-1), inset 0 0 0 8px var(--gold-4), 0 18px 40px rgba(0, 0, 0, 0.6), 0 0 70px rgba(255, 210, 80, 0.45); } }
     .spotlight .plaque h3 { font-size: 1.5rem; }
+    .spotlight.founder { max-width: 460px; }
+    .spotlight.founder .frame { background: linear-gradient(135deg, #8a6a12 0%, #ffe37a 25%, #fffbe0 42%, #ffd84d 58%, #6e4c06 100%); }
+    .spotlight.founder .label::after { content: " 👑"; }
+    .pedestal { width: 78%; height: 46px; margin-top: 14px; border-radius: 4px 4px 10px 10px; background: linear-gradient(180deg, #f3eee6, #cfc6b8 60%, #a89e8f); box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.8), inset 0 -6px 10px rgba(0, 0, 0, 0.25), 0 14px 30px rgba(0, 0, 0, 0.6); position: relative; }
+    .pedestal::before { content: ""; position: absolute; left: -6%; right: -6%; top: -10px; height: 12px; border-radius: 4px; background: linear-gradient(180deg, #fffaf2, #d9d0c2); box-shadow: 0 3px 6px rgba(0, 0, 0, 0.35); }
 
     /* The wall */
     .wall-title { margin: 56px 0 22px; text-align: center; font-family: "Cinzel", serif; font-weight: 800; letter-spacing: 0.3em; color: var(--gold-3); }
@@ -174,9 +179,9 @@
         <div class="frame"><div class="mat"><img src="${esc(g.imageUrl)}" alt="${esc(g.name)}" loading="lazy" /></div></div>
         <div class="plaque">
           <h3>${esc(g.name)}</h3>
-          ${g.creator ? `<div class="by">Drawn by ${esc(g.creator)}</div>` : `<div class="by">${esc(g.category || "classic")} Goober</div>`}
+          ${g.byline ? `<div class="by">${esc(g.byline)}</div>` : g.creator ? `<div class="by">Drawn by ${esc(g.creator)}</div>` : `<div class="by">${esc(g.category || "classic")} Goober</div>`}
           ${fame.note ? `<q>${esc(fame.note)}</q>` : ""}
-          ${fame.inductedAt ? `<span class="date">Inducted ${esc(fmtDate(fame.inductedAt))}</span>` : ""}
+          ${fame.founding ? `<span class="date">Founding Member · Est. MMXXVI</span>` : fame.inductedAt ? `<span class="date">Inducted ${esc(fmtDate(fame.inductedAt))}</span>` : ""}
         </div>
       </${tag}>`;
     }
@@ -196,27 +201,30 @@
       }
     }
 
+    // Built-in Goobers that aren't uploads: permanent founding members of the hall.
+    const FOUNDERS = [
+      { id: "original-goober", name: "Original Goober", category: "classic", imageUrl: "/assets/original-goober.jpg", byline: "The one that started it all", hallOfFame: { note: "The founding Goober. Where it all began.", founding: true } }
+    ];
+
     async function load() {
       const hall = document.getElementById("hall");
-      let goobers = [];
+      let goobers = [], offline = false;
       try {
         const res = await fetch("/api/goobers", { cache: "no-store" });
         if (!res.ok) throw new Error();
         goobers = await res.json();
       } catch {
-        hall.innerHTML = `<p class="empty">The hall is closed for cleaning. Try again in a bit.</p>`;
-        return;
+        offline = true;
       }
-      const legends = goobers.filter(g => g.hallOfFame).sort((a, b) => String(b.hallOfFame.inductedAt).localeCompare(String(a.hallOfFame.inductedAt)));
-      document.getElementById("count").textContent = legends.length ? `${legends.length} LEGEND${legends.length === 1 ? "" : "S"} INDUCTED` : "EST. MMXXVI";
-      if (!legends.length) {
-        hall.innerHTML = `<div class="empty"><div class="rope">🏛️</div><p>The velvet ropes are up and the walls are bare. The hall awaits its first legend.</p><p><a href="/#goobers">Browse the gallery →</a></p></div>`;
-        return;
-      }
-      const [newest, ...rest] = legends;
+      const inducted = goobers.filter(g => g.hallOfFame).sort((a, b) => String(b.hallOfFame.inductedAt).localeCompare(String(a.hallOfFame.inductedAt)));
+      const legends = [...FOUNDERS, ...inducted];
+      document.getElementById("count").textContent = `${legends.length} LEGEND${legends.length === 1 ? "" : "S"} INDUCTED`;
+      const [newest, ...rest] = inducted;
       hall.innerHTML = `
-        <section class="spotlight"><div class="label">✦ NEWEST LEGEND ✦</div>${exhibitHTML(newest)}</section>
-        ${rest.length ? `<h2 class="wall-title">THE WALL OF LEGENDS</h2><section class="wall">${rest.map(g => exhibitHTML(g)).join("")}</section>` : ""}`;
+        <section class="spotlight founder"><div class="label">✦ FOUNDING LEGEND ✦</div>${FOUNDERS.map(g => exhibitHTML(g)).join("")}<div class="pedestal" aria-hidden="true"></div></section>
+        ${newest ? `<section class="spotlight"><div class="label">✦ NEWEST LEGEND ✦</div>${exhibitHTML(newest)}</section>` : ""}
+        ${rest.length ? `<h2 class="wall-title">THE WALL OF LEGENDS</h2><section class="wall">${rest.map(g => exhibitHTML(g)).join("")}</section>` : ""}
+        ${offline ? `<p class="empty">The rest of the hall is closed for cleaning. Try again in a bit.</p>` : !inducted.length ? `<p class="empty">More legends will join the founder soon. <a href="/#goobers">Browse the gallery →</a></p>` : ""}`;
       hall.addEventListener("click", e => {
         const id = e.target.closest("[data-id]")?.dataset.id;
         const g = legends.find(x => x.id === id);

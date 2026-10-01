@@ -137,7 +137,9 @@ function getGooberFromCard(card) {
     name: card.dataset.name || title?.textContent || "Goober",
     category: card.dataset.category || "classic",
     description: card.dataset.description || description?.textContent || "A mysterious Goober with powerful Goober energy.",
-    imageUrl: image?.getAttribute("src") || "/assets/original-goober.jpg"
+    imageUrl: image?.getAttribute("src") || "/assets/original-goober.jpg",
+    // Built-in Goobers in the Hall of Fame are permanent founding members.
+    ...(card.dataset.hallOfFame ? { hallOfFame: { note: card.dataset.hallOfFame, founding: true } } : {})
   };
 }
 
@@ -263,7 +265,7 @@ function renderViewerFame() {
     plaque.hidden = !goober?.hallOfFame;
     if (goober?.hallOfFame) {
       plaque.querySelector("[data-fame-note]").textContent = goober.hallOfFame.note ? `“${goober.hallOfFame.note}”` : "";
-      plaque.querySelector("[data-fame-date]").textContent = `Inducted ${String(goober.hallOfFame.inductedAt || "").slice(0, 10)}`;
+      plaque.querySelector("[data-fame-date]").textContent = goober.hallOfFame.founding ? "Founding Legend" : `Inducted ${String(goober.hallOfFame.inductedAt || "").slice(0, 10)}`;
     }
   }
   if (button) button.textContent = goober?.hallOfFame ? "Remove from Hall of Fame" : "🏆 Add to Hall of Fame";
