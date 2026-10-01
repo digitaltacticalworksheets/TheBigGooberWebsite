@@ -21,8 +21,15 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Nunito:wght@600;700;800;900&display=swap" />
-  <link rel="stylesheet" href="/styles.css?v=2026-09-27.3" />
-  <script src="/app.js?v=2026-09-25.3" defer></script>
+  <link rel="stylesheet" href="/styles.css?v=2026-10-01.2" />
+  <script>
+    // Halloween theme for all of October (the visitor's local date). ?halloween=1 previews it, ?halloween=0 turns it off.
+    (function () {
+      var force = new URLSearchParams(location.search).get("halloween");
+      if (force === "1" || (force !== "0" && new Date().getMonth() === 9)) document.documentElement.classList.add("halloween");
+    })();
+  </script>
+  <script src="/app.js?v=2026-10-01.2" defer></script>
 </head>
 
 <body>
@@ -36,6 +43,7 @@
 
     <nav>
       <a href="#goobers">Goober Gallery</a>
+      <a href="/hall-of-fame/">Hall of Fame</a>
       <a href="/goober-cards/">Goober Cards</a>
       <a href="#about">What is a Goober?</a>
       <a href="#upload">Add Goober</a>
@@ -257,8 +265,15 @@
         <span class="viewer-category" id="viewerCategory">classic Goober</span>
         <h2 id="viewerTitle">Original Goober</h2>
         <p id="viewerDescription">The founding Goober. Soft, simple, and completely loafed up.</p>
+        <div class="viewer-fame" id="viewerFame" hidden>
+          <b>🏆 Goober Hall of Fame</b>
+          <i data-fame-note></i>
+          <small data-fame-date></small>
+          <a href="/hall-of-fame/">Visit the Hall →</a>
+        </div>
         <p>Click outside the card or press Escape to return to the gallery.</p>
         <div class="viewer-admin" id="viewerAdmin" hidden>
+          <button class="fame-goober" id="viewerFameToggle" type="button">🏆 Add to Hall of Fame</button>
           <button class="delete-goober" id="viewerDelete" type="button">🗑️ Delete this Goober</button>
           <span class="viewer-admin-status" id="viewerAdminStatus"></span>
         </div>

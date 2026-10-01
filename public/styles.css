@@ -85,7 +85,7 @@ header::before {
 nav { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
 
 /* ---------- Buttons ---------- */
-nav a, .nav-account, .button, .filter-btn, .upload-button, .gallery-search-button, .delete-goober {
+nav a, .nav-account, .button, .filter-btn, .upload-button, .gallery-search-button, .delete-goober, .fame-goober {
   position: relative; overflow: hidden;
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   padding: 10px 16px; border-radius: 14px;
@@ -321,4 +321,94 @@ footer {
 .logo-mark img {
   filter: drop-shadow(2px 0 0 #fff8e7) drop-shadow(-2px 0 0 #fff8e7) drop-shadow(0 2px 0 #fff8e7) drop-shadow(0 -2px 0 #fff8e7)
     drop-shadow(0 0 10px rgba(255, 211, 77, 0.55));
+}
+
+/* Hall of Fame marking in the gallery */
+.goober-card.hall-of-fame {
+  background: linear-gradient(160deg, #fff6d6, #ffd76a);
+  box-shadow: 0 0 0 3px #ffcf3f, 0 0 0 6px #000, 0 0 26px rgba(255, 196, 40, 0.75), 0 14px 34px rgba(0, 0, 0, 0.5);
+}
+.goober-image { position: relative; }
+.hof-ribbon {
+  position: absolute; top: 10px; left: -4px; z-index: 2; padding: 4px 12px 4px 10px;
+  background: linear-gradient(90deg, #b8860b, #ffd84d 45%, #fff3b0 55%, #ffd84d 65%, #b8860b);
+  color: #2a1b00; font-weight: 900; font-size: 0.78rem; letter-spacing: 0.03em; text-transform: uppercase;
+  border: 2px solid #000; border-left: 0; border-radius: 0 999px 999px 0; box-shadow: 0 3px 0 #000;
+}
+.viewer-fame {
+  display: grid; gap: 4px; margin: 4px 0 12px; padding: 12px 14px; border-radius: 14px;
+  background: linear-gradient(135deg, rgba(255, 216, 77, 0.22), rgba(184, 134, 11, 0.18)); border: 2px solid #ffcf3f;
+}
+.viewer-fame b { color: #ffd84d; font-family: var(--display); font-size: 1.15rem; letter-spacing: 0.04em; text-transform: uppercase; }
+.viewer-fame i:empty { display: none; }
+.viewer-fame small { color: var(--muted); font-weight: 800; }
+.viewer-fame a { color: #ffd84d; font-weight: 900; }
+.fame-goober { margin-top: 12px; color: #2a1b00; background: linear-gradient(90deg, #ffd84d, #fff0a0); padding: 6px 12px; }
+
+/* ---------------------------------------------------------------------------
+   Halloween (October only; html.halloween is set by a script in <head>).
+   --------------------------------------------------------------------------- */
+html.halloween { --yellow: #ff8a1f; --pink: #b45cff; --blue: #7cff6b; --purple: #7b2cff; background: #08040d; }
+html.halloween body { background: transparent; }
+html.halloween body::before {
+  background:
+    radial-gradient(40% 35% at 20% 25%, rgba(123, 44, 255, 0.55), transparent 70%),
+    radial-gradient(35% 30% at 80% 20%, rgba(255, 120, 20, 0.35), transparent 70%),
+    radial-gradient(40% 35% at 70% 85%, rgba(90, 255, 110, 0.18), transparent 70%),
+    radial-gradient(35% 30% at 25% 85%, rgba(255, 138, 31, 0.3), transparent 70%);
+}
+html.halloween .logo span { color: #ff8a1f; text-shadow: 0 0 16px rgba(255, 120, 20, 0.7), 0 2px 0 #000; }
+html.halloween .hero-copy h1 {
+  background: linear-gradient(100deg, #fff 0%, #ffb347 22%, #ff7a00 38%, #b45cff 58%, #7cff6b 78%, #fff 100%);
+  background-size: 250% 100%; -webkit-background-clip: text; background-clip: text;
+  filter: drop-shadow(0 5px 0 #000) drop-shadow(0 0 26px rgba(255, 120, 20, 0.45));
+}
+html.halloween .goober-card { background: linear-gradient(160deg, #fff4e6, #ffcf99); box-shadow: 0 0 0 2px rgba(255, 138, 31, 0.7), 0 12px 30px rgba(0, 0, 0, 0.5); }
+html.halloween .goober-card:hover { box-shadow: 0 0 0 3px #ff8a1f, 0 0 30px rgba(255, 120, 20, 0.7), 0 18px 40px rgba(0, 0, 0, 0.55); }
+html.halloween .goober-card.hall-of-fame { box-shadow: 0 0 0 3px #ffcf3f, 0 0 0 6px #000, 0 0 26px rgba(255, 196, 40, 0.75), 0 14px 34px rgba(0, 0, 0, 0.5); }
+html.halloween .feature-card { box-shadow: 0 0 0 3px #ff8a1f, 0 0 40px rgba(255, 120, 20, 0.55), 0 20px 50px rgba(0, 0, 0, 0.6); }
+html.halloween footer::before { content: "🎃 "; }
+
+.spooky-banner {
+  display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 18px; padding: 8px 14px; border-radius: 14px;
+  background: linear-gradient(90deg, rgba(255, 120, 20, 0.22), rgba(123, 44, 255, 0.22)); border: 2px solid #ff8a1f;
+  color: #ffe2c2; font-weight: 800; text-decoration: none; box-shadow: 0 0 22px rgba(255, 120, 20, 0.35);
+}
+.spooky-banner b { color: #ffb347; }
+.spooky-banner span { color: #7cff6b; font-weight: 900; }
+.spooky-banner:hover { border-color: #7cff6b; }
+
+.spooky-fx { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+.spooky-fx .moon {
+  position: absolute; top: 130px; right: 6vw; width: clamp(70px, 11vw, 140px); aspect-ratio: 1; border-radius: 50%;
+  background: radial-gradient(circle at 38% 36%, #fffbe6, #ffe39a 45%, #f5b94a 75%);
+  box-shadow: 0 0 40px 10px rgba(255, 210, 120, 0.45), 0 0 120px 40px rgba(255, 160, 60, 0.18);
+}
+.spooky-fx .moon::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle at 62% 58%, rgba(200, 140, 40, 0.35) 0 9%, transparent 10%), radial-gradient(circle at 34% 66%, rgba(200, 140, 40, 0.3) 0 6%, transparent 7%), radial-gradient(circle at 60% 28%, rgba(200, 140, 40, 0.25) 0 5%, transparent 6%); }
+.spooky-fx .bat { position: absolute; top: var(--y); left: -60px; font-size: calc(1.8rem * var(--s)); filter: brightness(0.15) drop-shadow(0 0 6px rgba(255, 140, 40, 0.6)); animation: batFly var(--d) linear var(--delay) infinite; }
+@keyframes batFly {
+  0% { transform: translate(0, 0) scaleX(1); }
+  25% { transform: translate(28vw, -4vh) scaleX(1); }
+  50% { transform: translate(55vw, 3vh) scaleX(1); }
+  75% { transform: translate(82vw, -3vh) scaleX(1); }
+  100% { transform: translate(112vw, 2vh) scaleX(1); }
+}
+.spooky-fx .ghost { position: absolute; bottom: -80px; left: var(--x); font-size: 2.6rem; opacity: 0; animation: ghostRise var(--d) ease-in-out var(--delay) infinite; }
+@keyframes ghostRise {
+  0% { transform: translate(0, 0); opacity: 0; }
+  15% { opacity: 0.5; }
+  50% { transform: translate(6vw, -55vh); opacity: 0.35; }
+  85% { opacity: 0.15; }
+  100% { transform: translate(-4vw, -110vh); opacity: 0; }
+}
+.spooky-fx .fog {
+  position: absolute; left: -10%; right: -10%; bottom: -40px; height: 220px;
+  background: radial-gradient(45% 60% at 20% 80%, rgba(190, 170, 230, 0.22), transparent 70%), radial-gradient(40% 55% at 60% 90%, rgba(190, 170, 230, 0.18), transparent 70%), radial-gradient(35% 50% at 90% 85%, rgba(190, 170, 230, 0.2), transparent 70%);
+  filter: blur(14px); animation: fogDrift 18s ease-in-out infinite alternate;
+}
+@keyframes fogDrift { to { transform: translateX(6%); } }
+.spooky-fx .web { position: absolute; top: 0; left: 0; width: clamp(120px, 18vw, 220px); color: rgba(255, 255, 255, 0.28); }
+@media (prefers-reduced-motion: reduce) {
+  .spooky-fx .bat, .spooky-fx .ghost, .spooky-fx .fog { animation: none; }
+  .spooky-fx .ghost { display: none; }
 }

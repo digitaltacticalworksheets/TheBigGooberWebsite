@@ -16,6 +16,7 @@ export default {
       if (url.pathname.startsWith("/api/card-battle/") && request.method === "GET") return await routeCardBattleRoom(request, env);
       if (url.pathname === "/api/goobers/pending" && request.method === "GET") return await listPendingGoobers(request, env);
       if (/^\/api\/goobers\/[^/]+\/approve$/.test(url.pathname) && request.method === "POST") return await approveGoober(request, env);
+      if (/^\/api\/goobers\/[^/]+\/fame$/.test(url.pathname) && (request.method === "POST" || request.method === "DELETE")) return await setGooberFame(request, env, url);
       if (url.pathname.startsWith("/api/goobers/") && request.method === "DELETE") return await deleteGoober(request, env);
       if (url.pathname.startsWith("/api/goober-image/") && request.method === "GET") return await getGooberImage(request, env);
       return jsonResponse({ error: "Not found" }, 404);
@@ -748,8 +749,53 @@ function getRoomCodeFromPath(pathname) { const match = pathname.match(/^\/api\/c
 async function listGoobers(env) {
   const result = await env.DB.prepare(`SELECT id, name, category, description, image_key, image_type, created_at FROM goobers WHERE approved = 1 ORDER BY created_at DESC`).all();
   const rows = result.results || [];
-  const creators = await gooberCreators(env, rows);
-  return jsonResponse(rows.map(row => ({ id: row.id, name: row.name, category: row.category, description: row.description, imageUrl: `/api/goober-image/${row.image_key}`, createdAt: row.created_at, ...(creators[row.id] ? { creator: creators[row.id] } : {}) })), 200, NO_STORE_HEADERS);
+  const [creators, fame] = await Promise.all([gooberCreators(env, rows), hallOfFame(env)]);
+  return jsonResponse(rows.map(row => ({
+    id: row.id, name: row.name, category: row.category, description: row.description, imageUrl: `/api/goober-image/${row.image_key}`, createdAt: row.created_at,
+    ...(creators[row.id] ? { creator: creators[row.id] } : {}),
+    ...(fame[row.id] ? { hallOfFame: fame[row.id] } : {})
+  })), 200, NO_STORE_HEADERS);
+}
+
+// --- Hall of Fame ---------------------------------------------------------------
+// Created on first use (also in migrations/0004) so a deploy works before the migration runs.
+let fameTableReady = false;
+async function ensureFameTable(env) {
+  if (fameTableReady) return;
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS goober_fame (goober_id TEXT PRIMARY KEY, note TEXT NOT NULL DEFAULT '', inducted_by TEXT NOT NULL DEFAULT '', inducted_at TEXT NOT NULL DEFAULT (datetime('now')))`).run();
+  fameTableReady = true;
+}
+
+// Goober id -> { note, inductedAt }. A lookup failure never breaks the gallery.
+async function hallOfFame(env) {
+  try {
+    await ensureFameTable(env);
+    const { results } = await env.DB.prepare(`SELECT goober_id, note, inducted_at FROM goober_fame`).all();
+    return Object.fromEntries(results.map(r => [r.goober_id, { note: r.note || "", inductedAt: r.inducted_at }]));
+  } catch (error) {
+    console.error("Hall of Fame lookup failed", error);
+    return {};
+  }
+}
+
+// Admins only. POST inducts (body: { note }), DELETE removes.
+async function setGooberFame(request, env, url) {
+  const user = await requireUser(request, env).catch(() => null);
+  if (!isAdminUser(user)) return jsonResponse({ error: "Only admins can change the Hall of Fame." }, 403, NO_STORE_HEADERS);
+  const id = decodeURIComponent(url.pathname.split("/")[3] || "").trim();
+  if (!id || id.includes("..")) return jsonResponse({ error: "Invalid goober id." }, 400, NO_STORE_HEADERS);
+  await ensureFameTable(env);
+  if (request.method === "DELETE") {
+    await env.DB.prepare(`DELETE FROM goober_fame WHERE goober_id = ?`).bind(id).run();
+    return jsonResponse({ ok: true, id, hallOfFame: null }, 200, NO_STORE_HEADERS);
+  }
+  const goober = await env.DB.prepare(`SELECT id FROM goobers WHERE id = ? AND approved = 1`).bind(id).first();
+  if (!goober) return jsonResponse({ error: "Goober not found." }, 404, NO_STORE_HEADERS);
+  const body = await readJson(request);
+  const note = cleanText(body.note, 140);
+  await env.DB.prepare(`INSERT INTO goober_fame (goober_id, note, inducted_by) VALUES (?, ?, ?) ON CONFLICT(goober_id) DO UPDATE SET note = excluded.note`).bind(id, note, String(user.username)).run();
+  const row = await env.DB.prepare(`SELECT note, inducted_at FROM goober_fame WHERE goober_id = ?`).bind(id).first();
+  return jsonResponse({ ok: true, id, hallOfFame: { note: row.note, inductedAt: row.inducted_at } }, 200, NO_STORE_HEADERS);
 }
 
 // --- "Created by" -------------------------------------------------------------
@@ -866,11 +912,14 @@ const MODERATION_IMAGE_LIMIT = 3.5 * 1024 * 1024;
 const VISION_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct";
 const TEXT_GUARD_MODEL = "@cf/meta/llama-guard-3-8b";
 const GUARD_CATEGORIES = { S1: "violent crime", S2: "crime", S3: "sexual crime", S4: "child safety", S5: "defamation", S6: "dangerous advice", S7: "private info", S8: "IP", S9: "weapons", S10: "hate", S11: "self-harm", S12: "sexual content", S13: "elections", S14: "code abuse" };
-const MODERATION_PROMPT = `You moderate uploads for a website where middle schoolers (ages 11-14) share hand-drawn cartoon dogs called "Goobers". Each upload becomes a trading card in a funny meme card game.
+const MODERATION_PROMPT = `You moderate uploads for a website where middle schoolers (ages 11-14) share hand-drawn cartoon characters called "Goobers". Each upload becomes a trading card in a funny meme card game.
 
-ALLOW: silly or chaotic drawings, meme references, cartoon slapstick, cartoon weapons like swords or water guns, mild gross-out humor (farts, burps, boogers), spooky or monster themes, playful trash talk, mild words like "dumb", "butt", "sus".
+Goobers started as loaf-shaped cartoon dogs, but a Goober can be ANY creature or character: cats, frogs, birds, fish, food, monsters, robots, people-shaped doodles, anything. Never block or review an upload because it isn't a dog, doesn't look like the original Goober, or is off-theme. Only safety matters.
+
+ALLOW: any cartoon animal or creature (cat Goobers are welcome), silly or chaotic drawings, meme references, cartoon slapstick, cartoon weapons like swords or water guns, mild gross-out humor (farts, burps, boogers), spooky or monster themes, playful trash talk, mild words like "dumb", "butt", "sus".
 BLOCK anything with: nudity or sexual content or innuendo; slurs, hate speech, or hate symbols; graphic gore or realistic violence; drugs, alcohol, vaping, or smoking; self-harm or suicide; swear words (including censored or misspelled ones); real people's photos or faces; personal info such as full names, addresses, phone numbers, school names, or social handles; bullying aimed at a real person.
-REVIEW if you truly cannot tell, or if the image is not a drawing at all (for example a screenshot or a photo).
+REVIEW if you truly cannot tell whether something breaks the BLOCK rules, or if the image is not a drawing at all (for example a screenshot or a photo).
+If nothing breaks the BLOCK rules, the verdict is "allow".
 
 Judge the image AND the name and description together. Reply with JSON only: {"verdict":"allow"|"review"|"block","reason":"short kid-friendly reason"}`;
 

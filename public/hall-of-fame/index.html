@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Goober Hall of Fame · The Big Goober Website</title>
+  <meta name="description" content="The most legendary Goobers ever drawn, inducted into the Goober Hall of Fame." />
+  <link rel="icon" href="/assets/big-goober-logo.png" type="image/png" />
+  <meta name="theme-color" content="#0b0612" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Cinzel:wght@600;800&family=Nunito:wght@700;800;900&display=swap" />
+  <style>
+    :root {
+      --gold-1: #7a5208; --gold-2: #b8860b; --gold-3: #ffd84d; --gold-4: #fff3b0;
+      --velvet: #2a0f2e; --night: #07040c; --text: #fff8e7; --muted: #cdbfa0;
+      --gold-grad: linear-gradient(135deg, var(--gold-2) 0%, var(--gold-3) 28%, var(--gold-4) 45%, var(--gold-3) 60%, var(--gold-1) 100%);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0; min-height: 100vh; color: var(--text); font-family: "Nunito", system-ui, sans-serif; overflow-x: hidden;
+      background:
+        radial-gradient(120% 60% at 50% -10%, rgba(255, 200, 80, 0.16), transparent 60%),
+        repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.018) 0 2px, transparent 2px 46px),
+        linear-gradient(180deg, #1c0a20 0%, var(--velvet) 35%, #150818 70%, var(--night) 100%);
+    }
+    a { color: inherit; }
+
+    /* Spotlights and drifting gold dust */
+    .stage-fx { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+    .beam {
+      position: absolute; top: -10vh; width: 46vw; height: 130vh; transform-origin: 50% 0;
+      background: linear-gradient(180deg, rgba(255, 236, 170, 0.22), rgba(255, 220, 120, 0.06) 55%, transparent 80%);
+      clip-path: polygon(44% 0, 56% 0, 100% 100%, 0 100%); filter: blur(6px); mix-blend-mode: screen;
+    }
+    .beam.left { left: -6vw; animation: swayL 9s ease-in-out infinite; }
+    .beam.right { right: -6vw; animation: swayR 11s ease-in-out infinite; }
+    @keyframes swayL { 0%, 100% { transform: rotate(-14deg); } 50% { transform: rotate(-4deg); } }
+    @keyframes swayR { 0%, 100% { transform: rotate(14deg); } 50% { transform: rotate(5deg); } }
+    .dust { position: absolute; bottom: -10px; width: 4px; height: 4px; border-radius: 50%; background: var(--gold-3); box-shadow: 0 0 8px var(--gold-3); opacity: 0; animation: rise linear infinite; }
+    @keyframes rise { 0% { transform: translateY(0) translateX(0); opacity: 0; } 10% { opacity: 0.9; } 100% { transform: translateY(-105vh) translateX(30px); opacity: 0; } }
+
+    .wrap { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 0 16px 60px; }
+
+    header.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 0; }
+    .home-link { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 900; color: var(--muted); }
+    .home-link img { width: 44px; height: auto; filter: drop-shadow(1.5px 0 0 #fff8e7) drop-shadow(-1.5px 0 0 #fff8e7) drop-shadow(0 1.5px 0 #fff8e7) drop-shadow(0 -1.5px 0 #fff8e7); }
+    .home-link:hover { color: var(--gold-3); }
+    .gallery-link { text-decoration: none; font-weight: 900; padding: 9px 16px; border-radius: 999px; border: 2px solid var(--gold-3); color: var(--gold-3); background: rgba(0, 0, 0, 0.35); }
+    .gallery-link:hover { background: var(--gold-3); color: #2a1b00; }
+
+    /* Title */
+    .title { text-align: center; padding: 24px 0 10px; }
+    .title .kicker { font-family: "Cinzel", serif; font-weight: 800; letter-spacing: 0.5em; font-size: clamp(0.8rem, 2.4vw, 1.1rem); color: var(--gold-3); text-indent: 0.5em; }
+    .title h1 {
+      margin: 6px 0 4px; font-family: "Anton", Impact, sans-serif; font-weight: 400; line-height: 0.95; text-transform: uppercase;
+      font-size: clamp(3rem, 12vw, 8.5rem); letter-spacing: 0.02em;
+      background: linear-gradient(100deg, var(--gold-1) 0%, var(--gold-3) 20%, var(--gold-4) 32%, var(--gold-3) 44%, var(--gold-2) 60%, var(--gold-4) 72%, var(--gold-3) 84%, var(--gold-1) 100%);
+      background-size: 220% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+      filter: drop-shadow(0 4px 0 #000) drop-shadow(0 0 30px rgba(255, 200, 60, 0.35));
+      animation: shine 7s linear infinite;
+    }
+    @keyframes shine { to { background-position: -220% 0; } }
+    .laurels { display: flex; align-items: center; justify-content: center; gap: 14px; color: var(--gold-3); font-family: "Cinzel", serif; font-weight: 800; letter-spacing: 0.2em; font-size: 0.95rem; }
+    .laurels::before, .laurels::after { content: ""; height: 2px; width: min(120px, 18vw); background: linear-gradient(90deg, transparent, var(--gold-3)); }
+    .laurels::after { transform: scaleX(-1); }
+    .title p.sub { margin: 14px auto 0; max-width: 560px; color: var(--muted); font-weight: 800; font-size: clamp(1rem, 2.4vw, 1.15rem); }
+
+    /* Ornate gold frame */
+    .frame {
+      position: relative; padding: 14px; border-radius: 6px; background: var(--gold-grad);
+      box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.5), inset 0 0 0 6px var(--gold-1), inset 0 0 0 8px var(--gold-4), 0 18px 40px rgba(0, 0, 0, 0.6), 0 0 40px rgba(255, 200, 60, 0.18);
+    }
+    .frame::before, .frame::after { content: "✦"; position: absolute; color: #fff7cf; font-size: 14px; text-shadow: 0 0 6px #fff; }
+    .frame::before { top: 2px; left: 4px; }
+    .frame::after { bottom: 2px; right: 4px; }
+    .mat { background: #fffaf0; padding: 12px; box-shadow: inset 0 0 0 3px #1a1206, inset 0 4px 12px rgba(0, 0, 0, 0.35); }
+    .mat img { display: block; width: 100%; aspect-ratio: 1 / 0.82; object-fit: contain; }
+
+    .plaque {
+      position: relative; margin: 14px auto 0; padding: 10px 16px 12px; max-width: 92%; text-align: center; border-radius: 6px; color: #2a1b00;
+      background: linear-gradient(180deg, #f6dc83, #c99a2e 55%, #a77a17); border: 2px solid #4a3304;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 6px 14px rgba(0, 0, 0, 0.5);
+    }
+    .plaque::before, .plaque::after { content: ""; position: absolute; top: 50%; width: 7px; height: 7px; margin-top: -3.5px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff6c8, #6b4a08); }
+    .plaque::before { left: 6px; } .plaque::after { right: 6px; }
+    .plaque h3 { margin: 0; font-family: "Cinzel", serif; font-weight: 800; font-size: 1.15rem; letter-spacing: 0.04em; text-transform: uppercase; }
+    .plaque .by { font-weight: 800; font-size: 0.85rem; opacity: 0.85; }
+    .plaque q { display: block; margin-top: 4px; font-style: italic; font-weight: 800; font-size: 0.9rem; quotes: "“" "”"; }
+    .plaque .date { display: block; margin-top: 4px; font-size: 0.72rem; font-weight: 900; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.75; }
+
+    /* Newest inductee */
+    .spotlight { display: grid; justify-items: center; margin: 34px auto 10px; max-width: 560px; }
+    .spotlight .label { margin-bottom: 14px; font-family: "Cinzel", serif; font-weight: 800; letter-spacing: 0.3em; color: var(--gold-3); text-shadow: 0 0 14px rgba(255, 200, 60, 0.6); }
+    .spotlight .exhibit { width: 100%; }
+    .spotlight .frame { padding: 20px; animation: glow 4s ease-in-out infinite; }
+    @keyframes glow { 50% { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.5), inset 0 0 0 6px var(--gold-1), inset 0 0 0 8px var(--gold-4), 0 18px 40px rgba(0, 0, 0, 0.6), 0 0 70px rgba(255, 210, 80, 0.45); } }
+    .spotlight .plaque h3 { font-size: 1.5rem; }
+
+    /* The wall */
+    .wall-title { margin: 56px 0 22px; text-align: center; font-family: "Cinzel", serif; font-weight: 800; letter-spacing: 0.3em; color: var(--gold-3); }
+    .wall { display: flex; flex-wrap: wrap; justify-content: center; gap: 40px 28px; }
+    .wall .exhibit { width: min(270px, 100%); }
+    .exhibit { all: unset; display: block; cursor: pointer; text-align: left; transition: transform 0.25s ease; }
+    .wall .exhibit { position: relative; padding-top: 18px; }
+    .wall .exhibit::before { content: ""; position: absolute; top: 0; left: 50%; width: 46%; height: 26px; transform: translateX(-50%); border: 2px solid rgba(255, 216, 77, 0.6); border-bottom: 0; border-radius: 50% 50% 0 0 / 100% 100% 0 0; }
+    .wall .exhibit:nth-child(odd) .frame { transform: rotate(-1.4deg); }
+    .wall .exhibit:nth-child(even) .frame { transform: rotate(1.2deg); }
+    .exhibit .frame { transition: transform 0.25s ease, box-shadow 0.25s ease; }
+    .exhibit:hover .frame, .exhibit:focus-visible .frame { transform: rotate(0) scale(1.03); box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.5), inset 0 0 0 6px var(--gold-1), inset 0 0 0 8px var(--gold-4), 0 22px 46px rgba(0, 0, 0, 0.65), 0 0 50px rgba(255, 210, 80, 0.55); }
+    .exhibit:focus-visible { outline: 3px solid var(--gold-3); outline-offset: 8px; border-radius: 8px; }
+
+    .empty, .loading { text-align: center; margin: 60px auto; max-width: 480px; color: var(--muted); font-weight: 800; }
+    .empty .rope { font-size: 3.4rem; }
+    .empty a { color: var(--gold-3); }
+
+    /* Lightbox */
+    .lightbox { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; padding: 16px; background: rgba(5, 2, 8, 0.86); backdrop-filter: blur(6px); }
+    .lightbox[hidden] { display: none; }
+    .lightbox .exhibit { cursor: default; width: min(560px, 100%); max-height: 100%; overflow-y: auto; }
+    .lightbox .close { position: absolute; top: 14px; right: 16px; width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--gold-3); background: rgba(0, 0, 0, 0.5); color: var(--gold-3); font-size: 1.6rem; cursor: pointer; }
+
+    footer { position: relative; z-index: 1; text-align: center; padding: 30px 16px 40px; color: var(--muted); font-weight: 800; font-size: 0.9rem; }
+
+    @media (max-width: 560px) {
+      .wall { gap: 34px; }
+      .wall .exhibit { width: 100%; }
+      .spotlight .frame { padding: 14px; }
+      .gallery-link { padding: 8px 12px; font-size: 0.9rem; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .beam, .dust, .title h1, .spotlight .frame { animation: none !important; }
+      .dust { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="stage-fx" aria-hidden="true"><div class="beam left"></div><div class="beam right"></div></div>
+
+  <div class="wrap">
+    <header class="top">
+      <a class="home-link" href="/"><img src="/assets/big-goober-logo.png" alt="" width="900" height="944" />The Big Goober Website</a>
+      <a class="gallery-link" href="/#goobers">Goober Gallery</a>
+    </header>
+
+    <section class="title">
+      <div class="kicker">THE GOOBER</div>
+      <h1>Hall of Fame</h1>
+      <div class="laurels" id="count">EST. MMXXVI</div>
+      <p class="sub">Only the most legendary loaves are hung on these walls. Inducted by the Goober council, admired forever.</p>
+    </section>
+
+    <div id="hall"><p class="loading">Dimming the lights…</p></div>
+  </div>
+
+  <div class="lightbox" id="lightbox" hidden role="dialog" aria-modal="true" aria-label="Hall of Fame Goober">
+    <button class="close" type="button" aria-label="Close">×</button>
+    <div id="lightboxBody"></div>
+  </div>
+
+  <footer>The Big Goober Website · Goober Hall of Fame</footer>
+
+  <script>
+    const esc = value => String(value ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
+    const fmtDate = when => {
+      const t = Date.parse(String(when || "").replace(" ", "T") + "Z");
+      return t ? new Date(t).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "";
+    };
+
+    function exhibitHTML(g, tag = "button") {
+      const fame = g.hallOfFame || {};
+      return `<${tag} class="exhibit" ${tag === "button" ? `type="button" data-id="${esc(g.id)}" aria-label="View ${esc(g.name)}"` : ""}>
+        <div class="frame"><div class="mat"><img src="${esc(g.imageUrl)}" alt="${esc(g.name)}" loading="lazy" /></div></div>
+        <div class="plaque">
+          <h3>${esc(g.name)}</h3>
+          ${g.creator ? `<div class="by">Drawn by ${esc(g.creator)}</div>` : `<div class="by">${esc(g.category || "classic")} Goober</div>`}
+          ${fame.note ? `<q>${esc(fame.note)}</q>` : ""}
+          ${fame.inductedAt ? `<span class="date">Inducted ${esc(fmtDate(fame.inductedAt))}</span>` : ""}
+        </div>
+      </${tag}>`;
+    }
+
+    function sprinkleDust() {
+      if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      const fx = document.querySelector(".stage-fx");
+      for (let i = 0; i < 26; i++) {
+        const d = document.createElement("span");
+        d.className = "dust";
+        d.style.left = `${Math.random() * 100}vw`;
+        d.style.animationDuration = `${9 + Math.random() * 10}s`;
+        d.style.animationDelay = `${-Math.random() * 18}s`;
+        const size = 2 + Math.random() * 3;
+        d.style.width = d.style.height = `${size}px`;
+        fx.appendChild(d);
+      }
+    }
+
+    async function load() {
+      const hall = document.getElementById("hall");
+      let goobers = [];
+      try {
+        const res = await fetch("/api/goobers", { cache: "no-store" });
+        if (!res.ok) throw new Error();
+        goobers = await res.json();
+      } catch {
+        hall.innerHTML = `<p class="empty">The hall is closed for cleaning. Try again in a bit.</p>`;
+        return;
+      }
+      const legends = goobers.filter(g => g.hallOfFame).sort((a, b) => String(b.hallOfFame.inductedAt).localeCompare(String(a.hallOfFame.inductedAt)));
+      document.getElementById("count").textContent = legends.length ? `${legends.length} LEGEND${legends.length === 1 ? "" : "S"} INDUCTED` : "EST. MMXXVI";
+      if (!legends.length) {
+        hall.innerHTML = `<div class="empty"><div class="rope">🏛️</div><p>The velvet ropes are up and the walls are bare. The hall awaits its first legend.</p><p><a href="/#goobers">Browse the gallery →</a></p></div>`;
+        return;
+      }
+      const [newest, ...rest] = legends;
+      hall.innerHTML = `
+        <section class="spotlight"><div class="label">✦ NEWEST LEGEND ✦</div>${exhibitHTML(newest)}</section>
+        ${rest.length ? `<h2 class="wall-title">THE WALL OF LEGENDS</h2><section class="wall">${rest.map(g => exhibitHTML(g)).join("")}</section>` : ""}`;
+      hall.addEventListener("click", e => {
+        const id = e.target.closest("[data-id]")?.dataset.id;
+        const g = legends.find(x => x.id === id);
+        if (g) openLightbox(g);
+      });
+    }
+
+    const lightbox = document.getElementById("lightbox");
+    function openLightbox(g) {
+      document.getElementById("lightboxBody").innerHTML = exhibitHTML(g, "div");
+      lightbox.hidden = false;
+      lightbox.querySelector(".close").focus();
+    }
+    function closeLightbox() { lightbox.hidden = true; }
+    lightbox.addEventListener("click", e => { if (e.target === lightbox || e.target.closest(".close")) closeLightbox(); });
+    addEventListener("keydown", e => { if (e.key === "Escape" && !lightbox.hidden) closeLightbox(); });
+
+    sprinkleDust();
+    load();
+  </script>
+</body>
+</html>
