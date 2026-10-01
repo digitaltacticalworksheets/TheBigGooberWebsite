@@ -21,6 +21,30 @@ function initializeSiteTheme() {
 
 initializeSiteTheme();
 
+// October only (the <head> script adds the class): moon, bats, ghosts, fog, a web, and a banner.
+function initializeHalloween() {
+  if (!document.documentElement.classList.contains("halloween") || document.querySelector(".spooky-fx")) return;
+  const fx = document.createElement("div");
+  fx.className = "spooky-fx";
+  fx.setAttribute("aria-hidden", "true");
+  const bats = Array.from({ length: 5 }, (_, i) => `<span class="bat" style="--y:${8 + i * 9}vh;--d:${14 + i * 3}s;--delay:${-i * 4.5}s;--s:${0.7 + (i % 3) * 0.25}">🦇</span>`).join("");
+  const ghosts = Array.from({ length: 3 }, (_, i) => `<span class="ghost" style="--x:${12 + i * 34}vw;--d:${18 + i * 5}s;--delay:${-i * 7}s">👻</span>`).join("");
+  fx.innerHTML = `<div class="moon"></div>${bats}${ghosts}<div class="fog"></div><svg class="web" viewBox="0 0 100 100"><g fill="none" stroke="currentColor" stroke-width="0.8"><path d="M0 0 L100 60 M0 0 L80 100 M0 0 L40 100 M0 0 L100 25"/><path d="M22 13 Q20 18 18 22 Q15 20 9 20"/><path d="M45 27 Q40 37 36 45 Q27 41 18 40 Q16 36 9 34"/><path d="M68 41 Q60 56 54 68 Q41 62 27 61 Q24 56 13 52"/><path d="M92 55 Q82 75 72 91 Q55 83 36 82 Q32 75 17 70"/></g></svg>`;
+  document.body.prepend(fx);
+
+  const hero = document.querySelector(".hero-copy");
+  if (hero && !document.querySelector(".spooky-banner")) {
+    const banner = document.createElement("a");
+    banner.className = "spooky-banner";
+    banner.href = "#goobers";
+    banner.innerHTML = `🎃 <b>Happy Goober-ween!</b> Spooky Goobers are extra welcome all October. <span>See the spooky ones →</span>`;
+    banner.addEventListener("click", () => document.querySelector('.filter-btn[data-filter="spooky"]')?.click());
+    hero.prepend(banner);
+  }
+}
+
+initializeHalloween();
+
 const filterButtons = document.querySelectorAll(".filter-btn");
 const gooberGrid = document.getElementById("gooberGrid");
 const uploadForm = document.getElementById("gooberUploadForm");

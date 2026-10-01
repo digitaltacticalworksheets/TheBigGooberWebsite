@@ -21,8 +21,15 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Nunito:wght@600;700;800;900&display=swap" />
-  <link rel="stylesheet" href="/styles.css?v=2026-10-01.1" />
-  <script src="/app.js?v=2026-10-01.1" defer></script>
+  <link rel="stylesheet" href="/styles.css?v=2026-10-01.2" />
+  <script>
+    // Halloween theme for all of October (the visitor's local date). ?halloween=1 previews it, ?halloween=0 turns it off.
+    (function () {
+      var force = new URLSearchParams(location.search).get("halloween");
+      if (force === "1" || (force !== "0" && new Date().getMonth() === 9)) document.documentElement.classList.add("halloween");
+    })();
+  </script>
+  <script src="/app.js?v=2026-10-01.2" defer></script>
 </head>
 
 <body>
