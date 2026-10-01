@@ -85,7 +85,7 @@ header::before {
 nav { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
 
 /* ---------- Buttons ---------- */
-nav a, .nav-account, .button, .filter-btn, .upload-button, .gallery-search-button, .delete-goober {
+nav a, .nav-account, .button, .filter-btn, .upload-button, .gallery-search-button, .delete-goober, .fame-goober {
   position: relative; overflow: hidden;
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   padding: 10px 16px; border-radius: 14px;
@@ -322,3 +322,25 @@ footer {
   filter: drop-shadow(2px 0 0 #fff8e7) drop-shadow(-2px 0 0 #fff8e7) drop-shadow(0 2px 0 #fff8e7) drop-shadow(0 -2px 0 #fff8e7)
     drop-shadow(0 0 10px rgba(255, 211, 77, 0.55));
 }
+
+/* Hall of Fame marking in the gallery */
+.goober-card.hall-of-fame {
+  background: linear-gradient(160deg, #fff6d6, #ffd76a);
+  box-shadow: 0 0 0 3px #ffcf3f, 0 0 0 6px #000, 0 0 26px rgba(255, 196, 40, 0.75), 0 14px 34px rgba(0, 0, 0, 0.5);
+}
+.goober-image { position: relative; }
+.hof-ribbon {
+  position: absolute; top: 10px; left: -4px; z-index: 2; padding: 4px 12px 4px 10px;
+  background: linear-gradient(90deg, #b8860b, #ffd84d 45%, #fff3b0 55%, #ffd84d 65%, #b8860b);
+  color: #2a1b00; font-weight: 900; font-size: 0.78rem; letter-spacing: 0.03em; text-transform: uppercase;
+  border: 2px solid #000; border-left: 0; border-radius: 0 999px 999px 0; box-shadow: 0 3px 0 #000;
+}
+.viewer-fame {
+  display: grid; gap: 4px; margin: 4px 0 12px; padding: 12px 14px; border-radius: 14px;
+  background: linear-gradient(135deg, rgba(255, 216, 77, 0.22), rgba(184, 134, 11, 0.18)); border: 2px solid #ffcf3f;
+}
+.viewer-fame b { color: #ffd84d; font-family: var(--display); font-size: 1.15rem; letter-spacing: 0.04em; text-transform: uppercase; }
+.viewer-fame i:empty { display: none; }
+.viewer-fame small { color: var(--muted); font-weight: 800; }
+.viewer-fame a { color: #ffd84d; font-weight: 900; }
+.fame-goober { margin-top: 12px; color: #2a1b00; background: linear-gradient(90deg, #ffd84d, #fff0a0); padding: 6px 12px; }

@@ -16,6 +16,7 @@ export default {
       if (url.pathname.startsWith("/api/card-battle/") && request.method === "GET") return await routeCardBattleRoom(request, env);
       if (url.pathname === "/api/goobers/pending" && request.method === "GET") return await listPendingGoobers(request, env);
       if (/^\/api\/goobers\/[^/]+\/approve$/.test(url.pathname) && request.method === "POST") return await approveGoober(request, env);
+      if (/^\/api\/goobers\/[^/]+\/fame$/.test(url.pathname) && (request.method === "POST" || request.method === "DELETE")) return await setGooberFame(request, env, url);
       if (url.pathname.startsWith("/api/goobers/") && request.method === "DELETE") return await deleteGoober(request, env);
       if (url.pathname.startsWith("/api/goober-image/") && request.method === "GET") return await getGooberImage(request, env);
       return jsonResponse({ error: "Not found" }, 404);
@@ -748,8 +749,53 @@ function getRoomCodeFromPath(pathname) { const match = pathname.match(/^\/api\/c
 async function listGoobers(env) {
   const result = await env.DB.prepare(`SELECT id, name, category, description, image_key, image_type, created_at FROM goobers WHERE approved = 1 ORDER BY created_at DESC`).all();
   const rows = result.results || [];
-  const creators = await gooberCreators(env, rows);
-  return jsonResponse(rows.map(row => ({ id: row.id, name: row.name, category: row.category, description: row.description, imageUrl: `/api/goober-image/${row.image_key}`, createdAt: row.created_at, ...(creators[row.id] ? { creator: creators[row.id] } : {}) })), 200, NO_STORE_HEADERS);
+  const [creators, fame] = await Promise.all([gooberCreators(env, rows), hallOfFame(env)]);
+  return jsonResponse(rows.map(row => ({
+    id: row.id, name: row.name, category: row.category, description: row.description, imageUrl: `/api/goober-image/${row.image_key}`, createdAt: row.created_at,
+    ...(creators[row.id] ? { creator: creators[row.id] } : {}),
+    ...(fame[row.id] ? { hallOfFame: fame[row.id] } : {})
+  })), 200, NO_STORE_HEADERS);
+}
+
+// --- Hall of Fame ---------------------------------------------------------------
+// Created on first use (also in migrations/0004) so a deploy works before the migration runs.
+let fameTableReady = false;
+async function ensureFameTable(env) {
+  if (fameTableReady) return;
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS goober_fame (goober_id TEXT PRIMARY KEY, note TEXT NOT NULL DEFAULT '', inducted_by TEXT NOT NULL DEFAULT '', inducted_at TEXT NOT NULL DEFAULT (datetime('now')))`).run();
+  fameTableReady = true;
+}
+
+// Goober id -> { note, inductedAt }. A lookup failure never breaks the gallery.
+async function hallOfFame(env) {
+  try {
+    await ensureFameTable(env);
+    const { results } = await env.DB.prepare(`SELECT goober_id, note, inducted_at FROM goober_fame`).all();
+    return Object.fromEntries(results.map(r => [r.goober_id, { note: r.note || "", inductedAt: r.inducted_at }]));
+  } catch (error) {
+    console.error("Hall of Fame lookup failed", error);
+    return {};
+  }
+}
+
+// Admins only. POST inducts (body: { note }), DELETE removes.
+async function setGooberFame(request, env, url) {
+  const user = await requireUser(request, env).catch(() => null);
+  if (!isAdminUser(user)) return jsonResponse({ error: "Only admins can change the Hall of Fame." }, 403, NO_STORE_HEADERS);
+  const id = decodeURIComponent(url.pathname.split("/")[3] || "").trim();
+  if (!id || id.includes("..")) return jsonResponse({ error: "Invalid goober id." }, 400, NO_STORE_HEADERS);
+  await ensureFameTable(env);
+  if (request.method === "DELETE") {
+    await env.DB.prepare(`DELETE FROM goober_fame WHERE goober_id = ?`).bind(id).run();
+    return jsonResponse({ ok: true, id, hallOfFame: null }, 200, NO_STORE_HEADERS);
+  }
+  const goober = await env.DB.prepare(`SELECT id FROM goobers WHERE id = ? AND approved = 1`).bind(id).first();
+  if (!goober) return jsonResponse({ error: "Goober not found." }, 404, NO_STORE_HEADERS);
+  const body = await readJson(request);
+  const note = cleanText(body.note, 140);
+  await env.DB.prepare(`INSERT INTO goober_fame (goober_id, note, inducted_by) VALUES (?, ?, ?) ON CONFLICT(goober_id) DO UPDATE SET note = excluded.note`).bind(id, note, String(user.username)).run();
+  const row = await env.DB.prepare(`SELECT note, inducted_at FROM goober_fame WHERE goober_id = ?`).bind(id).first();
+  return jsonResponse({ ok: true, id, hallOfFame: { note: row.note, inductedAt: row.inducted_at } }, 200, NO_STORE_HEADERS);
 }
 
 // --- "Created by" -------------------------------------------------------------

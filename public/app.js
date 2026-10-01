@@ -167,6 +167,14 @@ function createGooberCard(goober, isCloud = false) {
   tags.appendChild(categoryTag);
   tags.appendChild(sourceTag);
 
+  if (goober.hallOfFame) {
+    card.classList.add("hall-of-fame");
+    const ribbon = document.createElement("span");
+    ribbon.className = "hof-ribbon";
+    ribbon.textContent = "🏆 Hall of Fame";
+    imageWrap.appendChild(ribbon);
+  }
+
   info.appendChild(title);
   info.appendChild(description);
   info.appendChild(tags);
@@ -193,6 +201,7 @@ function openGooberViewer(goober) {
     viewerAdmin.hidden = !(gooberCardsLogin()?.admin && String(goober.imageUrl || "").startsWith("/api/goober-image/"));
     document.getElementById("viewerAdminStatus").textContent = "";
   }
+  renderViewerFame();
   gooberViewer.hidden = false;
   document.body.classList.add("viewer-open");
   viewerClose?.focus();
@@ -220,6 +229,54 @@ async function deleteViewerGoober() {
 }
 
 document.getElementById("viewerDelete")?.addEventListener("click", deleteViewerGoober);
+
+// Hall of Fame plaque in the viewer, plus the admin induct/remove button.
+function renderViewerFame() {
+  const goober = viewerGoober;
+  const plaque = document.getElementById("viewerFame");
+  const button = document.getElementById("viewerFameToggle");
+  if (plaque) {
+    plaque.hidden = !goober?.hallOfFame;
+    if (goober?.hallOfFame) {
+      plaque.querySelector("[data-fame-note]").textContent = goober.hallOfFame.note ? `“${goober.hallOfFame.note}”` : "";
+      plaque.querySelector("[data-fame-date]").textContent = `Inducted ${String(goober.hallOfFame.inductedAt || "").slice(0, 10)}`;
+    }
+  }
+  if (button) button.textContent = goober?.hallOfFame ? "Remove from Hall of Fame" : "🏆 Add to Hall of Fame";
+}
+
+async function toggleViewerFame() {
+  const login = gooberCardsLogin();
+  const goober = viewerGoober;
+  const status = document.getElementById("viewerAdminStatus");
+  if (!login?.admin || !goober?.id) return;
+  const inducting = !goober.hallOfFame;
+  let note = "";
+  if (inducting) {
+    const answer = window.prompt(`Induct "${goober.name}" into the Hall of Fame?\n\nOptional plaque text (up to 140 characters):`, "");
+    if (answer === null) return;
+    note = answer.trim().slice(0, 140);
+  } else if (!window.confirm(`Remove "${goober.name}" from the Hall of Fame?`)) return;
+  status.textContent = inducting ? "Inducting…" : "Removing…";
+  try {
+    const res = await fetch(`${API_BASE}/api/goobers/${encodeURIComponent(goober.id)}/fame`, {
+      method: inducting ? "POST" : "DELETE",
+      headers: { authorization: `Bearer ${login.token}`, "content-type": "application/json" },
+      body: inducting ? JSON.stringify({ note }) : undefined,
+      cache: "no-store"
+    });
+    const result = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(result.error || "That didn't work.");
+    goober.hallOfFame = result.hallOfFame || null;
+    renderViewerFame();
+    status.textContent = inducting ? "🏆 Inducted!" : "Removed.";
+    await loadCloudGoobers({ bustCache: true });
+  } catch (error) {
+    status.textContent = error.message || "That didn't work.";
+  }
+}
+
+document.getElementById("viewerFameToggle")?.addEventListener("click", toggleViewerFame);
 
 function closeGooberViewer() {
   if (!gooberViewer) return;
