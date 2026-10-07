@@ -1,7 +1,7 @@
 // Admin-only lab: page, assets, room API and the LabRoom Durable Object.
 // Everything here answers 404 to anyone who isn't an admin, exactly like an unknown URL.
 import { createGame, applyAction, vastMovesFrom, randomAction, BOARD_SIZES, GOLD, PURPLE } from "./engine.js";
-import { chooseAction } from "./ai.js";
+import { chooseAction, LEVELS, DEFAULT_LEVEL } from "./ai.js";
 import PAGE_HTML from "./web/index.html";
 import APP_JS from "./web/app.js";
 import BOARD_JS from "./web/board.js";
@@ -70,11 +70,12 @@ export async function routeLab(request, env, helpers) {
     const timer = TIMERS.has(Number(body.timer)) ? Number(body.timer) : 0;
     const color = ["gold", "purple", "random"].includes(body.color) ? body.color : "gold";
     const size = BOARD_SIZES[body.size] ? body.size : "standard";
+    const level = mode === "solo" && LEVELS[body.level] ? body.level : DEFAULT_LEVEL;
     for (let i = 0; i < 4; i++) {
       const code = roomCode();
       const res = await roomStub(env, code).fetch("https://lab.internal/init", {
         method: "POST",
-        body: JSON.stringify({ code, mode, timer, color, size, user: { id: String(user.id), name: user.username } })
+        body: JSON.stringify({ code, mode, timer, color, size, level, user: { id: String(user.id), name: user.username } })
       });
       if (res.ok) return helpers.jsonResponse({ code, mode, timer, size }, 201, PRIVATE_HEADERS);
     }
@@ -142,7 +143,7 @@ export class LabRoom {
       const seats = [null, null];
       seats[seat] = creator;
       if (body.mode === "solo") seats[1 - seat] = { npc: true, name: "NPC" };
-      this.room = { code: body.code, mode: body.mode, timer: body.timer, size: BOARD_SIZES[body.size] ? body.size : "standard", seats, game: null, phase: "waiting", deadline: 0, rematch: [false, false], log: [], ticker: [], created: Date.now() };
+      this.room = { code: body.code, mode: body.mode, timer: body.timer, size: BOARD_SIZES[body.size] ? body.size : "standard", level: LEVELS[body.level] ? body.level : DEFAULT_LEVEL, seats, game: null, phase: "waiting", deadline: 0, rematch: [false, false], log: [], ticker: [], created: Date.now() };
       if (body.mode === "solo") this.startGame();
       await this.save();
       return json({ ok: true });
@@ -225,7 +226,7 @@ export class LabRoom {
     const room = this.room;
     const g = room.game;
     if (g.over || !room.seats[g.toMove]?.npc) return;
-    const action = chooseAction(g, g.toMove) || randomAction(g);
+    const action = chooseAction(g, g.toMove, LEVELS[room.level] || LEVELS[DEFAULT_LEVEL]) || randomAction(g);
     if (action) this.play(g.toMove, action);
   }
 
@@ -287,7 +288,7 @@ export class LabRoom {
     const room = this.room;
     const watching = new Set([...this.sessions.values()].map(s => s.seat));
     return {
-      code: room.code, mode: room.mode, timer: room.timer, size: room.size || "standard", phase: room.phase, deadline: room.deadline, now: Date.now(),
+      code: room.code, mode: room.mode, timer: room.timer, size: room.size || "standard", level: room.level || DEFAULT_LEVEL, phase: room.phase, deadline: room.deadline, now: Date.now(),
       ticker: room.ticker || [],
       you: seat,
       rematch: room.rematch,
