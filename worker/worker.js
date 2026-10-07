@@ -1,11 +1,15 @@
 import { buildCatalog, validateDeck, cardFromGoober, heroPowerOf } from "../public/goober-cards/cards.js";
 import { createGame, applyAction, viewFor, eventsFor } from "../public/goober-cards/engine.js";
 import * as econ from "../public/goober-cards/economy.js";
+import { routeLab, isLabPath, readCookie, adminCookie, clearAdminCookie, ADMIN_COOKIE, LabRoom } from "../lab/server.js";
+
+export { LabRoom };
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     try {
+      if (isLabPath(url.pathname)) return await routeLab(request, env, { userFromToken, isAdminUser, jsonResponse });
       if (request.method === "OPTIONS") return corsResponse(null, 204);
       if (url.pathname === "/api/goobers" && request.method === "GET") return await listGoobers(env);
       if (url.pathname === "/api/goobers" && request.method === "POST") return await uploadGoober(request, env);
@@ -1049,12 +1053,26 @@ async function handleAccounts(request, env, url) {
   if (path === "/api/auth/logout" && method === "POST") return logout(request, env);
   if (path === "/api/auth/me" && method === "GET") {
     const user = await requireUser(request, env);
-    return user ? jsonResponse({ user: publicUser(user) }, 200, NO_STORE_HEADERS) : unauthorized();
+    if (!user) return withAdminCookie(unauthorized(), request, null, "");
+    return withAdminCookie(jsonResponse({ user: publicUser(user) }, 200, NO_STORE_HEADERS), request, user, bearerToken(request), (Date.parse(user.expires_at) - Date.now()) / 1000);
   }
   if (path === "/api/profile" && method === "GET") return getProfile(request, env);
   if (path === "/api/profile" && method === "PUT") return putProfile(request, env);
   if (path.startsWith("/api/econ/") && method === "POST") return econAction(request, env, url);
   return jsonResponse({ error: "Not found" }, 404, NO_STORE_HEADERS);
+}
+
+function bearerToken(request) {
+  const auth = request.headers.get("authorization") || "";
+  return auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+}
+
+// Admin accounts also get an HttpOnly cookie so admin-only pages can check them on
+// navigation. Everyone else never sees it; a stale one is cleared.
+function withAdminCookie(response, request, user, token, maxAgeSeconds = 0) {
+  if (user && isAdminUser(user) && token) response.headers.append("set-cookie", adminCookie(token, maxAgeSeconds));
+  else if (readCookie(request, ADMIN_COOKIE)) response.headers.append("set-cookie", clearAdminCookie());
+  return response;
 }
 
 function unauthorized() { return jsonResponse({ error: "Please log in again." }, 401, NO_STORE_HEADERS); }
@@ -1198,14 +1216,14 @@ async function login(request, env) {
   if (!user || !safeEqual(hash, user.pass_hash)) return jsonResponse({ error: "Wrong username or password." }, 401, NO_STORE_HEADERS);
   await env.DB.prepare(`DELETE FROM login_attempts WHERE username_key = ?`).bind(key).run();
   const token = await createSession(env, user.id);
-  return jsonResponse({ token, user: publicUser(user) }, 200, NO_STORE_HEADERS);
+  return withAdminCookie(jsonResponse({ token, user: publicUser(user) }, 200, NO_STORE_HEADERS), request, user, token, SESSION_DAYS * 86400);
 }
 
 async function logout(request, env) {
   const auth = request.headers.get("authorization") || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
   if (/^[0-9a-f]{64}$/.test(token)) await env.DB.prepare(`DELETE FROM sessions WHERE token_hash = ?`).bind(await sha256Hex(token)).run();
-  return jsonResponse({ ok: true }, 200, NO_STORE_HEADERS);
+  return withAdminCookie(jsonResponse({ ok: true }, 200, NO_STORE_HEADERS), request, null, "");
 }
 
 async function getProfile(request, env) {

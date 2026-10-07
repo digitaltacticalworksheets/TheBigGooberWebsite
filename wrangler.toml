@@ -3,8 +3,22 @@ main = "worker/worker.js"
 compatibility_date = "2026-05-28"
 
 routes = [
-  { pattern = "thebiggooberwebsite.com/api/*", zone_name = "thebiggooberwebsite.com" }
+  { pattern = "thebiggooberwebsite.com/api/*", zone_name = "thebiggooberwebsite.com" },
+  { pattern = "thebiggooberwebsite.com/lab", zone_name = "thebiggooberwebsite.com" },
+  { pattern = "thebiggooberwebsite.com/lab/*", zone_name = "thebiggooberwebsite.com" }
 ]
+
+# Admin-only pages are bundled into the Worker (never served from public/).
+# Globs match the import string in lab/server.js, e.g. "./web/app.js".
+[[rules]]
+type = "Text"
+globs = ["./web/*.html", "./web/*.css", "./web/*.js"]
+fallthrough = true
+
+[[rules]]
+type = "Data"
+globs = ["./web/*.png"]
+fallthrough = true
 
 [[d1_databases]]
 binding = "DB"
@@ -28,6 +42,10 @@ class_name = "Matchmaker"
 name = "PRESENCE"
 class_name = "Presence"
 
+[[durable_objects.bindings]]
+name = "LAB_ROOMS"
+class_name = "LabRoom"
+
 [[migrations]]
 tag = "v1-card-battle-rooms"
 new_sqlite_classes = ["CardBattleRoom"]
@@ -39,6 +57,10 @@ new_sqlite_classes = ["Matchmaker"]
 [[migrations]]
 tag = "v3-presence"
 new_sqlite_classes = ["Presence"]
+
+[[migrations]]
+tag = "v4-lab"
+new_sqlite_classes = ["LabRoom"]
 
 # Workers AI powers the upload auto-moderator.
 [ai]
