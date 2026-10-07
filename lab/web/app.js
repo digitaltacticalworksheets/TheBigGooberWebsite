@@ -180,9 +180,9 @@ const resultKey = () => `${ui.game.seed}:${ui.game.ply}`;
 // Pointy-top hexes, axial coordinates.
 const SIZE = 40, SQ3 = Math.sqrt(3);
 const centre = i => ({ x: SIZE * SQ3 * (CELLS[i].q + CELLS[i].r / 2), y: SIZE * 1.5 * CELLS[i].r });
-const hexPoints = ({ x, y }) => Array.from({ length: 6 }, (_, k) => {
+const hexPoints = ({ x, y }, radius = SIZE) => Array.from({ length: 6 }, (_, k) => {
   const a = (Math.PI / 180) * (60 * k - 30);
-  return `${(x + SIZE * Math.cos(a)).toFixed(1)},${(y + SIZE * Math.sin(a)).toFixed(1)}`;
+  return `${(x + radius * Math.cos(a)).toFixed(1)},${(y + radius * Math.sin(a)).toFixed(1)}`;
 }).join(" ");
 
 function boardSVG() {
@@ -206,10 +206,11 @@ function boardSVG() {
     const label = height ? `${NAMES[owner]} stack of ${height}` : "Empty cell";
     let stack = "";
     if (height) {
-      const r = SIZE * 0.6;
+      // Hexagonal pieces, same orientation as the cell, stacked with a small lift.
+      const r = SIZE * 0.66;
       for (let k = 0; k < height; k++) {
         const cy = p.y + (height - 1) * 2.2 - k * 4.4;
-        stack += `<circle class="piece p${owner}" cx="${p.x.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r.toFixed(1)}"/>`;
+        stack += `<polygon class="piece p${owner}" points="${hexPoints({ x: p.x, y: cy }, r)}"/>`;
       }
       const top = p.y - (height - 1) * 2.2;
       stack += `<text class="sym p${owner}" x="${p.x.toFixed(1)}" y="${(top - 8).toFixed(1)}" text-anchor="middle" font-size="12">${SYM[owner]}</text>`;
