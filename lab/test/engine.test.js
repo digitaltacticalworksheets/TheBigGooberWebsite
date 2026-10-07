@@ -249,8 +249,39 @@ test("replay: the same actions always give the same game", () => {
 
 test("the browser's board geometry matches the engine", async () => {
   const web = await import("../web/board.js");
-  assert.deepEqual(web.CELLS, CELLS);
-  assert.deepEqual(web.STEP, STEP);
+  const g = web.geometry(4);
+  assert.deepEqual(g.cells, CELLS);
+  assert.deepEqual(g.step, STEP);
   const from = cellAt(-2, 0);
-  assert.deepEqual(web.pathOf(from, E, 3), [STEP[from][E], STEP[STEP[from][E]][E], STEP[STEP[STEP[from][E]][E]][E]]);
+  assert.deepEqual(web.pathOf(g, from, E, 3), [STEP[from][E], STEP[STEP[from][E]][E], STEP[STEP[STEP[from][E]][E]][E]]);
+  assert.equal(g.names[0], "A1");
+  assert.equal(g.names[cellAt(0, 0)], "E5");
+});
+
+test("large board: 91 cells, 90 pieces, longer move limit, same rules", async () => {
+  const { geometry, plyLimit, BOARD_SIZES } = await import("../engine.js");
+  const s = createGame({ radius: BOARD_SIZES.large });
+  assert.equal(s.h.length, 91);
+  assert.equal(s.supply, 90);
+  assert.equal(s.total, 90);
+  assert.equal(plyLimit(s), 600);
+  assert.equal(plyLimit(createGame()), MAX_PLIES);
+  const g = geometry(5);
+  const rings = [0, 0, 0, 0, 0, 0];
+  for (const c of g.cells) rings[c.ring]++;
+  assert.deepEqual(rings, [1, 6, 12, 18, 24, 30]);
+  let t = s;
+  for (let i = 0; i < 400 && !t.over; i++) {
+    t = act(t, t.toMove, randomAction(t)).state;
+    assert.equal(t.h.reduce((a, b) => a + b, 0) + t.supply, 90);
+  }
+});
+
+test("the browser's large-board geometry matches the engine", async () => {
+  const web = await import("../web/board.js");
+  const { geometry } = await import("../engine.js");
+  for (const radius of [4, 5]) {
+    assert.deepEqual(web.geometry(radius).cells, geometry(radius).cells);
+    assert.deepEqual(web.geometry(radius).step, geometry(radius).step);
+  }
 });

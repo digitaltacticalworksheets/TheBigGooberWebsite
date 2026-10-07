@@ -1,6 +1,13 @@
-Simulated 1000 games (npc) in 57.8s
+Simulated 1000 games (npc, standard board: 61 cells, 60 pieces) in 51.9s
 Gold (first) wins: 516 (51.6%)  Purple wins: 482 (48.2%)  Draws: 2 (0.2%)
 Game length (actions): avg 265.9, min 89, max 400
 End reasons: elimination 764 (76.4%), limit 235 (23.5%), stuck 1 (0.1%)
-Move choice time: avg 0.21ms, max 59.3ms; most legal actions in a position: 289
+Move choice time: avg 0.19ms, max 7.4ms; most legal actions in a position: 289
+Illegal-state errors: 0
+
+Simulated 300 games (npc, large board: 91 cells, 90 pieces) in 53.2s
+Gold (first) wins: 151 (50.3%)  Purple wins: 149 (49.7%)  Draws: 0 (0.0%)
+Game length (actions): avg 435.2, min 172, max 600
+End reasons: elimination 211 (70.3%), limit 86 (28.7%), stuck 3 (1.0%)
+Move choice time: avg 0.39ms, max 23.8ms; most legal actions in a position: 440
 Illegal-state errors: 0
