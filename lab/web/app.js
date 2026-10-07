@@ -1,7 +1,7 @@
 // HEXAVAST client. All rules run on the server; this file draws the board, animates
 // what happened, plays sounds, keeps the move list, and sends actions.
-import { geometry, pathOf } from "./board.js";
-import { sfx, soundOn, setSound, unlockAudio } from "./sound.js";
+import { geometry, pathOf } from "./board.js?v=2026-10-07.2";
+import { sfx, soundOn, setSound, unlockAudio } from "./sound.js?v=2026-10-07.2";
 
 const app = document.getElementById("app");
 const NAMES = ["Gold", "Purple"];
