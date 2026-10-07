@@ -1,7 +1,7 @@
 // HEXAVAST client. All rules run on the server; this file draws the board, animates
 // what happened, plays sounds, keeps the move list, and sends actions.
-import { geometry, pathOf } from "./board.js?v=2026-10-07.2";
-import { sfx, soundOn, setSound, unlockAudio } from "./sound.js?v=2026-10-07.2";
+import { geometry, pathOf } from "./board.js?v=2026-10-07.3";
+import { sfx, soundOn, setSound, unlockAudio } from "./sound.js?v=2026-10-07.3";
 
 const app = document.getElementById("app");
 const NAMES = ["Gold", "Purple"];
@@ -26,7 +26,9 @@ const ui = {
   code: null, ws: null, opened: false, failures: 0, leaving: false,
   room: null, game: null, events: [], queue: [], skew: 0,
   animating: false, frame: null, fx: null,
-  sel: null, vast: null, pending: false, resultShown: null, turnSeen: null, lastTick: 0
+  sel: null, vast: null, pending: false, resultShown: null, turnSeen: null, lastTick: 0,
+  // Off: tapping a destination moves straight away with the default spread.
+  customSpread: (() => { try { return localStorage.getItem("hx-spread") === "custom"; } catch { return false; } })()
 };
 
 // --- Geometry & drawing helpers ------------------------------------------------------
@@ -468,10 +470,16 @@ function actionHTML() {
     return `<div class="msg">${esc(seatName(game.toMove))} (${NAMES[game.toMove]}) ${npc ? "is thinking…" : "to move."}${ui.sel !== null ? `<small>${cellInfo(ui.sel)}</small>` : ""}</div>`;
   }
   const me = room.you;
+  if (ui.vast && !ui.vast.choice) {
+    // A stack of 2+ is selected: its Vast Move destinations glow on the board.
+    const h = game.h[ui.vast.from];
+    const canGrow = game.supply > 0 && h < 5;
+    const head = !ui.vast.moves ? "Finding moves…" : ui.vast.moves.length ? "Tap a glowing cell to Vast Move there." : "This stack has no legal Vast Move.";
+    const sub = [ui.vast.moves?.length && (ui.customSpread ? "You'll choose how the pieces spread." : "One piece per cell, the rest on the last."), game.supply < 1 && "The supply is empty, so you can't Grow.", canGrow && h === 4 && "Growing to 5 sets off a ripple."].filter(Boolean).join(" ");
+    return `<div class="msg">Your stack of ${h} on ${geo().names[ui.vast.from]}. ${head}${sub ? `<small>${sub}</small>` : ""}</div>
+      <div class="row"><button class="btn gold" data-grow ${canGrow ? "" : "disabled"}>Grow</button><button class="btn ${ui.customSpread ? "purple" : ""}" data-spread aria-pressed="${ui.customSpread}">Spread: ${ui.customSpread ? "Choose" : "Auto"}</button><button class="btn" data-cancel>Cancel</button></div>`;
+  }
   if (ui.vast) {
-    if (!ui.vast.moves) return `<div class="msg muted-msg"><span class="pulse"></span>Finding Vast Moves…</div>`;
-    if (!ui.vast.moves.length) return `<div class="msg">This stack has no legal Vast Move.</div><div class="row"><button class="btn" data-cancel>Back</button></div>`;
-    if (!ui.vast.choice) return `<div class="msg">Vast Move: tap a glowing cell to choose where the stack ends.<small>Pieces drop along the line, at least one per cell.</small></div><div class="row"><button class="btn" data-cancel>Cancel</button></div>`;
     const d = ui.vast.drops;
     const steps = d.map((n, i) => {
       const last = i === d.length - 1;
@@ -479,17 +487,17 @@ function actionHTML() {
     }).join("");
     return `<div class="msg">Drop plan<small>The last cell takes whatever is left.</small></div><div class="plan">${steps}</div><div class="row"><button class="btn gold grow" data-commit-vast>Vast Move</button><button class="btn" data-cancel>Cancel</button></div>`;
   }
-  if (ui.sel === null) return `<div class="msg">Your move <span class="you p${me}">${SYM[me]} ${NAMES[me]}</span><small>Tap an empty cell to Spawn, or one of your stacks to Grow or Vast Move.</small></div>`;
+  if (ui.sel === null) return `<div class="msg">Your move <span class="you p${me}">${SYM[me]} ${NAMES[me]}</span><small>Tap an empty cell to Spawn. Tap one of your stacks, then a glowing cell to Vast Move, or Grow.</small></div>`;
   const h = game.h[ui.sel], o = game.o[ui.sel];
   if (!h) {
     if (game.supply < 1) return `<div class="msg">The supply is empty, so you can't Spawn.<small>Move one of your stacks instead.</small></div><div class="row"><button class="btn" data-cancel>OK</button></div>`;
     return `<div class="msg">Spawn a piece on ${geo().names[ui.sel]}?</div><div class="row"><button class="btn gold grow" data-spawn>Spawn</button><button class="btn" data-cancel>Cancel</button></div>`;
   }
   if (o !== me) return `<div class="msg">${cellInfo(ui.sel)}</div><div class="row"><button class="btn" data-cancel>OK</button></div>`;
-  const canGrow = game.supply > 0 && h < 5, canVast = h >= 2;
-  const hints = [!canVast && "A single piece can't Vast Move.", game.supply < 1 && "The supply is empty, so you can't Grow.", canGrow && h === 4 && "Growing to 5 sets off a ripple."].filter(Boolean).join(" ");
-  return `<div class="msg">Your stack of ${h} on ${geo().names[ui.sel]}.${hints ? `<small>${hints}</small>` : ""}</div>
-    <div class="row"><button class="btn gold" data-grow ${canGrow ? "" : "disabled"}>Grow</button><button class="btn purple" data-vast ${canVast ? "" : "disabled"}>Vast Move</button><button class="btn" data-cancel>Cancel</button></div>`;
+  const canGrow = game.supply > 0 && h < 5;
+  const hints = ["A single piece can't Vast Move.", game.supply < 1 && "The supply is empty, so you can't Grow."].filter(Boolean).join(" ");
+  return `<div class="msg">Your piece on ${geo().names[ui.sel]}.<small>${hints}</small></div>
+    <div class="row"><button class="btn gold grow" data-grow ${canGrow ? "" : "disabled"}>Grow</button><button class="btn" data-cancel>Cancel</button></div>`;
 }
 
 function cellInfo(i) {
@@ -552,9 +560,9 @@ app.addEventListener("click", e => {
   if (t.closest("[data-cancel]")) { ui.sel = null; ui.vast = null; sfx.cancel(); render(); return; }
   if (t.closest("[data-spawn]")) return act({ type: "spawn", cell: ui.sel });
   if (t.closest("[data-grow]")) return act({ type: "grow", cell: ui.sel });
-  if (t.closest("[data-vast]")) {
-    ui.vast = { from: ui.sel, moves: null, choice: null, drops: [] };
-    send({ type: "options", from: ui.sel });
+  if (t.closest("[data-spread]")) {
+    ui.customSpread = !ui.customSpread;
+    try { localStorage.setItem("hx-spread", ui.customSpread ? "custom" : "auto"); } catch { /* private mode */ }
     sfx.select();
     render();
     return;
@@ -576,8 +584,10 @@ app.addEventListener("toggle", e => { if (e.target.matches?.(".ticker") && !isDe
 
 function onCell(i) {
   const v = ui.vast;
-  if (v?.dests?.has(i)) {
+  // Tapping a glowing destination does the Vast Move (or opens the spread editor).
+  if (v?.dests?.has(i) && !v.choice) {
     const grp = v.dests.get(i);
+    if (!ui.customSpread) return act({ type: "vast", from: v.from, dir: grp.dir, drops: grp.plans[0] });
     v.choice = grp;
     v.drops = grp.plans[0].slice();
     sfx.select();
@@ -586,7 +596,14 @@ function onCell(i) {
   }
   ui.vast = null;
   ui.sel = ui.sel === i ? null : i;
-  if (ui.sel !== null) sfx.select();
+  if (ui.sel !== null) {
+    sfx.select();
+    // Selecting your own stack of 2+ asks the server where it can Vast Move.
+    if (myTurn() && ui.game.o[i] === ui.room.you && ui.game.h[i] >= 2) {
+      ui.vast = { from: i, moves: null, choice: null, drops: [] };
+      send({ type: "options", from: i });
+    }
+  }
   render();
 }
 
@@ -646,6 +663,12 @@ const RULES_HTML = `<div class="rules">
   </ul>
   <h3>Timer</h3>
   <p>With a move timer on, running out of time plays a random legal move for you.</p>
+  <h3>Controls</h3>
+  <ul>
+    <li>Tap an empty cell, then <b>Spawn</b>.</li>
+    <li>Tap one of your stacks: the cells it can Vast Move to glow. Tap one to move there, or tap <b>Grow</b>.</li>
+    <li><b>Spread: Auto</b> drops one piece per cell and the rest on the last. Switch to <b>Choose</b> to pick the spread yourself.</li>
+  </ul>
   <h3>Cell names</h3>
   <p>Rows are lettered A, B, C… from the top and cells numbered 1, 2, 3… from the left, so the move list reads like “Vast E5 → E7”.</p>
 </div>`;
