@@ -1,0 +1,6 @@
+Simulated 1000 games (npc) in 57.8s
+Gold (first) wins: 516 (51.6%)  Purple wins: 482 (48.2%)  Draws: 2 (0.2%)
+Game length (actions): avg 265.9, min 89, max 400
+End reasons: elimination 764 (76.4%), limit 235 (23.5%), stuck 1 (0.1%)
+Move choice time: avg 0.21ms, max 59.3ms; most legal actions in a position: 289
+Illegal-state errors: 0
