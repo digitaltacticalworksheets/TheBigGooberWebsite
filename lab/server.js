@@ -1,10 +1,11 @@
 // Admin-only lab: page, assets, room API and the LabRoom Durable Object.
 // Everything here answers 404 to anyone who isn't an admin, exactly like an unknown URL.
-import { createGame, applyAction, vastMovesFrom, randomAction, GOLD, PURPLE } from "./engine.js";
+import { createGame, applyAction, vastMovesFrom, randomAction, BOARD_SIZES, GOLD, PURPLE } from "./engine.js";
 import { chooseAction } from "./ai.js";
 import PAGE_HTML from "./web/index.html";
 import APP_JS from "./web/app.js";
 import BOARD_JS from "./web/board.js";
+import SOUND_JS from "./web/sound.js";
 import STYLE_CSS from "./web/style.css";
 import LOGO_PNG from "./web/logo.png";
 
@@ -21,6 +22,7 @@ const ASSETS = {
   "/lab/": [PAGE_HTML, "text/html; charset=utf-8"],
   "/lab/app.js": [APP_JS, "text/javascript; charset=utf-8"],
   "/lab/board.js": [BOARD_JS, "text/javascript; charset=utf-8"],
+  "/lab/sound.js": [SOUND_JS, "text/javascript; charset=utf-8"],
   "/lab/style.css": [STYLE_CSS, "text/css; charset=utf-8"],
   "/lab/logo.png": [LOGO_PNG, "image/png"]
 };
@@ -67,13 +69,14 @@ export async function routeLab(request, env, helpers) {
     const mode = body.mode === "solo" ? "solo" : "online";
     const timer = TIMERS.has(Number(body.timer)) ? Number(body.timer) : 0;
     const color = ["gold", "purple", "random"].includes(body.color) ? body.color : "gold";
+    const size = BOARD_SIZES[body.size] ? body.size : "standard";
     for (let i = 0; i < 4; i++) {
       const code = roomCode();
       const res = await roomStub(env, code).fetch("https://lab.internal/init", {
         method: "POST",
-        body: JSON.stringify({ code, mode, timer, color, user: { id: String(user.id), name: user.username } })
+        body: JSON.stringify({ code, mode, timer, color, size, user: { id: String(user.id), name: user.username } })
       });
-      if (res.ok) return helpers.jsonResponse({ code, mode, timer }, 201, PRIVATE_HEADERS);
+      if (res.ok) return helpers.jsonResponse({ code, mode, timer, size }, 201, PRIVATE_HEADERS);
     }
     return helpers.jsonResponse({ error: "Couldn't make a room. Try again." }, 503, PRIVATE_HEADERS);
   }
@@ -96,6 +99,20 @@ function roomCode() {
   const bytes = crypto.getRandomValues(new Uint8Array(6));
   return [...bytes].map(b => alphabet[b % alphabet.length]).join("");
 }
+// Compact record of a move for the move list: who, what, where, and any ripples.
+function tickerEntry(seat, action, result) {
+  const e = { n: result.state.ply, p: seat, k: action.type };
+  for (const ev of result.events) {
+    if (ev.t === "spawn") e.c = ev.cell;
+    if (ev.t === "grow") { e.c = ev.cell; e.h = ev.height; }
+    if (ev.t === "vast") { e.f = ev.from; e.d = ev.dir; e.dr = ev.drops; e.to = ev.path[ev.path.length - 1]; }
+    if (ev.t === "ripple") (e.rp = e.rp || []).push([ev.cell, ev.flipped.length]);
+    if (ev.t === "end") { e.w = ev.winner; e.r = ev.reason; }
+  }
+  if (action.timedOut) e.t = 1;
+  return e;
+}
+
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json" } });
 
 // --- Room ------------------------------------------------------------------------
@@ -125,7 +142,7 @@ export class LabRoom {
       const seats = [null, null];
       seats[seat] = creator;
       if (body.mode === "solo") seats[1 - seat] = { npc: true, name: "NPC" };
-      this.room = { code: body.code, mode: body.mode, timer: body.timer, seats, game: null, phase: "waiting", deadline: 0, rematch: [false, false], log: [], created: Date.now() };
+      this.room = { code: body.code, mode: body.mode, timer: body.timer, size: BOARD_SIZES[body.size] ? body.size : "standard", seats, game: null, phase: "waiting", deadline: 0, rematch: [false, false], log: [], ticker: [], created: Date.now() };
       if (body.mode === "solo") this.startGame();
       await this.save();
       return json({ ok: true });
@@ -164,10 +181,11 @@ export class LabRoom {
 
   startGame() {
     const room = this.room;
-    room.game = createGame({ seed: crypto.getRandomValues(new Uint32Array(1))[0] });
+    room.game = createGame({ seed: crypto.getRandomValues(new Uint32Array(1))[0], radius: BOARD_SIZES[room.size] || BOARD_SIZES.standard });
     room.phase = "playing";
     room.rematch = [false, false];
     room.log = [];
+    room.ticker = [];
     this.startTurn();
   }
 
@@ -195,6 +213,8 @@ export class LabRoom {
     if (!result.ok) return result.error;
     room.game = result.state;
     room.log.push([seat, action]);
+    room.ticker = room.ticker || [];
+    room.ticker.push(tickerEntry(seat, action, result));
     this.startTurn();
     this.broadcast(result.events);
     this.npcTurn();
@@ -267,7 +287,8 @@ export class LabRoom {
     const room = this.room;
     const watching = new Set([...this.sessions.values()].map(s => s.seat));
     return {
-      code: room.code, mode: room.mode, timer: room.timer, phase: room.phase, deadline: room.deadline, now: Date.now(),
+      code: room.code, mode: room.mode, timer: room.timer, size: room.size || "standard", phase: room.phase, deadline: room.deadline, now: Date.now(),
+      ticker: room.ticker || [],
       you: seat,
       rematch: room.rematch,
       seats: room.seats.map((s, i) => (s ? { name: s.name, npc: Boolean(s.npc), connected: Boolean(s.npc) || watching.has(i) } : null))
