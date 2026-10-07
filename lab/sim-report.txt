@@ -11,3 +11,13 @@ Game length (actions): avg 435.2, min 172, max 600
 End reasons: elimination 211 (70.3%), limit 86 (28.7%), stuck 3 (1.0%)
 Move choice time: avg 0.39ms, max 23.8ms; most legal actions in a position: 440
 Illegal-state errors: 0
+
+NPC levels (node lab/sim.js <games> <a>:<b>; colours swap each game):
+Simulated 100 games (normal:easy, standard board: 61 cells, 60 pieces) in 4.0s
+normal wins: 99 (99.0%)  easy wins: 1 (1.0%)
+Simulated 40 games (hard:normal, standard board: 61 cells, 60 pieces) in 13.6s
+hard wins: 39 (97.5%)  normal wins: 1 (2.5%)
+Move choice time: avg 1.57ms, max 11.5ms; most legal actions in a position: 250
+Simulated 20 games (expert:hard, standard board: 61 cells, 60 pieces) in 66.1s
+expert wins: 19 (95.0%)  hard wins: 0 (0.0%)
+Move choice time: avg 13.95ms, max 81.9ms; most legal actions in a position: 251

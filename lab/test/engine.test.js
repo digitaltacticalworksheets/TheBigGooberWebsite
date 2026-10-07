@@ -5,6 +5,7 @@ import {
   createGame, applyAction, legalActions, vastMovesFrom, hasLegalAction, score, scoreWinner, randomAction,
   CELLS, CELL_COUNT, NEIGHBORS, STEP, cellAt, GOLD, PURPLE, MAX_STACK, TOTAL_DISKS, MAX_PLIES
 } from "../engine.js";
+import { chooseAction, LEVELS } from "../ai.js";
 
 const C = cellAt(0, 0);
 const E = 0; // direction east: (q+1, r)
@@ -283,5 +284,28 @@ test("the browser's large-board geometry matches the engine", async () => {
   for (const radius of [4, 5]) {
     assert.deepEqual(web.geometry(radius).cells, geometry(radius).cells);
     assert.deepEqual(web.geometry(radius).step, geometry(radius).step);
+  }
+});
+
+test("every NPC level returns a legal action, deterministically", () => {
+  let s = createGame({ seed: 5 });
+  for (let i = 0; i < 30; i++) s = applyAction(s, s.toMove, chooseAction(s)).state;
+  for (const [name, level] of Object.entries(LEVELS)) {
+    const a = chooseAction(s, s.toMove, level);
+    assert.ok(applyAction(s, s.toMove, a).ok, name);
+    assert.deepEqual(chooseAction(s, s.toMove, level), a, name);
+  }
+});
+
+test("harder NPC levels beat easier ones", () => {
+  const duel = (strong, weak, seed) => {
+    let s = createGame({ seed });
+    const strongSide = seed % 2;
+    while (!s.over) s = applyAction(s, s.toMove, chooseAction(s, s.toMove, LEVELS[s.toMove === strongSide ? strong : weak])).state;
+    return s.winner === strongSide;
+  };
+  for (const [strong, weak] of [["normal", "easy"], ["hard", "normal"]]) {
+    const wins = [1, 2, 3, 4].filter(seed => duel(strong, weak, seed)).length;
+    assert.ok(wins >= 3, `${strong} won ${wins}/4 against ${weak}`);
   }
 });

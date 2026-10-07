@@ -1,13 +1,14 @@
 // HEXAVAST client. All rules run on the server; this file draws the board, animates
 // what happened, plays sounds, keeps the move list, and sends actions.
-import { geometry, pathOf } from "./board.js?v=2026-10-07.3";
-import { sfx, soundOn, setSound, unlockAudio } from "./sound.js?v=2026-10-07.3";
+import { geometry, pathOf } from "./board.js?v=2026-10-07.4";
+import { sfx, soundOn, setSound, unlockAudio } from "./sound.js?v=2026-10-07.4";
 
 const app = document.getElementById("app");
 const NAMES = ["Gold", "Purple"];
 const SYM = ["★", "◆"];
 const TIMER_LABEL = { 0: "Off", 30: "30s", 60: "1 min", 120: "2 min" };
 const SIZE_LABEL = { standard: "Standard", large: "Large" };
+const LEVEL_LABEL = { easy: "Easy", normal: "Normal", hard: "Hard", expert: "Expert" };
 const SIZE_NOTE = { standard: "61 cells · 60 pieces", large: "91 cells · 90 pieces" };
 const REASONS = {
   elimination: loser => `${loser} has no cells left.`,
@@ -21,7 +22,7 @@ const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": 
 const token = (() => { try { return localStorage.getItem("gooberCardsSession") || ""; } catch { return ""; } })();
 
 const ui = {
-  pick: { soloColor: "gold", soloTimer: "0", soloSize: "standard", roomColor: "gold", roomTimer: "60", roomSize: "standard" },
+  pick: { soloLevel: (() => { try { return LEVEL_LABEL[localStorage.getItem("hx-level")] ? localStorage.getItem("hx-level") : "hard"; } catch { return "hard"; } })(), soloColor: "gold", soloTimer: "0", soloSize: "standard", roomColor: "gold", roomTimer: "60", roomSize: "standard" },
   error: "",
   code: null, ws: null, opened: false, failures: 0, leaving: false,
   room: null, game: null, events: [], queue: [], skew: 0,
@@ -114,6 +115,7 @@ function seg(name, options, value) {
 }
 const colorOptions = [["gold", "Gold ★"], ["purple", "Purple ◆"], ["random", "Random"]];
 const timerOptions = Object.entries(TIMER_LABEL);
+const levelOptions = Object.entries(LEVEL_LABEL);
 const sizeOptions = Object.entries(SIZE_LABEL).map(([v, l]) => [v, `${l}<small>${SIZE_NOTE[v]}</small>`]);
 const soundButton = () => `<button class="icon-btn" data-sound aria-label="${soundOn() ? "Mute sound" : "Turn sound on"}" title="Sound">${soundOn() ? "🔊" : "🔇"}</button>`;
 
@@ -129,6 +131,7 @@ function renderLobby() {
     <div class="lobby-grid">
       <section class="card">
         <h2><span class="tag gold">Solo</span> Play the NPC</h2>
+        <label>Difficulty ${seg("soloLevel", levelOptions, p.soloLevel)}</label>
         <label>Your colour ${seg("soloColor", colorOptions, p.soloColor)}</label>
         <label>Board ${seg("soloSize", sizeOptions, p.soloSize)}</label>
         <label>Move timer ${seg("soloTimer", timerOptions, p.soloTimer)}</label>
@@ -151,7 +154,7 @@ function renderLobby() {
 
 async function createRoom(mode) {
   const p = ui.pick, solo = mode === "solo";
-  const body = { mode, color: solo ? p.soloColor : p.roomColor, timer: Number(solo ? p.soloTimer : p.roomTimer), size: solo ? p.soloSize : p.roomSize };
+  const body = { mode, color: solo ? p.soloColor : p.roomColor, timer: Number(solo ? p.soloTimer : p.roomTimer), size: solo ? p.soloSize : p.roomSize, level: p.soloLevel };
   ui.error = "";
   try {
     const res = await fetch("/api/lab/rooms", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}` }, body: JSON.stringify(body), cache: "no-store" });
@@ -385,7 +388,7 @@ function render() {
   app.innerHTML = `<div class="game">
     <header class="topbar">
       <span class="logo" aria-hidden="true"></span><span class="title">HEXAVAST</span>
-      <span class="chip">${room.mode === "solo" ? "vs NPC" : `Room ${esc(room.code)}`}</span>
+      <span class="chip">${room.mode === "solo" ? `vs NPC · ${LEVEL_LABEL[room.level] || "Normal"}` : `Room ${esc(room.code)}`}</span>
       <span class="chip hide-sm">${SIZE_LABEL[room.size] || "Standard"}</span>
       ${room.timer ? `<span class="chip hide-sm">⏱ ${TIMER_LABEL[room.timer]}</span>` : ""}
       <span class="spacer"></span>
@@ -542,7 +545,11 @@ document.addEventListener("pointerdown", unlockAudio, { once: true });
 app.addEventListener("click", e => {
   const t = e.target;
   const segBtn = t.closest("[data-seg]");
-  if (segBtn) { ui.pick[segBtn.dataset.seg] = segBtn.dataset.v; sfx.select(); renderLobby(); return; }
+  if (segBtn) {
+    ui.pick[segBtn.dataset.seg] = segBtn.dataset.v;
+    if (segBtn.dataset.seg === "soloLevel") try { localStorage.setItem("hx-level", segBtn.dataset.v); } catch { /* private mode */ }
+    sfx.select(); renderLobby(); return;
+  }
   if (t.closest("[data-sound]")) { setSound(!soundOn()); if (soundOn()) sfx.select(); ui.room ? render() : renderLobby(); return; }
   if (t.closest("[data-start-solo]")) return createRoom("solo");
   if (t.closest("[data-create]")) return createRoom("online");
@@ -663,6 +670,8 @@ const RULES_HTML = `<div class="rules">
   </ul>
   <h3>Timer</h3>
   <p>With a move timer on, running out of time plays a random legal move for you.</p>
+  <h3>NPC difficulty</h3>
+  <p><b>Easy</b> makes loose, sometimes random moves. <b>Normal</b> picks the best-looking move right now. <b>Hard</b> also checks your best reply. <b>Expert</b> looks one move further: its move, your reply, and its answer.</p>
   <h3>Controls</h3>
   <ul>
     <li>Tap an empty cell, then <b>Spawn</b>.</li>
