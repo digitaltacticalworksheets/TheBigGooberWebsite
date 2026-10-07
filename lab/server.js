@@ -177,6 +177,12 @@ export class LabRoom {
     server.addEventListener("error", close);
     this.sendState(server, []);
     this.broadcast([], server);
+    // A solo game where the NPC plays gold starts on its move: make it once someone
+    // is watching, so the opening move animates (this also unsticks older rooms).
+    if (room.phase === "playing" && room.seats[room.game.toMove]?.npc) {
+      this.npcTurn();
+      await this.save();
+    }
     return new Response(null, { status: 101, webSocket: client });
   }
 
