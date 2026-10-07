@@ -1,7 +1,7 @@
 // NPC opponent: one-ply search over legalActions with a cheap evaluation.
 // Deterministic for a given position (seeded noise), and fast enough to run inside
 // the room's Durable Object on every NPC turn.
-import { legalActions, applyAction, score, NEIGHBORS, CELL_COUNT, MAX_STACK, STEP, rng, GOLD, PURPLE } from "./engine.js";
+import { legalActions, applyAction, score, geo, MAX_STACK, rng, GOLD, PURPLE } from "./engine.js";
 
 const other = p => (p === GOLD ? PURPLE : GOLD);
 
@@ -9,7 +9,8 @@ const other = p => (p === GOLD ? PURPLE : GOLD);
 function rippleThreat(s, attacker, victim) {
   if (s.supply < 1) return 0;
   let threat = 0;
-  for (let c = 0; c < CELL_COUNT; c++) {
+  const NEIGHBORS = geo(s).neighbors;
+  for (let c = 0; c < s.h.length; c++) {
     if (s.o[c] !== attacker || s.h[c] !== MAX_STACK - 1) continue;
     for (const n of NEIGHBORS[c]) if (s.o[n] === victim) threat += 1;
   }
@@ -20,7 +21,8 @@ function rippleThreat(s, attacker, victim) {
 // are the only way to keep moving, and a player with no legal move loses.
 function movableStacks(s, p) {
   let n = 0;
-  for (let c = 0; c < CELL_COUNT; c++) {
+  const STEP = geo(s).step;
+  for (let c = 0; c < s.h.length; c++) {
     if (s.o[c] !== p || s.h[c] < 2) continue;
     if (STEP[c].some(t => t >= 0 && s.h[t] + 1 <= MAX_STACK)) n += 1;
   }

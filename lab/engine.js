@@ -5,41 +5,62 @@
 // top (stacks are only grown, dropped onto, picked up whole, or removed whole), so
 // the colours further down never matter.
 
+// Board sizes. Every size has one fewer piece than cells, so while any supply is left
+// there is always an empty cell to spawn on.
+export const BOARD_SIZES = { standard: 4, large: 5 };
 export const RADIUS = 4;
 export const MAX_STACK = 5;
-export const TOTAL_DISKS = 60;
 export const GOLD = 0;
 export const PURPLE = 1;
-// After this many actions the game is decided by score, so a game always ends.
-export const MAX_PLIES = 400;
 
 // Axial directions, clockwise starting east.
 export const DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
 
-// Cells in reading order: rows top (r = -4) to bottom, left to right.
-export const CELLS = [];
-const INDEX = new Map();
-for (let r = -RADIUS; r <= RADIUS; r++) {
-  for (let q = Math.max(-RADIUS, -r - RADIUS); q <= Math.min(RADIUS, -r + RADIUS); q++) {
-    INDEX.set(`${q},${r}`, CELLS.length);
-    CELLS.push({ q, r, ring: Math.max(Math.abs(q), Math.abs(r), Math.abs(-q - r)) });
+// Geometry for a hexagon of the given radius: cells in reading order (rows top to
+// bottom, left to right), STEP[cell][dir] = neighbour or -1, NEIGHBORS[cell].
+const GEOMETRY = new Map();
+export function geometry(radius = RADIUS) {
+  if (GEOMETRY.has(radius)) return GEOMETRY.get(radius);
+  const cells = [], index = new Map();
+  for (let r = -radius; r <= radius; r++) {
+    for (let q = Math.max(-radius, -r - radius); q <= Math.min(radius, -r + radius); q++) {
+      index.set(`${q},${r}`, cells.length);
+      cells.push({ q, r, ring: Math.max(Math.abs(q), Math.abs(r), Math.abs(-q - r)) });
+    }
   }
+  const at = (q, r) => index.get(`${q},${r}`) ?? -1;
+  const step = cells.map(({ q, r }) => DIRS.map(([dq, dr]) => at(q + dq, r + dr)));
+  const g = { radius, cells, count: cells.length, step, neighbors: step.map(l => l.filter(i => i >= 0)), at, disks: cells.length - 1 };
+  GEOMETRY.set(radius, g);
+  return g;
 }
-export const CELL_COUNT = CELLS.length;
-export const cellAt = (q, r) => INDEX.get(`${q},${r}`) ?? -1;
-// STEP[cell][dir] = neighbouring cell index, or -1 off the board.
-export const STEP = CELLS.map(({ q, r }) => DIRS.map(([dq, dr]) => cellAt(q + dq, r + dr)));
-export const NEIGHBORS = STEP.map(list => list.filter(i => i >= 0));
 
+// The standard board, exported for tests and tools.
+const STD = geometry(RADIUS);
+export const CELLS = STD.cells;
+export const CELL_COUNT = STD.count;
+export const STEP = STD.step;
+export const NEIGHBORS = STD.neighbors;
+export const cellAt = STD.at;
+export const TOTAL_DISKS = STD.disks;
+// After this many actions the game is decided by score, so a game always ends.
+// Bigger boards get proportionally more.
+export const MAX_PLIES = 400;
+export const plyLimit = s => Math.round((MAX_PLIES * geo(s).count) / CELL_COUNT / 50) * 50;
+
+export const geo = s => geometry(s.radius || RADIUS);
 const other = p => (p === GOLD ? PURPLE : GOLD);
-const isCell = c => Number.isInteger(c) && c >= 0 && c < CELL_COUNT;
+const isCell = (s, c) => Number.isInteger(c) && c >= 0 && c < geo(s).count;
 
-export function createGame({ seed = 1 } = {}) {
+export function createGame({ seed = 1, radius = RADIUS } = {}) {
+  const g = geometry(radius);
   return {
-    v: 1,
-    h: Array(CELL_COUNT).fill(0),
-    o: Array(CELL_COUNT).fill(-1),
-    supply: TOTAL_DISKS,
+    v: 2,
+    radius,
+    total: g.disks,
+    h: Array(g.count).fill(0),
+    o: Array(g.count).fill(-1),
+    supply: g.disks,
     toMove: GOLD,
     turns: [0, 0],
     ply: 0,
@@ -56,7 +77,7 @@ function cloneState(s) {
 
 export function score(s) {
   const cells = [0, 0], tallest = [0, 0], pieces = [0, 0];
-  for (let i = 0; i < CELL_COUNT; i++) {
+  for (let i = 0; i < s.h.length; i++) {
     const p = s.o[i];
     if (p < 0) continue;
     cells[p] += 1;
@@ -78,6 +99,7 @@ export function scoreWinner(s) {
 // Every way to spread `height` pieces along direction `dir` from `from`: at least one
 // piece per cell, the last cell takes the rest, and no cell may go above MAX_STACK.
 function forEachVast(s, from, dir, visit) {
+  const STEP = geo(s).step;
   const height = s.h[from];
   const path = [], caps = [];
   let c = from;
@@ -103,7 +125,7 @@ function forEachVast(s, from, dir, visit) {
 
 export function vastMovesFrom(s, from, player = s.toMove) {
   const moves = [];
-  if (!isCell(from) || s.o[from] !== player || s.h[from] < 2) return moves;
+  if (!isCell(s, from) || s.o[from] !== player || s.h[from] < 2) return moves;
   for (let dir = 0; dir < 6; dir++) forEachVast(s, from, dir, (path, drops) => moves.push({ type: "vast", from, dir, drops }));
   return moves;
 }
@@ -111,7 +133,7 @@ export function vastMovesFrom(s, from, player = s.toMove) {
 export function legalActions(s, player = s.toMove) {
   const out = [];
   if (s.over || player !== s.toMove) return out;
-  for (let i = 0; i < CELL_COUNT; i++) {
+  for (let i = 0; i < s.h.length; i++) {
     if (s.supply > 0 && s.h[i] === 0) out.push({ type: "spawn", cell: i });
     if (s.o[i] !== player) continue;
     if (s.supply > 0 && s.h[i] < MAX_STACK) out.push({ type: "grow", cell: i });
@@ -123,7 +145,7 @@ export function legalActions(s, player = s.toMove) {
 export function hasLegalAction(s, player) {
   // With supply left there is always an empty cell (at most 59 pieces on 61 cells).
   if (s.supply > 0) return true;
-  for (let i = 0; i < CELL_COUNT; i++) {
+  for (let i = 0; i < s.h.length; i++) {
     if (s.o[i] !== player || s.h[i] < 2) continue;
     for (let dir = 0; dir < 6; dir++) {
       let found = false;
@@ -136,7 +158,7 @@ export function hasLegalAction(s, player) {
 
 // Path cells for a Vast Move, or an error string.
 function vastPath(s, player, a) {
-  if (!isCell(a.from)) return "Pick a stack.";
+  if (!isCell(s, a.from)) return "Pick a stack.";
   if (s.o[a.from] !== player) return "You can only move a stack you own.";
   const height = s.h[a.from];
   if (height < 2) return "A single piece can't Vast Move.";
@@ -149,7 +171,7 @@ function vastPath(s, player, a) {
     sum += d;
   }
   if (sum !== height) return "Every piece in the stack has to be dropped.";
-  const path = [];
+  const path = [], STEP = geo(s).step;
   let c = a.from;
   for (let i = 0; i < drops.length; i++) {
     c = STEP[c][a.dir];
@@ -167,7 +189,7 @@ function resolveRipples(s, player, touched, events) {
     s.o[cell] = -1;
     s.supply += MAX_STACK;
     const flipped = [];
-    for (const n of NEIGHBORS[cell]) {
+    for (const n of geo(s).neighbors[cell]) {
       if (s.h[n] > 0 && s.o[n] !== player) { s.o[n] = player; flipped.push(n); }
     }
     events.push({ t: "ripple", cell, player, flipped });
@@ -188,7 +210,7 @@ function checkEnd(s, player, events) {
   if (out.length === 2) return finish(s, "draw", "elimination", events);
   if (out.length === 1) return finish(s, other(out[0]), "elimination", events);
   if (!hasLegalAction(s, s.toMove)) return finish(s, other(s.toMove), "stuck", events);
-  if (s.ply >= MAX_PLIES) return finish(s, scoreWinner(s), "limit", events);
+  if (s.ply >= plyLimit(s)) return finish(s, scoreWinner(s), "limit", events);
 }
 
 // action: { type: "spawn", cell } | { type: "grow", cell } | { type: "vast", from, dir, drops }
@@ -209,7 +231,7 @@ export function applyAction(state, player, action) {
   if (action.type === "spawn") {
     const c = action.cell;
     if (s.supply < 1) return { ok: false, error: "The supply is empty." };
-    if (!isCell(c) || s.h[c] !== 0) return { ok: false, error: "Spawn goes on an empty cell." };
+    if (!isCell(s, c) || s.h[c] !== 0) return { ok: false, error: "Spawn goes on an empty cell." };
     s.h[c] = 1;
     s.o[c] = player;
     s.supply -= 1;
@@ -218,7 +240,7 @@ export function applyAction(state, player, action) {
   } else if (action.type === "grow") {
     const c = action.cell;
     if (s.supply < 1) return { ok: false, error: "The supply is empty." };
-    if (!isCell(c) || s.o[c] !== player) return { ok: false, error: "Grow goes on a stack you own." };
+    if (!isCell(s, c) || s.o[c] !== player) return { ok: false, error: "Grow goes on a stack you own." };
     if (s.h[c] >= MAX_STACK) return { ok: false, error: `No stack can go above ${MAX_STACK}.` };
     s.h[c] += 1;
     s.supply -= 1;
