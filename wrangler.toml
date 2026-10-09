@@ -5,7 +5,9 @@ compatibility_date = "2026-05-28"
 routes = [
   { pattern = "thebiggooberwebsite.com/api/*", zone_name = "thebiggooberwebsite.com" },
   { pattern = "thebiggooberwebsite.com/lab", zone_name = "thebiggooberwebsite.com" },
-  { pattern = "thebiggooberwebsite.com/lab/*", zone_name = "thebiggooberwebsite.com" }
+  { pattern = "thebiggooberwebsite.com/lab/*", zone_name = "thebiggooberwebsite.com" },
+  { pattern = "thebiggooberwebsite.com/hexavast", zone_name = "thebiggooberwebsite.com" },
+  { pattern = "thebiggooberwebsite.com/hexavast/*", zone_name = "thebiggooberwebsite.com" }
 ]
 
 # The lab game pages are bundled into the Worker (never served from public/).

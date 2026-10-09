@@ -27,7 +27,9 @@ const ASSETS = {
   "/lab/logo.png": [LOGO_PNG, "image/png"]
 };
 
-export const isLabPath = path => path === "/lab" || path.startsWith("/lab/") || path.startsWith("/api/lab/");
+// The game's public address is /hexavast/; its assets and API stay under /lab.
+const PAGE_PATH = "/hexavast/";
+export const isLabPath = path => path === "/lab" || path.startsWith("/lab/") || path === "/hexavast" || path.startsWith("/hexavast/") || path.startsWith("/api/lab/");
 
 export function readCookie(request, name) {
   for (const part of (request.headers.get("cookie") || "").split(";")) {
@@ -52,8 +54,8 @@ export async function routeLab(request, env, helpers) {
   const notFound = () => (isApi ? helpers.jsonResponse({ error: "Not found" }, 404) : new Response("Not found", { status: 404, headers: { "content-type": "text/plain; charset=utf-8", ...PRIVATE_HEADERS } }));
 
   if (!isApi) {
-    if (path === "/lab") return new Response(null, { status: 302, headers: { location: "/lab/", ...PRIVATE_HEADERS } });
-    const asset = ASSETS[path];
+    if (path === "/lab" || path === "/lab/" || path === "/hexavast") return new Response(null, { status: 301, headers: { location: PAGE_PATH + url.search } });
+    const asset = path === PAGE_PATH ? ASSETS["/lab/"] : ASSETS[path];
     if (!asset) return notFound();
     return new Response(asset[0], { headers: { "content-type": asset[1], ...PRIVATE_HEADERS } });
   }
