@@ -1,7 +1,7 @@
 // HEXAVAST client. All rules run on the server; this file draws the board, animates
 // what happened, plays sounds, keeps the move list, and sends actions.
-import { geometry, pathOf } from "./board.js?v=2026-10-07.4";
-import { sfx, soundOn, setSound, unlockAudio } from "./sound.js?v=2026-10-07.4";
+import { geometry, pathOf } from "./board.js?v=2026-10-09.1";
+import { sfx, soundOn, setSound, unlockAudio } from "./sound.js?v=2026-10-09.1";
 
 const app = document.getElementById("app");
 const NAMES = ["Gold", "Purple"];
@@ -127,7 +127,7 @@ function renderLobby() {
       <div class="hero-text"><h1>HEXAVAST</h1><p>Stack. Slide. Ripple. Control the hexagon.</p></div>
       ${soundButton()}
     </header>
-    ${token ? "" : `<p class="error">You're not logged in here. Log in on the main site, then reload this page.</p>`}
+    ${token ? "" : `<p class="error">You need a Goober Cards account to play. <a href="/goober-cards/">Log in or sign up (free)</a>, then come back here.</p>`}
     <div class="lobby-grid">
       <section class="card">
         <h2><span class="tag gold">Solo</span> Play the NPC</h2>
@@ -138,7 +138,7 @@ function renderLobby() {
         <button class="btn gold big" data-start-solo>Start game</button>
       </section>
       <section class="card">
-        <h2><span class="tag purple">Online</span> Play another admin</h2>
+        <h2><span class="tag purple">Online</span> Play a friend</h2>
         <label>Your colour ${seg("roomColor", colorOptions, p.roomColor)}</label>
         <label>Board ${seg("roomSize", sizeOptions, p.roomSize)}</label>
         <label>Move timer ${seg("roomTimer", timerOptions, p.roomTimer)}</label>
@@ -382,7 +382,7 @@ function render() {
   }).join("");
   const goldShare = total ? (100 * cells[0]) / total : 50;
   const body = room.phase === "waiting"
-    ? `<section class="card waiting"><h2>Waiting for another admin</h2><div class="bigcode">${esc(room.code)}</div><p class="note">Share this code. They open this page and join with it.</p><button class="btn" data-copy>Copy code</button></section>`
+    ? `<section class="card waiting"><h2>Waiting for your opponent</h2><div class="bigcode">${esc(room.code)}</div><p class="note">Share this code. They open HEXAVAST on The Big Goober Website and join with it.</p><button class="btn" data-copy>Copy code</button></section>`
     : `<div class="board-host">${boardSVG()}</div><svg class="fx" viewBox="${vb.attr}" aria-hidden="true"></svg>`;
   const tickerOpen = isDesktop() || ui.tickerOpen;
   app.innerHTML = `<div class="game">

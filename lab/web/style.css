@@ -85,6 +85,7 @@ input.code { min-height: 46px; padding: 8px 14px; border-radius: 12px; border: 1
 .divider::before, .divider::after { content: ""; flex: 1; border-top: 1px dashed var(--line-2); }
 .note { color: var(--muted); font-size: 0.9rem; margin: 0; }
 .error { color: #ffb7b7; min-height: 1.2em; margin: 0; font-size: 0.92rem; }
+.error a { color: var(--gold); font-weight: 800; }
 
 /* --- Game layout ------------------------------------------------------------- */
 .game {

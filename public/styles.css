@@ -145,6 +145,21 @@ nav a[href="/goober-cards/"] { animation: glowPulse 2.4s ease-in-out infinite; }
   background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.7) 45%, transparent 60%) -150% 0 / 250% 100% no-repeat;
   animation: cardGlint 4s ease-in-out infinite;
 }
+/* Small promo tile for the hexagon strategy game. */
+.game-tile {
+  display: inline-flex; align-items: center; gap: 12px; max-width: 100%; margin-top: 18px;
+  padding: 10px 16px 10px 10px; border-radius: 18px; text-decoration: none; color: #fff8e7;
+  background: linear-gradient(135deg, #2a2433, #1b1a20 55%, #2b1d45);
+  border: 2px solid #000; box-shadow: 0 0 0 2px #e9b843, 0 6px 20px rgba(155, 107, 255, 0.35);
+  transition: transform 0.15s, box-shadow 0.2s;
+}
+.game-tile:hover { transform: translateY(-2px); box-shadow: 0 0 0 2px #ffdc7a, 0 10px 28px rgba(155, 107, 255, 0.5); }
+.game-tile:focus-visible { outline: 3px solid var(--yellow); outline-offset: 3px; }
+.game-tile img { width: 52px; height: auto; flex: none; }
+.game-tile-text { display: grid; gap: 2px; min-width: 0; }
+.game-tile-text strong { font-family: var(--display); font-weight: 400; font-size: 1.35rem; letter-spacing: 0.05em; color: #ffdc7a; }
+.game-tile-text small { font-weight: 800; font-size: 0.85rem; color: var(--muted); }
+.game-tile-arrow { font-weight: 900; font-size: 1.3rem; color: #c9a6ff; margin-left: 4px; }
 @keyframes cardGlint { 0%, 50% { background-position: -150% 0; } 90%, 100% { background-position: 250% 0; } }
 .feature-card img { width: 100%; display: block; border-radius: 18px; background: #fff; border: 3px solid #000; }
 .feature-card h2 { margin: 14px 0 4px; font-size: 2.2rem; text-transform: uppercase; }

@@ -15,7 +15,7 @@ function initializeSiteTheme() {
       <a class="button primary" id="playGooberCardsHero" href="/goober-cards/">Play Goober Cards</a>
       <a class="button" href="#goobers">Browse Goobers</a>
     `;
-    heroCopy.appendChild(actions);
+    heroCopy.insertBefore(actions, heroCopy.querySelector(".game-tile"));
   }
 }
 

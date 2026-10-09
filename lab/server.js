@@ -1,5 +1,5 @@
-// Admin-only lab: page, assets, room API and the LabRoom Durable Object.
-// Everything here answers 404 to anyone who isn't an admin, exactly like an unknown URL.
+// Lab game: page, assets, room API and the LabRoom Durable Object.
+// The page is public; creating or joining a room needs a logged-in Goober Cards account.
 import { createGame, applyAction, vastMovesFrom, randomAction, BOARD_SIZES, GOLD, PURPLE } from "./engine.js";
 import { chooseAction, LEVELS, DEFAULT_LEVEL } from "./ai.js";
 import PAGE_HTML from "./web/index.html";
@@ -51,17 +51,17 @@ export async function routeLab(request, env, helpers) {
   const isApi = path.startsWith("/api/lab/");
   const notFound = () => (isApi ? helpers.jsonResponse({ error: "Not found" }, 404) : new Response("Not found", { status: 404, headers: { "content-type": "text/plain; charset=utf-8", ...PRIVATE_HEADERS } }));
 
-  const auth = request.headers.get("authorization") || "";
-  const token = (auth.startsWith("Bearer ") ? auth.slice(7) : "") || url.searchParams.get("auth") || readCookie(request, ADMIN_COOKIE);
-  const user = await helpers.userFromToken(env, token);
-  if (!user || !helpers.isAdminUser(user)) return notFound();
-
   if (!isApi) {
     if (path === "/lab") return new Response(null, { status: 302, headers: { location: "/lab/", ...PRIVATE_HEADERS } });
     const asset = ASSETS[path];
     if (!asset) return notFound();
     return new Response(asset[0], { headers: { "content-type": asset[1], ...PRIVATE_HEADERS } });
   }
+
+  const auth = request.headers.get("authorization") || "";
+  const token = (auth.startsWith("Bearer ") ? auth.slice(7) : "") || url.searchParams.get("auth") || readCookie(request, ADMIN_COOKIE);
+  const user = await helpers.userFromToken(env, token);
+  if (!user) return helpers.jsonResponse({ error: "Log in with your Goober Cards account to play." }, 401, PRIVATE_HEADERS);
 
   if (!env.LAB_ROOMS) return notFound();
   if (path === "/api/lab/rooms" && request.method === "POST") {
